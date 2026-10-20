@@ -15,6 +15,7 @@ from app import models
 from app.costs import estimate_cost
 from app.db import SessionLocal
 from app.llm.base import LLMCallError, LLMProvider
+from app.locale import teaching_system
 
 logger = logging.getLogger("studyforge.usage")
 
@@ -93,7 +94,7 @@ class MeteredLLM:
     def generate(self, stage: str, system: str, prompt: str, max_tokens: int = 64000) -> str:
         self._check_cap()
         try:
-            result = self.provider.generate(system, prompt, max_tokens)
+            result = self.provider.generate(teaching_system(system), prompt, max_tokens)
         except LLMCallError as exc:
             self._record(stage, exc.input_tokens, exc.output_tokens)
             raise

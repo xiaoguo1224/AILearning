@@ -1,14 +1,16 @@
 # PROGRESS — 开发进度与真实验证记录
 
-> 这是交给 Codex 的初始进度，不是已开发成果。每次会话结束必须追加新的记录，不覆盖以往测试证据。
+> 下方保留初始化与逐项真实验证记录；以本节“当前状态”和最新追加记录为恢复入口。
 
 ## 当前状态
 
-- 当前里程碑：**P0 上游环境与基线验证**。
+- 当前里程碑：**P0 原始六项与 Gemini 适配已验收，正在补充中英双语，随后进入 P1 Project/Resource**。
 - 已确定：产品需求、单人本地运行边界、项目化、课程/自由学习、自动知识草稿与核心审核、跨项目确认。
 - 已准备：AGENTS、PRD、ARCHITECTURE、TASKS、DECISIONS、README 的目标文档草案。
 - 已有源码审查：通过 GitHub 阅读 StudyForge 目录、models、ingest、generation、tutor、remediation、db、部分 API 及依赖文件。
-- 尚未完成：本地克隆和运行、测试结果、任何新功能开发、迁移及真实验收。
+- 当前运行：本机 FastAPI `http://localhost:8000`、Next.js `http://localhost:3000`；Docker 两服务已停止、卷保留。真实模型根 `.env` 已接通，本机开发验收进程暂设 Fake，正式使用时清除该覆盖即可使用 Gemini。
+- 已完成：基线文档合并、容器/本机测试、浏览器课程/Quiz/Review/Tutor、SQLite 快照/恢复、Gemini adapter 和一次真实 Shape 教学。提交截至 `c2e3e0f`。
+- 正在进行：已恢复未提交双语批次；前端协作 Agent 补齐旧组件、测试语言上下文和构建，主 Agent 已接通后端请求语言并完成定向测试，随后接续 P1。旧初始化“未运行”表仅是历史记录。
 
 ## 上游静态审查主要观察
 
@@ -31,12 +33,21 @@
 
 ## 下次工作入口
 
-1. 在实际 StudyForge 仓库中检查所有已存在文档，**合并**本包，不覆盖上游安装指南和现有架构说明。
-2. 检查 `git status` 和 HEAD，建立分支。
-3. 执行 P0-03 / P0-04 的依赖安装和测试，记录错误、操作系统和环境。
-4. 基线验收后，进入 P1-01。
+1. 核对当前状态和最新追加记录，保留用户既有文档删除；不要重新执行已通过的 P0 基线。
+2. 完成 P0-08 双语验收和提交；未通过的前端检查必须修复。
+3. 接续 P1-01 Project 模型/API，再实现项目页面和 Resource 持久化。
 
 ## 追加记录模板
+
+### 2026-10-20 — 恢复双语批次（进行中）
+- 重新完整读取 AGENTS、README、PRD、ARCHITECTURE、TASKS、DECISIONS、PROGRESS，核对 Git；当前 HEAD 为 `c2e3e0f`，用户原先的文档删除保持未暂存。
+- 后端新增请求级 ContextVar 语言及 ASGI middleware，MeteredLLM 统一追加可信语言要求，保留原始来源、标识符及 JSON 契约；避免不同请求互相污染语言。
+- 本机实际执行 `uv run pytest tests/test_locale.py tests/test_fake_provider.py -q`：**31 passed**；对应四个文件 ruff 通过；既有两项 FastAPI on_event 弃用警告仍在。
+- 本机前端首轮 `npm test`：**49 passed / 77 failed**。失败集中于未指定语言的旧断言、server cookies 请求上下文和新增请求头契约；没有将此轮写成通过或跳过失败。前端协作 Agent 正在修复并补充双语验证。
+- 本机 FastAPI 已重新启动（Fake QA）；尚未重复真实付费调用或全量后端基线。P0-08 尚未关闭，P1 尚未提前标记完成。
+- 随后定向执行 `uv run pytest tests/test_tutor.py tests/test_remediation.py -q`：**200 passed**，原有教学与补课契约保持通过。
+- 使用根 `.env` 的真实 Gemini 通过同一 MeteredLLM 各验证一次 zh-CN/en：中文回答“张量的秩是指该张量所具有的维度（或轴）的数量。”；英文回答“A tensor's rank is simply the number of dimensions, or axes, it contains.”。脚本检查语言并退出 0，调用记录保留在本机数据库；这是两条语言样例验证，不代表全面教学质量评估。
+- P1 升级前快照：`F:\A____usually\code\ProjectCode\AILearning-backups\2026-10-20_203346\studyforge.sqlite3`，SQLite Backup API、integrity_check=ok，课程/答题/复习日志计数为 **3/5/4**。未覆盖或删除现有数据库。
 
 ### 2026-10-20 — P0-07 Gemini 网关与真实教学
 - P0-06 提交 `6897038`。本项提交：本记录所在提交（`git log --grep="P0-07"`）。
