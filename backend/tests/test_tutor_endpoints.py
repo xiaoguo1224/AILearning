@@ -40,11 +40,11 @@ from sqlalchemy import func, select
 from sqlalchemy import inspect as sa_inspect
 
 from app import days, fsrs, main, metering, models, review, tutor
-from app.locale import teaching_system
 from app.concepts import normalize_concept
 from app.db import Base, SessionLocal
 from app.llm.base import LLMResult
 from app.llm.fake_provider import FakeProvider
+from app.locale import teaching_system
 
 LESSON_CONTENT = (
     "# Stability\n\nStability is the number of days until recall of a concept drops to "

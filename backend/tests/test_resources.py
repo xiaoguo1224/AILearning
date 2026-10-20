@@ -1,9 +1,6 @@
 import io
 import zipfile
-import pytest
-from app.db import SessionLocal
-from app.models import Course
-from app.resources.models import Resource, ResourceChunk, ProjectResource
+
 
 def test_resource_upload_and_search_flow(client):
     # 1. Create two projects
