@@ -4,7 +4,7 @@ import os
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import update
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload
 
 from app.db import get_session
 from app.models import utcnow
@@ -66,7 +66,7 @@ def project_detail(session: Session, project: Project) -> ProjectDetail:
     links = (
         session.query(ProjectCourse)
         .filter_by(project_id=project.id)
-        .options(selectinload(ProjectCourse.course))
+        .options(joinedload(ProjectCourse.course, innerjoin=True))
         .order_by(ProjectCourse.position, ProjectCourse.course_id)
         .all()
     )

@@ -39,6 +39,11 @@
 
 ## 追加记录模板
 
+### 2026-10-20 — P1-01 协作审查回归修复
+- P1-01 提交 `c0a9685`。只读协作在独立临时库发现两项实际边界：超过 SQLite int64 的路径/offset 返回 500；课程恰在两次详情 SELECT 间被删除会使关联 Course 为 None。
+- 修复：项目/课程 ID 与 offset 设 int64 上限，超限请求返回统一 422；课程引用与标题用单次 JOIN 快照读取，消除两阶段加载窗口。
+- `uv run pytest tests/test_projects.py -q`：**22 passed**；包含整数溢出及旧双查询窗口的确定性回归，ruff 通过。没有修改用户数据库或通过关闭测试解决问题。
+
 ### 2026-10-20 — P1-01 Project 模型、迁移和 API
 - 前项双语提交 `bf0bb5c`；本项见 `git log --grep="P1-01"`。新增独立 `app/projects/` 模型、schema、service、router；main 仅注册路由，db 显式注册新表。
 - `/api/projects` 支持列表（状态/分页）、创建；`/{id}` 支持查看/编辑；`/{id}/archive` 幂等归档；`/{id}/courses/{course_id}` PUT/DELETE 幂等关联/解除。归档项目可读，写操作返回 project_archived；没有项目硬删除。

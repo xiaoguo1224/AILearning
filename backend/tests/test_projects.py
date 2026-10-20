@@ -2,10 +2,10 @@ from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import update
+from sqlalchemy import event, update
 
 from app import models
-from app.db import SessionLocal
+from app.db import SessionLocal, engine
 from app.projects.models import Project, ProjectCourse
 
 
@@ -162,3 +162,45 @@ def test_archive_write_lock_rechecks_status_before_membership(client):
         response = future.result(timeout=10)
     assert response.status_code == 409
     assert client.get(f"/api/projects/{project['id']}").json()["courses"] == []
+
+
+def test_integer_overflow_is_rejected_before_sqlite(client):
+    huge = 2**63
+    project = create(client)
+    for response in (
+        client.get(f"/api/projects/{huge}"),
+        client.get(f"/api/projects?offset={huge}"),
+        client.post(f"/api/projects/{huge}/archive"),
+        client.put(f"/api/projects/{project['id']}/courses/{huge}", json={}),
+        client.delete(f"/api/projects/{project['id']}/courses/{huge}"),
+    ):
+        assert response.status_code == 422
+
+
+def test_course_details_are_read_in_one_snapshot(client):
+    from app.deletion import delete_course
+
+    project = create(client)
+    course_id = course()
+    client.put(f"/api/projects/{project['id']}/courses/{course_id}", json={})
+    statements = []
+    deleting = False
+
+    def delete_between_queries(conn, cursor, statement, parameters, context, executemany):
+        nonlocal deleting
+        statements.append(statement)
+        # Regression: selectinload used a second query after releasing the membership cursor.
+        if not deleting and "FROM courses" in statement:
+            deleting = True
+            with SessionLocal() as session:
+                delete_course(session, session.get(models.Course, course_id))
+
+    event.listen(engine, "before_cursor_execute", delete_between_queries)
+    try:
+        response = client.get(f"/api/projects/{project['id']}")
+    finally:
+        event.remove(engine, "before_cursor_execute", delete_between_queries)
+    assert response.status_code == 200
+    assert len(response.json()["courses"]) == 1
+    assert not deleting, "Course details must be fetched with membership in one JOIN."
+    assert sum("FROM project_courses" in statement for statement in statements) == 1

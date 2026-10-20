@@ -27,7 +27,8 @@ from app.projects.service import (
 
 router = APIRouter(prefix="/api/projects", tags=["projects"])
 logger = logging.getLogger("studyforge.projects")
-ProjectId = Annotated[int, Path(gt=0)]
+MAX_SQLITE_INTEGER = 2**63 - 1
+EntityId = Annotated[int, Path(gt=0, le=MAX_SQLITE_INTEGER)]
 Db = Annotated[Session, Depends(project_session)]
 MUTATION = [Depends(local_mutation)]
 
@@ -37,7 +38,7 @@ def list_projects(
     session: Db,
     status: ProjectStatus = "active",
     limit: int = Query(50, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=MAX_SQLITE_INTEGER),
 ):
     query = session.query(Project).filter(Project.status == status)
     return {
@@ -59,12 +60,12 @@ def create_project(body: ProjectCreate, session: Db):
 
 
 @router.get("/{project_id}", response_model=ProjectDetail)
-def read_project(project_id: ProjectId, session: Db):
+def read_project(project_id: EntityId, session: Db):
     return project_detail(session, get_project(session, project_id))
 
 
 @router.patch("/{project_id}", response_model=ProjectDetail, dependencies=MUTATION)
-def edit_project(project_id: ProjectId, body: ProjectPatch, session: Db):
+def edit_project(project_id: EntityId, body: ProjectPatch, session: Db):
     project = writable_project(session, project_id)
     for field, value in body.model_dump(exclude_unset=True).items():
         setattr(project, field, value)
@@ -74,7 +75,7 @@ def edit_project(project_id: ProjectId, body: ProjectPatch, session: Db):
 
 
 @router.post("/{project_id}/archive", response_model=ProjectDetail, dependencies=MUTATION)
-def archive_project(project_id: ProjectId, session: Db):
+def archive_project(project_id: EntityId, session: Db):
     changed = session.execute(
         update(Project)
         .where(Project.id == project_id, Project.status == "active")
@@ -91,9 +92,7 @@ def archive_project(project_id: ProjectId, session: Db):
 @router.put(
     "/{project_id}/courses/{course_id}", response_model=ProjectDetail, dependencies=MUTATION
 )
-def link_course(
-    project_id: ProjectId, course_id: Annotated[int, Path(gt=0)], body: CourseLinkInput, session: Db
-):
+def link_course(project_id: EntityId, course_id: EntityId, body: CourseLinkInput, session: Db):
     project = writable_project(session, project_id)
     if session.get(Course, course_id) is None:
         raise project_error(404, "course_not_found", "Course not found.")
@@ -112,7 +111,7 @@ def link_course(
 @router.delete(
     "/{project_id}/courses/{course_id}", response_model=ProjectDetail, dependencies=MUTATION
 )
-def unlink_course(project_id: ProjectId, course_id: Annotated[int, Path(gt=0)], session: Db):
+def unlink_course(project_id: EntityId, course_id: EntityId, session: Db):
     project = writable_project(session, project_id)
     session.query(ProjectCourse).filter_by(project_id=project_id, course_id=course_id).delete()
     session.commit()
