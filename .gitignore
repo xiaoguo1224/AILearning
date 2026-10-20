@@ -25,6 +25,8 @@ dist/
 *.db-*
 /data/
 /.artifacts/
+/.playwright-mcp/
+/output/playwright/
 /*-build.log
 /*-baseline.log
 

@@ -38,6 +38,16 @@
 
 ## 追加记录模板
 
+### 2026-10-20 — P0-05 浏览器学习闭环验收
+- P0-04 提交 `1a819c6`。本项提交：本记录所在提交（`git log --grep="P0-05"`）。
+- Playwright 实际操作：添加文本 → Generate course → Open course → 打开课程 → MCQ 错答与简答正确 → Mark complete；页面状态和持久化均成功。
+- 独立标记的 `P0 Acceptance QA` 测试课程：仅该独有概念的 due 被夹具提前，随后两次真实浏览器 `/review` 答题、Again 评分 → Session complete；没有修改用户其他概念的 due。
+- Today 展示 Needs attention → Re-teach → 教学面板 → 输入问题 → Ask → Tutor reply 可见。Fake 回答明确标注 fake，未当成真实教学质量。
+- 用户在验收过程中要求主要本机运行并减少非必要测试。已停止本项目 Docker 两个服务（保留卷），从已停止容器复制数据库到原先不存在的 `backend/studyforge.sqlite3`，没有覆盖现有本机数据库。
+- 本机 `uv sync --extra dev --frozen` 成功、`npm ci` 安装 653 个包成功；`uv run uvicorn app.main:app --host 127.0.0.1 --port 8000` 和 `node node_modules/next/dist/bin/next dev --hostname 127.0.0.1` 已实际启动，Next 就绪 417ms。
+- 本机后端回归（含模型适配测试）：**1175 passed, 2 skipped，37.06 秒**；`uv run ruff check app tests` 通过。之后采用最小关键验证，不反复重跑全套。
+- 测试课程/模型验收课程已明确命名保留为可审查记录，不冒充个人正式学习成果；浏览器截图/快照均忽略提交。
+
 ### 2026-10-20 — P0-04 前端测试与生产构建
 - P0-03 提交 `fd1f978`。本项提交：本记录所在提交（`git log --grep="P0-04"`）。
 - 修复上游 package-lock 缺失 `@emnapi/core/runtime` 引起的 `npm ci` EUSAGE；未改变 package.json 中的依赖范围。首次 npm 下载 network aborted，增加安装层缓存和下载重试后 `npm ci` 成功。
