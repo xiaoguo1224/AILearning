@@ -22,6 +22,8 @@ from app.submissions.static_check import StaticFinding
 
 logger = logging.getLogger("studyforge.submissions.review")
 
+REVIEW_STAGE = "code_review"
+
 MAX_CODE_CHARS = 12_000
 MAX_LOG_CHARS = 6_000
 MAX_SUMMARY_CHARS = 2_000
@@ -172,7 +174,7 @@ def review_with_model(
     """
     run_id = f"code_review-{uuid.uuid4().hex[:12]}"
     meter = MeteredLLM(get_provider(), run_id)
-    raw = meter.generate("code_review", REVIEW_SYSTEM, _prompt(context, static_findings))
+    raw = meter.generate(REVIEW_STAGE, REVIEW_SYSTEM, _prompt(context, static_findings))
     review = parse_review(raw)
     if review is None:
         logger.warning("code_review_unparseable run_id=%s", run_id)

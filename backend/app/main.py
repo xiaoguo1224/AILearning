@@ -48,6 +48,7 @@ from app.metering import CostLimitExceeded, MeteredLLM, acknowledge_alert, alert
 from app.projects.router import router as projects_router
 from app.rating import rating_v1
 from app.resources.router import router as resources_router
+from app.submissions import llm_review, llm_variant
 from app.submissions.router import router as submissions_router
 
 logger = logging.getLogger("studyforge.api")
@@ -2053,11 +2054,15 @@ def get_tutor_conversation(concept_key: str, session: Session = Depends(get_sess
 GROUP_COURSE = "course"
 GROUP_REMEDIATION = "remediation"
 GROUP_TUTOR = "tutor"
+GROUP_CODE_REVIEW = "code_review"
+GROUP_VARIANT = "variant_exercise"
 GROUP_FAILED_RUN = "failed_run"
 
 GROUP_LABELS = {
     GROUP_REMEDIATION: "Re-teaching (no single course)",
     GROUP_TUTOR: "Tutor chat (no single course)",
+    GROUP_CODE_REVIEW: "Code review (no single course)",
+    GROUP_VARIANT: "Variant exercises (no single course)",
     GROUP_FAILED_RUN: "Unattributed",
 }
 
@@ -2103,6 +2108,15 @@ GROUP_NOTES = {
     # "or from one still running" is not padding. Generation is synchronous and can take
     # minutes, and its rows carry no course until it finishes, so a learner who opens
     # this page mid-run is reading about a run that has not failed at all.
+    GROUP_CODE_REVIEW: (
+        "A code review is charged to no course: it belongs to a project submission, and a "
+        "project may hold no course at all. The static pass costs nothing; only the "
+        "model-assisted pass appears here."
+    ),
+    GROUP_VARIANT: (
+        "A variant exercise is drafted from one submission, so it is charged to no course. "
+        "Nothing is recorded when the model returns an unusable draft."
+    ),
     GROUP_FAILED_RUN: (
         '"Unattributed" calls have no course to attach to: they come from a generation run '
         "that failed before its course could be saved, or from one still running now."
@@ -2193,6 +2207,10 @@ def _unattributed_group(stage: str) -> str:
         return GROUP_REMEDIATION
     if stage == tutor.TUTOR_STAGE:
         return GROUP_TUTOR
+    if stage == llm_review.REVIEW_STAGE:
+        return GROUP_CODE_REVIEW
+    if stage == llm_variant.VARIANT_STAGE:
+        return GROUP_VARIANT
     return GROUP_FAILED_RUN
 
 
@@ -2233,7 +2251,14 @@ def _spend_groups(session: Session) -> list[dict]:
         bucket["output_tokens"] += stage_out or 0
         bucket["estimated_cost_usd"] += stage_cost or 0.0
 
-    rank = {GROUP_COURSE: 0, GROUP_REMEDIATION: 1, GROUP_TUTOR: 2, GROUP_FAILED_RUN: 3}
+    rank = {
+        GROUP_COURSE: 0,
+        GROUP_REMEDIATION: 1,
+        GROUP_TUTOR: 2,
+        GROUP_CODE_REVIEW: 3,
+        GROUP_VARIANT: 4,
+        GROUP_FAILED_RUN: 5,
+    }
     groups = []
     for (group, course_id, stamped), bucket in sorted(
         buckets.items(),

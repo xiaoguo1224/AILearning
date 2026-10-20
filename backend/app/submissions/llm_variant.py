@@ -19,6 +19,8 @@ from app.submissions.static_check import StaticFinding
 
 logger = logging.getLogger("studyforge.submissions.variant")
 
+VARIANT_STAGE = "variant_exercise"
+
 MAX_PROMPT_CHARS = 4_000
 MAX_CODE_CHARS = 8_000
 
@@ -88,7 +90,7 @@ def draft_variant(
     """One metered call. CostLimitExceeded propagates so the cap is not hidden."""
     run_id = f"variant-{uuid.uuid4().hex[:12]}"
     meter = MeteredLLM(get_provider(), run_id)
-    raw = meter.generate("variant_exercise", VARIANT_SYSTEM, _prompt(context, findings))
+    raw = meter.generate(VARIANT_STAGE, VARIANT_SYSTEM, _prompt(context, findings))
     draft = parse_variant(raw)
     if draft is None:
         logger.warning("variant_unparseable run_id=%s", run_id)
