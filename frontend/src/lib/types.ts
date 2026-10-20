@@ -1073,6 +1073,15 @@ export interface VariantDraft {
   id: number;
   project_id: number;
   source_submission_id: number | null;
+  /**
+   * Set when the exercise was drafted from a free-exploration question rather than from
+   * a submission, which is the only other way one gets made. Both are null together:
+   * an exercise always has one origin, and a screen that showed neither would be
+   * describing a row the server cannot produce.
+   */
+  session_id: number | null;
+  /** The question verbatim, so the exercise can sit next to what prompted it. */
+  source_question: string | null;
   title: string;
   prompt: string;
   starter_code: string | null;
@@ -1140,6 +1149,14 @@ export interface ExploreMessage {
   /** Which model answered. Empty on a learner row, which no model wrote. */
   model: string;
   created_at: string;
+  /**
+   * The draft exercise this reply produced, when it produced one.
+   *
+   * Sent on read rather than kept client-side, so reopening a conversation months later
+   * still shows the exercise under the reply that introduced it. A card that only
+   * existed in memory would leave the learner with an exercise they can no longer find.
+   */
+  exercise: VariantDraft | null;
 }
 
 /**
@@ -1175,6 +1192,19 @@ export interface ExploreSessionDetail extends ExploreSession {
 export interface ExploreAskResult {
   user: ExploreMessage;
   assistant: ExploreMessage;
+}
+
+/**
+ * What one practice request wrote: a reply and a draft exercise, not the conversation.
+ *
+ * `message` is an ordinary assistant row and belongs in the transcript; `exercise` is
+ * the draft, and it carries its own id so the follow-up submission links to it. The
+ * question is NOT echoed back, because it is already in the transcript and a second copy
+ * would read as if the learner had asked twice.
+ */
+export interface ExplorePracticeResult {
+  message: ExploreMessage;
+  exercise: VariantDraft;
 }
 
 /** `mode` is required here even though the server defaults it, for the reason TutorMode is. */

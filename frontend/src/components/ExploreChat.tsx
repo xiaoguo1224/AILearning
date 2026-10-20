@@ -1,14 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useI18n } from "@/components/LocaleProvider";
 import { LessonMarkdown } from "@/components/LessonMarkdown";
+import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
-import { ApiError, askExploreQuestion } from "@/lib/api";
+import { ApiError, askExploreQuestion, createExplorePractice } from "@/lib/api";
 import type { Translator } from "@/lib/i18n";
-import type { ExploreMessage, ExploreSourceRef } from "@/lib/types";
+import type { ExploreMessage, ExploreSourceRef, VariantDraft } from "@/lib/types";
 
 /**
  * The two register headings and the sentence between them.
@@ -49,6 +51,29 @@ function askError(err: unknown, t: Translator): string {
   if (err instanceof ApiError) {
     if (err.code === "agent_unavailable") {
       return t("The model did not answer. Your question was not saved, so you can send it again.");
+    }
+    return err.message;
+  }
+  return t("Could not reach the server. Is the backend running?");
+}
+
+/**
+ * The practice failure, in the wording that says whether anything survived.
+ *
+ * Same reasoning as `askError`, with one addition: the 502 case is worth naming here
+ * because it is the difference between "the exercise was lost" and "the exercise was
+ * never written", and only the second one makes pressing the button again the right move.
+ * `nothing_to_practise` should be unreachable while the button is hidden, but it is a
+ * code the server can send and a silent fall-through to its English sentence would be
+ * worse than one line here.
+ */
+function practiceErrorText(err: unknown, t: Translator): string {
+  if (err instanceof ApiError) {
+    if (err.code === "practice_unavailable") {
+      return t("The model did not return a usable exercise. Nothing was saved, so you can try again.");
+    }
+    if (err.code === "nothing_to_practise") {
+      return t("Ask a question in this session first, then generate practice.");
     }
     return err.message;
   }
@@ -147,6 +172,59 @@ function AssistantReply({ message }: { message: ExploreMessage }) {
   );
 }
 
+/**
+ * The draft exercise one practice request produced, under the reply that introduced it.
+ *
+ * The disclaimer is not a variant of the `beyond` sentence: it says a different thing
+ * about a different artefact. The reply above may be grounded in the project's files;
+ * the exercise below is model output that no person has read and that the server has
+ * never executed. So nothing on this card may call it checked, verified or tested, and
+ * the link is an offer to try it rather than a claim that it is worth trying.
+ *
+ * The heading carries the label rather than the exercise title alone: the title is model
+ * output and may be anything, so naming the region after it would leave a screen reader
+ * user without the one fact that matters, that this is a practice exercise and not
+ * another answer.
+ */
+function PracticeCard({ exercise, projectId }: { exercise: VariantDraft; projectId: number }) {
+  const { t } = useI18n();
+  const headingId = useId();
+
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="mt-3 space-y-2 rounded-surface border border-line-strong px-4 py-3"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge tone="warning">{t("Draft, unreviewed")}</Badge>
+        <h5 id={headingId} className="text-ui font-medium text-ink">
+          {t("Practice exercise: {0}", exercise.title)}
+        </h5>
+      </div>
+      <p className="whitespace-pre-wrap text-ui text-ink">{exercise.prompt}</p>
+      {/* Omitted rather than rendered empty: the server may send no starter at all, and
+          an empty <pre> reads as a rendering fault. */}
+      {exercise.starter_code && (
+        <pre className="overflow-x-auto rounded-control bg-surface-sunken p-3 font-mono text-small text-ink">
+          {exercise.starter_code}
+        </pre>
+      )}
+      {exercise.acceptance && (
+        <p className="text-small text-ink-muted">{t("Acceptance: {0}", exercise.acceptance)}</p>
+      )}
+      <p className="text-small text-ink-muted">
+        {t("This exercise is a model draft. It has not been reviewed, and the server has not run it.")}
+      </p>
+      <Link
+        href={`/projects/${projectId}/submissions?variant=${exercise.id}`}
+        className="text-small text-accent underline"
+      >
+        {t("Submit code for this exercise")}
+      </Link>
+    </section>
+  );
+}
+
 /** One thing the learner asked, as it sits in the transcript. */
 function QuestionMessage({ text }: { text: string }) {
   const { t } = useI18n();
@@ -169,13 +247,23 @@ function QuestionMessage({ text }: { text: string }) {
  * Nothing here is an assessment. The only rows it writes are two messages per question:
  * no schedule, no mastery state and no knowledge entry moves because a learner asked
  * something.
+ *
+ * The draft exercises live in `practices`, keyed by the reply that introduced them.
+ * The server sends one back on every read as `message.exercise`, so the cards are seeded
+ * from `initialMessages` as well as from a fresh request: an exercise that only existed
+ * in memory would be unreachable after a reload, which is the one thing a learner would
+ * notice. Keying by message id also lets one session hold several exercises without any
+ * card replacing another.
  */
 export function ExploreChat({
   sessionId,
+  projectId,
   initialMessages,
   readOnly,
 }: {
   sessionId: number;
+  /** Only used to build the submission link, which is project-scoped. */
+  projectId: number;
   /** The transcript the server already rendered, oldest first. */
   initialMessages: ExploreMessage[];
   /** An archived project is read-only: the transcript still reads, the box does not. */
@@ -187,6 +275,15 @@ export function ExploreChat({
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [practicing, setPracticing] = useState(false);
+  const [practiceError, setPracticeError] = useState<string | null>(null);
+  const [practices, setPractices] = useState<Record<number, VariantDraft>>(() =>
+    Object.fromEntries(
+      initialMessages
+        .filter((message) => message.exercise)
+        .map((message) => [message.id, message.exercise as VariantDraft]),
+    ),
+  );
   /**
    * What the live region says, in one short sentence.
    *
@@ -242,7 +339,41 @@ export function ExploreChat({
     }
   }
 
+  /**
+   * Ask for one draft exercise built from the conversation so far.
+   *
+   * No question is sent: the server takes the last thing the learner actually asked, so
+   * the exercise always matches a question visible above it. Typing a fresh question
+   * here would produce an exercise quoting something the transcript never shows.
+   */
+  async function generatePractice() {
+    if (practicing) return;
+    setPracticing(true);
+    setPracticeError(null);
+    setAnnouncement(t("Generating a practice exercise."));
+    try {
+      const result = await createExplorePractice(sessionId);
+      setMessages((current) => [...current, result.message]);
+      setPractices((current) => ({
+        ...current,
+        [result.message.id]: result.message.exercise ?? result.exercise,
+      }));
+      setAnnouncement(
+        t("The practice exercise is ready. It is a model draft and has not been reviewed."),
+      );
+    } catch (err) {
+      const message = practiceErrorText(err, t);
+      setPracticeError(message);
+      setAnnouncement(message);
+      // The draft in the box is untouched. This request never used it, and clearing it
+      // would throw away text the learner was still writing.
+    } finally {
+      setPracticing(false);
+    }
+  }
+
   const headingId = `${baseId}-heading`;
+  const hasQuestion = messages.some((message) => message.role === "user");
 
   return (
     <section aria-labelledby={headingId} className="space-y-4">
@@ -272,7 +403,12 @@ export function ExploreChat({
               {message.role === "user" ? (
                 <QuestionMessage text={message.body} />
               ) : (
-                <AssistantReply message={message} />
+                <>
+                  <AssistantReply message={message} />
+                  {practices[message.id] && (
+                    <PracticeCard exercise={practices[message.id]} projectId={projectId} />
+                  )}
+                </>
               )}
             </li>
           ))}
@@ -318,7 +454,24 @@ export function ExploreChat({
               {sending ? t("Sending…") : t("Send")}
             </Button>
             <p className="text-micro text-ink-muted">{t("Ctrl or Cmd and Enter sends.")}</p>
+            {/* Offered only once there is a question to build from: the endpoint would
+                answer 422 otherwise, and a button whose only outcome is an error is
+                worse than no button. Hidden on an archived project with the rest of the
+                composer, since nothing may be written there. */}
+            {hasQuestion && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="ml-auto"
+                disabled={practicing}
+                onClick={() => void generatePractice()}
+              >
+                {practicing ? t("Generating…") : t("Generate practice")}
+              </Button>
+            )}
           </div>
+
+          {practiceError && <p className="mt-2 text-small text-danger">{practiceError}</p>}
         </div>
       )}
     </section>

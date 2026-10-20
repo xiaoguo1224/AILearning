@@ -20,14 +20,14 @@
  * rather than leaving the learner to guess whether sending again would duplicate it.
  */
 
-import { fireEvent, render, screen, waitFor } from "./render";
+import { fireEvent, render, screen, waitFor, within } from "./render";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { ExploreChat } from "@/components/ExploreChat";
-import { ApiError, askExploreQuestion } from "@/lib/api";
+import { ApiError, askExploreQuestion, createExplorePractice } from "@/lib/api";
 import type { ExploreMessage } from "@/lib/types";
 
-import { exploreQuestion, exploreReply } from "./fixtures";
+import { exploreQuestion, exploreReply, variantDraft } from "./fixtures";
 
 const { refresh } = vi.hoisted(() => ({ refresh: vi.fn() }));
 
@@ -38,6 +38,7 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
   askExploreQuestion: vi.fn(),
+  createExplorePractice: vi.fn(),
 }));
 
 // Restated rather than imported: these strings are the feature's visible contract, and a
@@ -50,13 +51,19 @@ const DISCLAIMER =
   "This project's material does not cover this. What follows is general knowledge and " +
   "has not been checked against your files.";
 const UNGROUNDED = "This answer does not cite this project's material.";
+const DRAFT_DISCLAIMER =
+  "This exercise is a model draft. It has not been reviewed, and the server has not run it.";
+const PRACTICE_FAILED =
+  "The model did not return a usable exercise. Nothing was saved, so you can try again.";
 
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
 function renderChat(messages: ExploreMessage[]) {
-  render(<ExploreChat sessionId={7} initialMessages={messages} readOnly={false} />);
+  render(
+    <ExploreChat sessionId={7} projectId={1} initialMessages={messages} readOnly={false} />,
+  );
 }
 
 /** The block a register heading lives in: its direct parent, which is the bordered div. */
@@ -193,5 +200,87 @@ describe("asking a follow-up", () => {
       refresh,
       "the server takes the session title from the first question, so the list is stale until it re-renders",
     ).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * The exercise the practice endpoint returns is the one thing on this screen the model
+ * wrote that nobody has read and the server has never run. So the card has to say that,
+ * the region has to have a name of its own, and the submission link is the only place
+ * the draft is offered as something to try.
+ *
+ * The 502 case is the mirror of the question failure: the endpoint writes neither the
+ * reply nor the exercise, so the transcript above it must be exactly as it was and the
+ * message has to say the exercise can be asked for again.
+ */
+describe("generating a temporary exercise", () => {
+  test("a delivered draft is appended under its reply, with the unreviewed disclaimer and a submission link", async () => {
+    const question = "How does the attention mask treat padding?";
+    vi.mocked(createExplorePractice).mockResolvedValue({
+      message: exploreReply({ id: 5, body: "The mask zeroes the padded positions." }),
+      exercise: variantDraft({ id: 21, sessionId: 7, sourceQuestion: question }),
+    });
+    renderChat([exploreQuestion(question, 1), exploreReply({ id: 2, body: "A first answer." })]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate practice" }));
+
+    const card = await screen.findByRole("region", {
+      name: "Practice exercise: Widen the attention mask",
+    });
+    expect(card).toHaveTextContent(DRAFT_DISCLAIMER);
+    expect(card).toHaveTextContent("def attend(q, k, mask):");
+    expect(card).toHaveTextContent("Acceptance: Padded positions score zero for every query.");
+    expect(
+      within(card).getByRole("link", { name: "Submit code for this exercise" }),
+    ).toHaveAttribute("href", "/projects/1/submissions?variant=21");
+    // The reply that came with the exercise belongs in the transcript too.
+    expect(screen.getByText("The mask zeroes the padded positions.")).toBeInTheDocument();
+  });
+
+  test("a 502 says nothing was saved and leaves the transcript alone", async () => {
+    vi.mocked(createExplorePractice).mockRejectedValue(
+      new ApiError(
+        502,
+        "The model did not return a usable practice set. Nothing was saved.",
+        "practice_unavailable",
+      ),
+    );
+    renderChat([
+      exploreQuestion("What does the paper say about attention?", 1),
+      exploreReply({ id: 2, body: "It reports a 4.2 point gain." }),
+    ]);
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate practice" }));
+
+    // Twice on purpose: beside the button, and in the live region, which is the only way
+    // this is heard while focus stays on the button.
+    expect(await screen.findAllByText(PRACTICE_FAILED)).not.toHaveLength(0);
+    expect(screen.getByText("It reports a 4.2 point gain.")).toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: /Practice exercise/ })).toBeNull();
+  });
+
+  test("no button until the session has a question to build from", () => {
+    renderChat([]);
+
+    expect(screen.queryByRole("button", { name: "Generate practice" })).toBeNull();
+  });
+
+  test("a reloaded conversation still shows the exercise it produced", () => {
+    // The server sends the draft back on `message.exercise`, so the card is rendered from
+    // the transcript rather than from state that only existed while the tab was open.
+    const reply = {
+      ...exploreReply({ id: 5, body: "The mask zeroes the padded positions." }),
+      exercise: variantDraft({ id: 21, sessionId: 7, sourceQuestion: "How does masking work?" }),
+    };
+
+    renderChat([exploreQuestion("How does masking work?", 1), reply]);
+
+    const card = screen.getByRole("region", {
+      name: "Practice exercise: Widen the attention mask",
+    });
+    expect(card).toHaveTextContent(DRAFT_DISCLAIMER);
+    expect(
+      within(card).getByRole("link", { name: "Submit code for this exercise" }),
+    ).toHaveAttribute("href", "/projects/1/submissions?variant=21");
   });
 });
