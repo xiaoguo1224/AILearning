@@ -543,5 +543,8 @@
   "Acceptance: {0}": "验收条件：{0}",
   "Practise this and submit again": "练习后再次提交",
   "Could not draft a variant.": "无法生成变式题。",
-  "This submission will be linked to variant draft #{0}.": "本次提交将关联到变式题草稿 #{0}。"
+  "This submission will be linked to variant draft #{0}.": "本次提交将关联到变式题草稿 #{0}。",
+  "Delete this version with its files and reviews?": "删除这个版本及其文件与评审记录？",
+  "Deleting...": "删除中……",
+  "Could not delete this submission.": "无法删除本次提交。"
 }

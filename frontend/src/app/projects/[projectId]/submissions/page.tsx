@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SubmissionDeleteButton } from "@/components/SubmissionDeleteButton";
 import { SubmissionForm } from "@/components/SubmissionForm";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -128,6 +129,7 @@ export default async function ProjectSubmissionsPage({
                         >
                           {t("Open")}
                         </Link>
+                        {!archived && <SubmissionDeleteButton submissionId={item.id} />}
                       </div>
                     </li>
                   ))}
