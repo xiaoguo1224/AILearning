@@ -45,6 +45,7 @@ from app.attempts import (
 from app.concepts import normalize_concept
 from app.costs import is_priced
 from app.db import SessionLocal, get_session, init_db
+from app.knowledge.router import router as knowledge_router
 from app.llm import get_provider
 from app.llm.base import LLMCallError
 from app.locale import TeachingLocaleMiddleware
@@ -63,6 +64,7 @@ app.include_router(projects_router)
 app.include_router(resources_router)
 app.include_router(submissions_router)
 app.include_router(agent_router)
+app.include_router(knowledge_router)
 
 _cors_origins = os.environ.get("STUDYFORGE_CORS_ORIGINS", "http://localhost:3000")
 app.add_middleware(
