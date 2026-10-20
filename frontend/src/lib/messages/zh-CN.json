@@ -586,5 +586,15 @@
   "The answer is ready. It includes a part that is not from this project's material.": "回答已生成，其中包含一部分资料之外的内容。",
   "The model did not answer. Your question was not saved, so you can send it again.": "模型没有返回回答，问题没有被保存，可以重试。",
   "The model did not answer. Your question was not saved.": "模型没有返回回答，问题没有被保存。",
-  "Ask a question first.": "请先填写问题。"
+  "Ask a question first.": "请先填写问题。",
+  "Generate practice": "生成临时练习",
+  "Generating…": "生成中……",
+  "Generating a practice exercise.": "正在生成练习。",
+  "The practice exercise is ready. It is a model draft and has not been reviewed.": "练习已生成。它是模型草稿，尚未审核。",
+  "The model did not return a usable exercise. Nothing was saved, so you can try again.": "模型没有返回可用的练习。没有保存任何内容，可以重试。",
+  "Ask a question in this session first, then generate practice.": "请先在本会话中提一个问题，再生成练习。",
+  "No exercise was recorded, and this attempt spent nothing.": "没有保存任何练习，本次尝试未消耗额度。",
+  "Practice exercise: {0}": "临时练习：{0}",
+  "This exercise is a model draft. It has not been reviewed, and the server has not run it.": "这是模型生成的草稿练习，未经审核，服务端没有运行过它。",
+  "Submit code for this exercise": "提交代码做这道题"
 }

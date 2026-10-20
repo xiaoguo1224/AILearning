@@ -136,6 +136,7 @@ export default async function ProjectExplorePage({
                 <ExploreChat
                   key={detail.id}
                   sessionId={detail.id}
+                  projectId={id}
                   initialMessages={detail.messages}
                   readOnly={Boolean(archived)}
                 />

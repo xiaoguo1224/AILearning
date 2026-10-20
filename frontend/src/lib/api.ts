@@ -34,6 +34,7 @@ import type {
   UploadSubmissionInput,
   CreateSessionPayload,
   ExploreAskResult,
+  ExplorePracticeResult,
   ExploreSession,
   ExploreSessionDetail,
   ExploreSessionList,
@@ -122,6 +123,10 @@ const COST_LIMIT_CONSEQUENCE = {
   // has parsed, and the cap is checked before the provider call, so a refused question
   // leaves the session untouched.
   explore: "No message was recorded, and this attempt spent nothing.",
+  // The practice endpoint writes its reply and its draft together, after the model has
+  // answered, and the cap is checked before the provider call. So a refusal here leaves
+  // the transcript and the exercise list exactly as they were.
+  practice: "No exercise was recorded, and this attempt spent nothing.",
 } as const;
 
 /** Returns null when the detail carries nothing useful, so the caller keeps its statusText fallback. */
@@ -1000,5 +1005,35 @@ export function askExploreQuestion(sessionId: number, body: string): Promise<Exp
     `/api/sessions/${sessionId}/messages`,
     { body },
     COST_LIMIT_CONSEQUENCE.explore,
+  );
+}
+
+/**
+ * Turn one question from this session into a temporary explanation plus one draft
+ * exercise. One metered model call.
+ *
+ * `body` is omitted by every caller that has a question in the transcript already, and
+ * the server then uses the last thing the learner asked. Sending an explicit question is
+ * possible but is NOT the same act: it is not written to the transcript, so a learner who
+ * asked it here alone would find the exercise quoting a question the conversation never
+ * shows.
+ *
+ * NOTHING IS WRITTEN on any failing path, the same two reasons as the endpoint above:
+ * both rows commit together after the model answers, and the cap is checked before the
+ * provider is called. A 502 `practice_unavailable` is therefore a retry, not a partial
+ * save, and the caller may say so.
+ *
+ * Other failures throw ApiError: 404 unknown session, 409 project archived, 422
+ * `nothing_to_practise` (nothing asked yet and no body), 402 spend cap, 502 model
+ * unavailable or off-schema.
+ */
+export function createExplorePractice(
+  sessionId: number,
+  body?: string,
+): Promise<ExplorePracticeResult> {
+  return postJson(
+    `/api/sessions/${sessionId}/practice`,
+    { body: body ?? null },
+    COST_LIMIT_CONSEQUENCE.practice,
   );
 }
