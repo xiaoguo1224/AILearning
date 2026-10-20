@@ -14,7 +14,7 @@
  * Mutation-verified: removing role="alert" from the <p> makes the first test red,
  * and moving the <p> inside the polite region makes the second red.
  */
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "./render";
 import { describe, expect, test, vi } from "vitest";
 
 import { QuizSection } from "@/components/QuizSection";

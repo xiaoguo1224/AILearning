@@ -41,7 +41,7 @@
  * carried over: the first mutation and the combined one both reach it, and the tally
  * against main moved from eight of ten to nine of eleven because of it.
  */
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "./render";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { GenerateForm } from "@/components/GenerateForm";

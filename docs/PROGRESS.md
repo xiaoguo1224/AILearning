@@ -4,13 +4,13 @@
 
 ## 当前状态
 
-- 当前里程碑：**P0 原始六项与 Gemini 适配已验收，正在补充中英双语，随后进入 P1 Project/Resource**。
+- 当前里程碑：**P0 原始基线、Gemini 与中英双语已验收，进入 P1 Project/Resource**。
 - 已确定：产品需求、单人本地运行边界、项目化、课程/自由学习、自动知识草稿与核心审核、跨项目确认。
 - 已准备：AGENTS、PRD、ARCHITECTURE、TASKS、DECISIONS、README 的目标文档草案。
 - 已有源码审查：通过 GitHub 阅读 StudyForge 目录、models、ingest、generation、tutor、remediation、db、部分 API 及依赖文件。
 - 当前运行：本机 FastAPI `http://localhost:8000`、Next.js `http://localhost:3000`；Docker 两服务已停止、卷保留。真实模型根 `.env` 已接通，本机开发验收进程暂设 Fake，正式使用时清除该覆盖即可使用 Gemini。
 - 已完成：基线文档合并、容器/本机测试、浏览器课程/Quiz/Review/Tutor、SQLite 快照/恢复、Gemini adapter 和一次真实 Shape 教学。提交截至 `c2e3e0f`。
-- 正在进行：已恢复未提交双语批次；前端协作 Agent 补齐旧组件、测试语言上下文和构建，主 Agent 已接通后端请求语言并完成定向测试，随后接续 P1。旧初始化“未运行”表仅是历史记录。
+- 正在进行：P1-01 项目模型/API；前端双语协作已交付，主 Agent 接续实现，只读协作 Agent 核查共享课程/归档/迁移契约。旧初始化“未运行”表仅是历史记录。
 
 ## 上游静态审查主要观察
 
@@ -34,10 +34,18 @@
 ## 下次工作入口
 
 1. 核对当前状态和最新追加记录，保留用户既有文档删除；不要重新执行已通过的 P0 基线。
-2. 完成 P0-08 双语验收和提交；未通过的前端检查必须修复。
-3. 接续 P1-01 Project 模型/API，再实现项目页面和 Resource 持久化。
+2. 接续最靠前的 P1 未完成任务，先确认已有提交和工作区。
+3. 完成 Project 模型/API、项目页面，再实现 Resource 持久化；每项按改动范围验收。
 
 ## 追加记录模板
+
+### 2026-10-20 — P0-08 双语验收
+- 后端语言链路提交 `df3709a`；前端与文档提交见 `git log --grep="P0-08"`。
+- 默认中文、Cookie 持久切换、SSR/客户端统一；课程创建/测验/复习/导师/计划/费用/删除确认已接入词典。已存课程、用户输入和原始资料保留原文；Fake 内容仍为确定性夹具。
+- 首轮失败已全部修复，没有删除或跳过测试：旧英文测试显式使用真实英语 LocaleProvider，SSR fixture 提供请求 Cookie，新增请求头契约断言。
+- 实际前端 `npm test`：**17 文件 / 132 passed**（原 126 + 新增 6）；`npm run lint` 零告警、`npm exec tsc -- --noEmit` 通过、`npm run build` 成功。收尾文案/测试 wrapper 调整后再次运行 132 项和 tsc 均通过。
+- Playwright 独立浏览器上下文实际验证：初次中文 → English → 刷新保持英文 → 切回中文 → 创建课程页；html lang 与 Cookie 均一致，无需重新生成已存课程。
+- 后端定向 31+200 项与两条真实模型语言样例结果见下方恢复记录。P0-08 验收通过，后续新增页面沿用同一双语机制。
 
 ### 2026-10-20 — 恢复双语批次（进行中）
 - 重新完整读取 AGENTS、README、PRD、ARCHITECTURE、TASKS、DECISIONS、PROGRESS，核对 Git；当前 HEAD 为 `c2e3e0f`，用户原先的文档删除保持未暂存。

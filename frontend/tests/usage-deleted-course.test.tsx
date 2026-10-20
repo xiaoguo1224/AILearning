@@ -28,7 +28,7 @@
  *   sharing `course:1`. Nothing else notices, which is why that test spies on
  *   console.error rather than on the rendered output
  */
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "./render";
 import { describe, expect, test, vi, beforeEach } from "vitest";
 
 import UsagePage from "@/app/usage/page";

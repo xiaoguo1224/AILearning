@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LanguageSwitcher, useI18n } from "./LocaleProvider";
 
 const LINKS: { href: string; label: string }[] = [
   { href: "/", label: "Today" },
@@ -16,15 +17,16 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 export function SiteHeader() {
+  const { t } = useI18n();
   const pathname = usePathname();
 
   // A review session runs under its own top bar (End session, progress, position),
   // and two stacked bars would push the card below the fold on a laptop screen.
-  if (pathname === "/review" || pathname.startsWith("/review/")) return null;
+  if (pathname === "/review" || pathname.startsWith("/review/")) return <div className="absolute right-6 top-3 z-10"><LanguageSwitcher /></div>;
 
   return (
     <header className="border-b border-line">
-      <nav className="mx-auto flex w-full max-w-4xl items-center justify-between px-6 py-3">
+      <nav className="mx-auto flex w-full max-w-4xl flex-wrap items-center justify-between gap-3 px-6 py-3">
         <Link href="/" className="text-subtitle tracking-tight text-ink">
           StudyForge
         </Link>
@@ -45,10 +47,11 @@ export function SiteHeader() {
                     : "text-ink-muted transition-colors duration-fast ease-standard hover:text-ink"
                 }
               >
-                {link.label}
+                {t(link.label)}
               </Link>
             );
           })}
+          <LanguageSwitcher />
         </div>
       </nav>
     </header>

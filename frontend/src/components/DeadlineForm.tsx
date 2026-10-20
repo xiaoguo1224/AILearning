@@ -1,5 +1,7 @@
 "use client";
 
+import { LocalizedText, useI18n } from "@/components/LocaleProvider";
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
@@ -39,6 +41,7 @@ type DeadlineFocus = "day" | "label" | "submit";
  * and its sentence is what the learner reads.
  */
 export function DeadlineForm({ plan }: { plan: CoursePlan }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [day, setDay] = useState(plan.deadline ?? "");
   const [label, setLabel] = useState(plan.deadline_label ?? "");
@@ -124,7 +127,7 @@ export function DeadlineForm({ plan }: { plan: CoursePlan }) {
       // A state update after await is not automatically part of a transition.
       startTransition(() => router.refresh());
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not reach the server.");
+      setError(err instanceof ApiError ? err.message : t("Could not reach the server."));
     } finally {
       setSaving(false);
     }
@@ -141,9 +144,7 @@ export function DeadlineForm({ plan }: { plan: CoursePlan }) {
     >
       <div className="flex flex-wrap gap-4">
         <div className="min-w-[10rem] flex-1">
-          <label htmlFor="deadline-day" className="block text-small font-medium text-ink-muted">
-            Date
-          </label>
+          <label htmlFor="deadline-day" className="block text-small font-medium text-ink-muted"><LocalizedText text={" Date "} /></label>
           {/* Never disabled, mid-request included. Disabling the focused control blurs
               it to the body, and a second submit from here is refused by the `pending`
               check at the top of `run`. Same rule the tutor's composer follows. */}
@@ -157,8 +158,7 @@ export function DeadlineForm({ plan }: { plan: CoursePlan }) {
           />
         </div>
         <div className="min-w-[10rem] flex-1">
-          <label htmlFor="deadline-label" className="block text-small font-medium text-ink-muted">
-            What to call it <span className="font-normal text-ink-subtle">(optional)</span>
+          <label htmlFor="deadline-label" className="block text-small font-medium text-ink-muted"><LocalizedText text={" What to call it "} /><span className="font-normal text-ink-subtle"><LocalizedText text={"(optional)"} /></span>
           </label>
           <input
             id="deadline-label"
@@ -166,21 +166,18 @@ export function DeadlineForm({ plan }: { plan: CoursePlan }) {
             type="text"
             value={label}
             maxLength={200}
-            placeholder="Midterm"
+            placeholder={t("Midterm")}
             onChange={(event) => setLabel(event.target.value)}
             className={`mt-1 ${FIELD_CLASS}`}
           />
         </div>
       </div>
 
-      <p className="mt-2.5 text-xs text-ink-muted">
-        The name is what shows up in your calendar. The date is the day you need to know the
-        material by, so the day itself is not counted as study time.
-      </p>
+      <p className="mt-2.5 text-xs text-ink-muted"><LocalizedText text={" The name is what shows up in your calendar. The date is the day you need to know the material by, so the day itself is not counted as study time. "} /></p>
 
       <div className="mt-3.5 flex flex-wrap items-center gap-3">
         <Button type="submit" ref={submitRef} disabled={pending || !day}>
-          {saving ? "Saving…" : hasDeadline ? "Change deadline" : "Set deadline"}
+          {saving ? t("Saving…") : hasDeadline ? t("Change deadline") : t("Set deadline")}
         </Button>
         {hasDeadline && (
           // Focus goes to the date field rather than back here, because on the path that
@@ -192,9 +189,7 @@ export function DeadlineForm({ plan }: { plan: CoursePlan }) {
             variant="secondary"
             disabled={pending}
             onClick={() => void run(() => clearCourseDeadline(plan.course_id), "day")}
-          >
-            Clear deadline
-          </Button>
+          ><LocalizedText text={" Clear deadline "} /></Button>
         )}
       </div>
 

@@ -13,7 +13,7 @@
  * exclusive contract courses-page-contract.test.tsx pins for DeleteCourseButton's
  * focus restore.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "./render";
 import { describe, expect, test, vi, beforeEach } from "vitest";
 
 import CoursesPage from "@/app/courses/page";

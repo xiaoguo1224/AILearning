@@ -8,7 +8,7 @@
  * Non-numeric ids are asserted separately since that guard runs before the API is
  * even called and must keep 404ing unconditionally.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "./render";
 import { describe, expect, test, vi, beforeEach } from "vitest";
 
 import CoursePage from "@/app/courses/[courseId]/page";

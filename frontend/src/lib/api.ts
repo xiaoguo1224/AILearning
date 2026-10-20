@@ -1,3 +1,4 @@
+import { browserLocale, createTranslator, type Locale } from "./i18n";
 import { formatUsd } from "./format";
 import type {
   AlertState,
@@ -35,6 +36,13 @@ import type {
 const BASE_URL =
   (typeof window === "undefined" ? process.env.API_INTERNAL_URL : undefined) ??
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+/** A shared request boundary for browser calls and explicit server locale forwarding. */
+async function localizedFetch(input: RequestInfo | URL, init?: RequestInit, locale: Locale = browserLocale()): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  headers.set("Accept-Language", locale);
+  return fetch(input, { ...init, headers });
+}
 
 export class ApiError extends Error {
   constructor(
@@ -92,13 +100,14 @@ const COST_LIMIT_CONSEQUENCE = {
 } as const;
 
 /** Returns null when the detail carries nothing useful, so the caller keeps its statusText fallback. */
-function messageFromObjectDetail(detail: ObjectDetail, consequence?: string): string | null {
+function messageFromObjectDetail(detail: ObjectDetail, consequence?: string, locale: Locale = browserLocale()): string | null {
+  const t = createTranslator(locale);
   if (detail.error === "cost_limit_exceeded") {
-    const tail = consequence ? ` ${consequence}` : "";
+    const tail = consequence ? ` ${t(consequence)}` : "";
     if (typeof detail.limit_usd === "number" && typeof detail.spent_usd === "number") {
-      return `LLM spend limit reached: ${formatUsd(detail.spent_usd)} spent of a ${formatUsd(detail.limit_usd)} cap.${tail}`;
+      return `${t("LLM spend limit reached: {0} spent of a {1} cap.", formatUsd(detail.spent_usd), formatUsd(detail.limit_usd))}${tail}`;
     }
-    return `LLM spend limit reached.${tail}`;
+    return `${t("LLM spend limit reached.")}${tail}`;
   }
   if (typeof detail.message === "string" && detail.message) {
     return detail.message;
@@ -119,8 +128,9 @@ async function request<T>(
   path: string,
   init?: RequestInit,
   costLimitConsequence?: string,
+  locale?: Locale,
 ): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, init);
+  const res = await localizedFetch(`${BASE_URL}${path}`, init, locale);
   if (!res.ok) {
     let message = res.statusText || `Request failed with status ${res.status}`;
     try {
@@ -131,18 +141,18 @@ async function request<T>(
       } else if (Array.isArray(detail)) {
         message = messageFromValidationDetail(detail) ?? message;
       } else if (detail && typeof detail === "object") {
-        message = messageFromObjectDetail(detail as ObjectDetail, costLimitConsequence) ?? message;
+        message = messageFromObjectDetail(detail as ObjectDetail, costLimitConsequence, locale) ?? message;
       }
     } catch {
       // Non-JSON error body - keep the statusText fallback.
     }
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, createTranslator(locale ?? browserLocale())(message));
   }
   return res.json() as Promise<T>;
 }
 
-function get<T>(path: string): Promise<T> {
-  return request<T>(path, { cache: "no-store" });
+function get<T>(path: string, locale?: Locale): Promise<T> {
+  return request<T>(path, { cache: "no-store" }, undefined, locale);
 }
 
 function postJson<T>(path: string, body: unknown, costLimitConsequence?: string): Promise<T> {
@@ -165,8 +175,8 @@ function putJson<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
-export function listCourses(): Promise<CourseSummary[]> {
-  return get("/courses");
+export function listCourses(locale?: Locale): Promise<CourseSummary[]> {
+  return get("/courses", locale);
 }
 
 /**
@@ -202,17 +212,17 @@ export function deleteCourse(id: number): Promise<CourseDeletion> {
   return request(`/courses/${id}`, { method: "DELETE" });
 }
 
-export function getCourse(id: number): Promise<CourseDetail> {
-  return get(`/courses/${id}`);
+export function getCourse(id: number, locale?: Locale): Promise<CourseDetail> {
+  return get(`/courses/${id}`, locale);
 }
 
-export function getLesson(id: number): Promise<LessonDetail> {
-  return get(`/lessons/${id}`);
+export function getLesson(id: number, locale?: Locale): Promise<LessonDetail> {
+  return get(`/lessons/${id}`, locale);
 }
 
 /** The concept map's data: every concept in the course, its lesson, and its mastery. */
-export function getCourseConcepts(id: number): Promise<CourseConcepts> {
-  return get(`/courses/${id}/concepts`);
+export function getCourseConcepts(id: number, locale?: Locale): Promise<CourseConcepts> {
+  return get(`/courses/${id}/concepts`, locale);
 }
 
 export function generateFromText(text: string): Promise<GenerateResult> {
@@ -280,7 +290,7 @@ export async function generateFromSources(
     form.append("file", file);
   }
 
-  const res = await fetch(`${BASE_URL}/courses/generate/multipart`, {
+  const res = await localizedFetch(`${BASE_URL}/courses/generate/multipart`, {
     method: "POST",
     body: form,
   });
@@ -302,7 +312,7 @@ export async function generateFromSources(
     const failed = detail as { message?: string; sources: SourceFailure[] };
     throw new SourceGenerationError(
       res.status,
-      failed.message || "Some of your sources could not be read.",
+      createTranslator(browserLocale())(failed.message || "Some of your sources could not be read."),
       failed.sources,
     );
   }
@@ -331,13 +341,13 @@ export function uncompleteLesson(id: number): Promise<CompleteResult> {
   return request(`/lessons/${id}/complete`, { method: "DELETE" });
 }
 
-export function getReviewToday(): Promise<ReviewToday> {
-  return get("/review/today");
+export function getReviewToday(locale?: Locale): Promise<ReviewToday> {
+  return get("/review/today", locale);
 }
 
-export function getReviewQueue(limit?: number): Promise<ReviewQueue> {
+export function getReviewQueue(limit?: number, locale?: Locale): Promise<ReviewQueue> {
   const query = limit ? `?limit=${limit}` : "";
-  return get(`/review/queue${query}`);
+  return get(`/review/queue${query}`, locale);
 }
 
 /**
@@ -423,7 +433,7 @@ function messageFromErrorBody(
  * and would throw the 409 note away.
  */
 export async function requestRemediation(cardId: number): Promise<RemediationOutcome> {
-  const res = await fetch(`${BASE_URL}/review/cards/${cardId}/remediation`, { method: "POST" });
+  const res = await localizedFetch(`${BASE_URL}/review/cards/${cardId}/remediation`, { method: "POST" });
   let body: unknown = null;
   try {
     body = await res.json();
@@ -443,8 +453,8 @@ export async function requestRemediation(cardId: number): Promise<RemediationOut
 }
 
 /** The concept's current explanation, or null when it has none. Costs nothing. */
-export function getRemediation(cardId: number): Promise<RemediationNote | null> {
-  return get(`/review/cards/${cardId}/remediation`);
+export function getRemediation(cardId: number, locale?: Locale): Promise<RemediationNote | null> {
+  return get(`/review/cards/${cardId}/remediation`, locale);
 }
 
 function practicePath(cardId: number): string {
@@ -495,7 +505,7 @@ export async function submitPractice(
   answer: string,
   elapsedMs?: number,
 ): Promise<PracticeOutcome> {
-  const res = await fetch(`${BASE_URL}${practicePath(cardId)}`, {
+  const res = await localizedFetch(`${BASE_URL}${practicePath(cardId)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -581,7 +591,7 @@ export async function sendTutorMessage(
   message: string,
   mode: TutorMode,
 ): Promise<TutorOutcome> {
-  const res = await fetch(`${BASE_URL}/tutor/messages`, {
+  const res = await localizedFetch(`${BASE_URL}/tutor/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ concept_key: conceptKey, message, mode }),
@@ -612,8 +622,8 @@ export async function sendTutorMessage(
  * the bespoke fetch that requestRemediation, submitPractice and sendTutorMessage use.
  * They all go through plain get/postJson/putJson, deliberately.
  */
-export function getCoursePlan(id: number): Promise<CoursePlan> {
-  return get(`/courses/${id}/plan`);
+export function getCoursePlan(id: number, locale?: Locale): Promise<CoursePlan> {
+  return get(`/courses/${id}/plan`, locale);
 }
 
 /**
@@ -676,8 +686,8 @@ export function coursePlanIcsFilename(id: number): string {
 }
 
 /** Every day the learner has marked off, oldest first. Global, not per course. */
-export function listDaysOff(): Promise<DaysOff> {
-  return get("/plan/days-off");
+export function listDaysOff(locale?: Locale): Promise<DaysOff> {
+  return get("/plan/days-off", locale);
 }
 
 /**
@@ -700,9 +710,9 @@ export function removeDayOff(day: string): Promise<DayOffRemoval> {
   return request(`/plan/days-off/${encodeURIComponent(day)}`, { method: "DELETE" });
 }
 
-export function getUsage(limit?: number): Promise<UsageSummary> {
+export function getUsage(limit?: number, locale?: Locale): Promise<UsageSummary> {
   const query = limit ? `?limit=${limit}` : "";
-  return get(`/usage${query}`);
+  return get(`/usage${query}`, locale);
 }
 
 export function acknowledgeCostAlert(): Promise<AlertState> {

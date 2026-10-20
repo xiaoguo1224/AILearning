@@ -9,7 +9,7 @@
 - `backend/app/main.py` 集中现有 API；`models.py` 定义 Course/Module/Lesson/QuizItem/Attempt/ReviewCard/ReviewLog/RemediationNote/TutorMessage 等。
 - `ingest.py` 支持 PDF、文字、URL、YouTube 字幕等文本提取；`generation.py` 构建课程与 Quiz。
 - `tutor.py` 按 Concept 提供教学上下文；`remediation.py`、`review.py`、`fsrs.py` 实现补课和复习。
-- LLM Provider 支持 Anthropic、Ollama、用于测试的 Fake provider。
+- LLM Provider 支持 Anthropic、Ollama、Gemini/OpenAI 兼容网关及用于测试的 Fake provider。
 - 现有资料生成后原始来源未持久保存；缺少项目级自由会话和本地代码上传评审。
 
 正式开发前应再次核查目标仓库 HEAD，不假定静态审查与本地代码完全一致。
@@ -19,6 +19,7 @@
 - Next.js App Router 通过 `NEXT_PUBLIC_API_URL` 调用 FastAPI。既有路由不带 `/api` 前缀：`/courses`、`/courses/generate`、`/courses/generate/pdf`、`/quiz/{id}/answer`、`/review/*`、`/tutor/messages`、`/usage`。下文 `/api/*` 是新增模块的规划。
 - 生成链路：不可信来源 → ingest 清洗分块 → outline → 逐课 author → 保存 Course/Module/Lesson/QuizItem。多来源最多 5 个、累计 150000 字符；任何来源失败时整次请求在模型调用前拒绝。
 - `MeteredLLM` 统一检查预算、调用 provider、记录 token/费用/失败与 run_id。费用是估算；预算可能超出一个调用。删除课程保留费用历史，不能将费用视为账单。
+- 双语：Next.js 以 `studyforge_locale` Cookie 在 SSR 和客户端间共享 zh-CN/en（默认中文），统一 API 封装转发 Accept-Language。后端请求级 ContextVar 经 ASGI middleware 隔离，并由 MeteredLLM 追加教学语言指令；原始来源、代码、JSON schema 与既有概念键不翻译。
 - Quiz/Review 写入 Attempt 与 FSRS 复习记录；补课练习和 Tutor 不提高正式掌握等级。Tutor 以概念为范围，支持直接回答和两级 guided 提示。
 - 课程删除会清理课程内答题和独占概念的复习历史，保留共享概念；项目归档不得调用课程删除。原始 PDF/网页尚未持久化，由 P1 补齐。
 - 启动时 `create_all` 创建缺失表，`ADDED_COLUMNS` 仅支持新增列及常量默认值；不得用它做重命名、删除或重建。升级前备份，旧数据及重复启动必须回归。

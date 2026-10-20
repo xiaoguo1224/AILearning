@@ -1,3 +1,7 @@
+import type { Translator } from "@/lib/i18n";
+
+import { LocalizedText } from "@/components/LocaleProvider";
+import { getLocale, getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -78,9 +82,9 @@ const RATE_FLOOR = 0.05;
  */
 const PACE_WINDOW_DAYS = 30;
 
-function formatRate(value: number): string {
+function formatRate(value: number, t: Translator): string {
   if (value === 0) return "0";
-  if (value < RATE_FLOOR) return "less than 0.1";
+  if (value < RATE_FLOOR) return t("less than 0.1");
   return value.toFixed(1);
 }
 
@@ -115,29 +119,29 @@ function formatRate(value: number): string {
  * enforces, which is why they are the backup and not the primary reason. The prose reading
  * correctly at the floor is the property that holds no matter what the server sends.
  */
-function ratePhrase(value: number): string {
-  if (value !== 0 && value < RATE_FLOOR) return "less than 0.1";
-  return `about ${formatRate(value)}`;
+function ratePhrase(value: number, t: Translator): string {
+  if (value !== 0 && value < RATE_FLOOR) return t("less than 0.1");
+  return t("about {0}", formatRate(value, t));
 }
 
 /** "your Midterm" when they named it, "your deadline" when they did not. */
-function deadlineName(plan: CoursePlan): string {
+function deadlineName(plan: CoursePlan, t: Translator): string {
   const label = plan.deadline_label?.trim();
-  return label ? `your ${label}` : "your deadline";
+  return label ? t("your {0}", label) : t("your deadline");
 }
 
 /** Sentence-initial form of the same phrase. */
-function capitalizedDeadlineName(plan: CoursePlan): string {
-  const name = deadlineName(plan);
+function capitalizedDeadlineName(plan: CoursePlan, t: Translator): string {
+  const name = deadlineName(plan, t);
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
 
-function lessonCount(count: number): string {
-  return count === 1 ? "1 lesson" : `${count} lessons`;
+function lessonCount(count: number, t: Translator): string {
+  return count === 1 ? t("1 lesson") : t("{0} lessons", count);
 }
 
-function dayCount(count: number): string {
-  return count === 1 ? "1 day" : `${count} days`;
+function dayCount(count: number, t: Translator): string {
+  return count === 1 ? t("1 day") : t("{0} days", count);
 }
 
 /**
@@ -146,27 +150,27 @@ function dayCount(count: number): string {
  * Never says a day is "left to prepare" or similar: the days counted here are days new
  * lessons can go in on, which is the only thing this feature measures.
  */
-function deadlineSentence(plan: CoursePlan): string {
+function deadlineSentence(plan: CoursePlan, t: Translator): string {
   if (plan.deadline == null || plan.days_until == null) return "";
-  const when = formatDayKey(plan.deadline);
-  const name = capitalizedDeadlineName(plan);
+  const when = formatDayKey(plan.deadline, t.locale);
+  const name = capitalizedDeadlineName(plan, t);
   if (plan.status === "passed") {
-    return plan.days_until === -1 ? `${name} was yesterday.` : `${name} was on ${when}.`;
+    return plan.days_until === -1 ? t("{0} was yesterday.", name) : t("{0} was on {1}.", name, when);
   }
-  if (plan.days_until === 0) return `${name} is today, ${when}.`;
-  if (plan.days_until === 1) return `${name} is tomorrow, ${when}.`;
-  return `${name} is in ${dayCount(plan.days_until)}, on ${when}.`;
+  if (plan.days_until === 0) return t("{0} is today, {1}.", name, when);
+  if (plan.days_until === 1) return t("{0} is tomorrow, {1}.", name, when);
+  return t("{0} is in {1}, on {2}.", name, dayCount(plan.days_until, t), when);
 }
 
 /** "24 study days left before it, after the 2 days you have marked off." */
-function studyDaysSentence(plan: CoursePlan): string | null {
+function studyDaysSentence(plan: CoursePlan, t: Translator): string | null {
   if (plan.status !== "active" || plan.available_days == null) return null;
-  const head = `That leaves ${dayCount(plan.available_days)} to study on before it`;
+  const head = t("That leaves {0} to study on before it", dayCount(plan.available_days, t));
   const off = plan.days_off_in_window ?? 0;
   if (off > 0) {
-    return `${head}, once the ${dayCount(off)} you have marked off are taken out. The deadline day itself is not counted, since that is the day you need to already know it.`;
+    return t("{0}, once the {1} you have marked off are taken out. The deadline day itself is not counted, since that is the day you need to already know it.", head, dayCount(off, t));
   }
-  return `${head}. The deadline day itself is not counted, since that is the day you need to already know it.`;
+  return t("{0}. The deadline day itself is not counted, since that is the day you need to already know it.", head);
 }
 
 /**
@@ -187,16 +191,16 @@ function studyDaysSentence(plan: CoursePlan): string | null {
  * a denominator this feature never touched, and the paragraph above already says what a
  * day off does.
  */
-function daysOffCountSentence(plan: CoursePlan, upcomingCount: number): string {
+function daysOffCountSentence(plan: CoursePlan, upcomingCount: number, t: Translator): string {
   const counted = plan.days_off_in_window ?? 0;
   if (plan.status !== "active" || counted === 0) return "";
-  const name = deadlineName(plan);
+  const name = deadlineName(plan, t);
   if (counted === upcomingCount) {
     return upcomingCount === 1
-      ? ` Your one upcoming day off falls between today and ${name}.`
-      : ` All ${upcomingCount} of your upcoming days off fall between today and ${name}.`;
+      ? t(" Your one upcoming day off falls between today and {0}.", name)
+      : t(" All {0} of your upcoming days off fall between today and {1}.", upcomingCount, name);
   }
-  return ` ${counted} of your ${upcomingCount} upcoming days off ${counted === 1 ? "falls" : "fall"} between today and ${name}.`;
+  return t(" {0} of your {1} upcoming days off {2} between today and {3}.", counted, upcomingCount, counted === 1 ? t("falls") : t("fall"), name);
 }
 
 /**
@@ -207,16 +211,16 @@ function daysOffCountSentence(plan: CoursePlan, upcomingCount: number): string {
  * and only the code separates a deadline that is today from one that has passed from a
  * window the learner has marked entirely off.
  */
-function requiredDashNote(plan: CoursePlan): string {
+function requiredDashNote(plan: CoursePlan, t: Translator): string {
   switch (plan.reason) {
     case "deadline_today":
-      return `${capitalizedDeadlineName(plan)} is today, so there are no study days left before it and no weekly rate to spread the remaining lessons across.`;
+      return t("{0} is today, so there are no study days left before it and no weekly rate to spread the remaining lessons across.", capitalizedDeadlineName(plan, t));
     case "deadline_passed":
-      return `${capitalizedDeadlineName(plan)} has passed, so there is no longer a rate to hit for it.`;
+      return t("{0} has passed, so there is no longer a rate to hit for it.", capitalizedDeadlineName(plan, t));
     case "all_days_off":
-      return `Every day between now and ${deadlineName(plan)} is marked as a day off, so there is no study time left to spread the remaining lessons across. Unmark one and a rate appears.`;
+      return t("Every day between now and {0} is marked as a day off, so there is no study time left to spread the remaining lessons across. Unmark one and a rate appears.", deadlineName(plan, t));
     default:
-      return "This course has no deadline, so there is no rate to hit. Set one below and this fills in.";
+      return t("This course has no deadline, so there is no rate to hit. Set one below and this fills in.");
   }
 }
 
@@ -264,11 +268,11 @@ function PlanStat({ value, label }: { value: string; label: string }) {
  * to that is a true sentence on their screen rather than a broken page. The neighbouring
  * default branch already answers rather than throwing, on strictly stranger input.
  */
-function projectionSentence(plan: CoursePlan): string {
-  const noDate = "There is no finish date to project for this course just now.";
+function projectionSentence(plan: CoursePlan, t: Translator): string {
+  const noDate = t("There is no finish date to project for this course just now.");
   switch (plan.projection_reason) {
     case "no_pace_yet":
-      return "There is no finish date to project until you have finished a few more lessons.";
+      return t("There is no finish date to project until you have finished a few more lessons.");
     case "no_progress_in_this_course":
       /*
        * SCOPED TO THE WINDOW, NOT TO THE LEARNER'S HISTORY, because this branch is reached
@@ -279,10 +283,10 @@ function projectionSentence(plan: CoursePlan): string {
        * worked in this course, just not lately, and a screen telling them otherwise is
        * wrong about the one thing they would know better than it does.
        */
-      return `None of that has been in this course in the last ${PACE_WINDOW_DAYS} days, so there is no finish date to project.`;
+      return t("None of that has been in this course in the last {0} days, so there is no finish date to project.", PACE_WINDOW_DAYS);
     case "already_finished":
       // Unreachable today, and answered rather than asserted. See the header above.
-      return "You have finished this course, so there is no finish date left to project.";
+      return t("You have finished this course, so there is no finish date left to project.");
     case null:
     case undefined:
       break;
@@ -344,11 +348,11 @@ function projectionSentence(plan: CoursePlan): string {
    */
   const share =
     plan.observed_per_week_this_course === plan.observed_per_week_all_courses
-      ? "All of that is in this course, and that is the pace your finish date uses."
-      : `${ratePhrase(plan.observed_per_week_this_course)} of that is in this course, and that is the pace your finish date uses.`;
-  const finish = `At that pace you finish on ${formatDayKey(plan.finish_projection)}`;
+      ? t("All of that is in this course, and that is the pace your finish date uses.")
+      : t("{0} of that is in this course, and that is the pace your finish date uses.", ratePhrase(plan.observed_per_week_this_course, t));
+  const finish = t("At that pace you finish on {0}", formatDayKey(plan.finish_projection, t.locale));
   return plan.deadline != null && plan.status === "active"
-    ? `${capitalize(share)} ${finish}; ${deadlineName(plan)} is on ${formatDayKey(plan.deadline)}.`
+    ? t("{0} {1}; {2} is on {3}.", capitalize(share), finish, deadlineName(plan, t), formatDayKey(plan.deadline, t.locale))
     : `${capitalize(share)} ${finish}.`;
 }
 
@@ -365,19 +369,19 @@ function capitalize(text: string): string {
  * disaster depends entirely on what the learner's next fortnight looks like, which this
  * program has no way of knowing, so it does not say.
  */
-function paceSentences(plan: CoursePlan): string[] {
+function paceSentences(plan: CoursePlan, t: Translator): string[] {
   const lines: string[] = [];
 
   if (plan.lessons_remaining === 0) {
     lines.push(
-      `All ${lessonCount(plan.lessons_total)} in this course are finished, so there is no new material left to fit in.`,
+      t("All {0} in this course are finished, so there is no new material left to fit in.", lessonCount(plan.lessons_total, t)),
     );
   } else if (plan.required_per_week != null) {
     lines.push(
-      `You need ${ratePhrase(plan.required_per_week)} lessons a week to get through the remaining ${lessonCount(plan.lessons_remaining)} before ${deadlineName(plan)}.`,
+      t("You need {0} lessons a week to get through the remaining {1} before {2}.", ratePhrase(plan.required_per_week, t), lessonCount(plan.lessons_remaining, t), deadlineName(plan, t)),
     );
   } else {
-    lines.push(requiredDashNote(plan));
+    lines.push(requiredDashNote(plan, t));
   }
 
   const sample = plan.observed_sample_all_courses;
@@ -385,24 +389,24 @@ function paceSentences(plan: CoursePlan): string[] {
     // "all" is load-bearing and must survive any trimming of this sentence. Without it
     // this is the old claim, which counted only this course, and it is now false.
     lines.push(
-      `Across all your courses, you have been finishing ${ratePhrase(plan.observed_per_week_all_courses)} lessons a week.`,
+      t("Across all your courses, you have been finishing {0} lessons a week.", ratePhrase(plan.observed_per_week_all_courses, t)),
     );
   } else if (sample === 0) {
     lines.push(
-      `You have not finished a lesson in any course in the last ${PACE_WINDOW_DAYS} days, so there is no pace to measure yet.`,
+      t("You have not finished a lesson in any course in the last {0} days, so there is no pace to measure yet.", PACE_WINDOW_DAYS),
     );
   } else if (typeof sample === "number") {
     lines.push(
-      `You have finished ${lessonCount(sample)} across all your courses in the last ${PACE_WINDOW_DAYS} days, which is not enough to call a pace yet: a rate off a handful of lessons would swing every time one more landed.`,
+      t("You have finished {0} across all your courses in the last {1} days, which is not enough to call a pace yet: a rate off a handful of lessons would swing every time one more landed.", lessonCount(sample, t), PACE_WINDOW_DAYS),
     );
   } else {
     // Claims no count, because a payload that stopped sending one is a payload whose
     // count we do not know. Saying "you have finished 0" there would be inventing it.
-    lines.push("There is not enough finished work across your courses to call a pace yet.");
+    lines.push(t("There is not enough finished work across your courses to call a pace yet."));
   }
 
   if (plan.lessons_remaining > 0) {
-    lines.push(projectionSentence(plan));
+    lines.push(projectionSentence(plan, t));
   }
 
   return lines;
@@ -414,61 +418,38 @@ function paceSentences(plan: CoursePlan): string[] {
  * The deadline going by changes nothing at all: no card was pulled forward before it and
  * none is dropped after it. Saying so is the point of the panel.
  */
-function PassedPanel({ plan }: { plan: CoursePlan }) {
+function PassedPanel({ plan, t }: { plan: CoursePlan; t: Translator }) {
   return (
     <section className="mt-5 rounded-surface border border-line px-5 py-4">
       <p className="text-ui font-medium">
-        {deadlineSentence(plan)} Your reviews continue, because you still know this.
-      </p>
-      <p className="mt-1.5 text-small text-ink-muted">
-        Nothing was rescheduled when you set the date and nothing was rescheduled when it
-        passed. Your concepts come back when your memory of them says so, exactly as they
-        would have without a deadline. Clear it below, or set the next one.
-      </p>
+        {deadlineSentence(plan, t)}<LocalizedText text={" Your reviews continue, because you still know this. "} /></p>
+      <p className="mt-1.5 text-small text-ink-muted"><LocalizedText text={" Nothing was rescheduled when you set the date and nothing was rescheduled when it passed. Your concepts come back when your memory of them says so, exactly as they would have without a deadline. Clear it below, or set the next one. "} /></p>
     </section>
   );
 }
 
-function CalendarSection({ plan }: { plan: CoursePlan }) {
+function CalendarSection({ plan, t }: { plan: CoursePlan; t: Translator }) {
   return (
     <section aria-labelledby="plan-calendar-heading">
-      <h2 id="plan-calendar-heading" className="mt-9 text-subtitle">
-        Put it in your calendar
-      </h2>
-      <p className="mt-1.5 max-w-2xl text-small text-ink-muted">
-        StudyForge cannot notify you. There are no accounts here and no server running when
-        you are not using it, so nothing in this program can send you an email, a push
-        notification, or a reminder of any kind, and that is by design. What it can do is
-        hand you a calendar file, and let the calendar you already use do the reminding.
-      </p>
+      <h2 id="plan-calendar-heading" className="mt-9 text-subtitle"><LocalizedText text={" Put it in your calendar "} /></h2>
+      <p className="mt-1.5 max-w-2xl text-small text-ink-muted"><LocalizedText text={" StudyForge cannot notify you. There are no accounts here and no server running when you are not using it, so nothing in this program can send you an email, a push notification, or a reminder of any kind, and that is by design. What it can do is hand you a calendar file, and let the calendar you already use do the reminding. "} /></p>
       {plan.deadline == null ? (
-        <p className="mt-3 rounded-surface border border-line px-5 py-4 text-small text-ink-muted">
-          Set a deadline above and the calendar file appears here.
-        </p>
+        <p className="mt-3 rounded-surface border border-line px-5 py-4 text-small text-ink-muted"><LocalizedText text={" Set a deadline above and the calendar file appears here. "} /></p>
       ) : (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-4 rounded-surface border border-line px-5 py-4">
-          <p className="max-w-lg text-small text-ink-muted">
-            One all-day event on {formatDayKey(plan.deadline)}, with where you stand written
-            into it. It saves as {coursePlanIcsFilename(plan.course_id)}. This is a file you
-            download and open once, not an address your calendar keeps checking: a calendar
-            provider on the internet cannot reach a server running on your own machine.
-            Download it again after changing the date and it updates the same entry rather
-            than adding a second one.
-          </p>
+          <p className="max-w-lg text-small text-ink-muted"><LocalizedText text={" One all-day event on "} />{formatDayKey(plan.deadline, t.locale)}<LocalizedText text={", with where you stand written into it. It saves as "} />{coursePlanIcsFilename(plan.course_id)}<LocalizedText text={". This is a file you download and open once, not an address your calendar keeps checking: a calendar provider on the internet cannot reach a server running on your own machine. Download it again after changing the date and it updates the same entry rather than adding a second one. "} /></p>
           <a
             href={coursePlanIcsUrl(plan.course_id)}
             className="shrink-0 whitespace-nowrap rounded-control border border-line-strong px-4 py-2 text-small font-medium transition-colors duration-fast ease-standard hover:border-line-hover"
-          >
-            Download .ics
-          </a>
+          ><LocalizedText text={" Download .ics "} /></a>
         </div>
       )}
     </section>
   );
 }
 
-function PlanScreen({ plan, daysOff }: { plan: CoursePlan; daysOff: DayOff[] }) {
-  const studyDays = studyDaysSentence(plan);
+function PlanScreen({ plan, daysOff, t }: { plan: CoursePlan; daysOff: DayOff[]; t: Translator }) {
+  const studyDays = studyDaysSentence(plan, t);
   // The same split the list renders, so the sentence and the list can never be counting
   // different things. One definition, two callers.
   const today = serverToday(plan);
@@ -476,31 +457,24 @@ function PlanScreen({ plan, daysOff }: { plan: CoursePlan; daysOff: DayOff[] }) 
 
   return (
     <>
-      <p className="mt-5 max-w-2xl text-ui text-ink-muted">
-        This page is about the rate new material goes in, and only that. Your reviews are
-        scheduled by how your memory of each concept decays, and a deadline does not move
-        any of them: nothing here brings a review forward, and nothing here is at risk
-        because a date is close.
-      </p>
+      <p className="mt-5 max-w-2xl text-ui text-ink-muted"><LocalizedText text={" This page is about the rate new material goes in, and only that. Your reviews are scheduled by how your memory of each concept decays, and a deadline does not move any of them: nothing here brings a review forward, and nothing here is at risk because a date is close. "} /></p>
 
-      {plan.status === "passed" && <PassedPanel plan={plan} />}
+      {plan.status === "passed" && <PassedPanel plan={plan} t={t} />}
 
       <section aria-labelledby="plan-pace-heading">
-        <h2 id="plan-pace-heading" className="mt-8 text-subtitle">
-          Your pace
-        </h2>
+        <h2 id="plan-pace-heading" className="mt-8 text-subtitle"><LocalizedText text={" Your pace "} /></h2>
         {plan.status === "active" && (
           <p className="mt-1.5 max-w-2xl text-small text-ink-muted">
-            {deadlineSentence(plan)} {studyDays}
+            {deadlineSentence(plan, t)} {studyDays}
           </p>
         )}
         <div className="mt-4 rounded-surface border border-line px-5 py-5">
           <dl className="flex flex-wrap gap-x-12 gap-y-6">
             <PlanStat
               value={
-                plan.required_per_week == null ? "–" : formatRate(plan.required_per_week)
+                plan.required_per_week == null ? "–" : formatRate(plan.required_per_week, t)
               }
-              label="Lessons a week needed"
+              label={t("Lessons a week needed")}
             />
             {/*
               THE SECOND TILE IS THIS COURSE'S SHARE, NOT THE ALL-COURSES RATE, and the
@@ -554,13 +528,13 @@ function PlanScreen({ plan, daysOff }: { plan: CoursePlan; daysOff: DayOff[] }) 
               value={
                 plan.observed_per_week_this_course == null
                   ? "–"
-                  : formatRate(plan.observed_per_week_this_course)
+                  : formatRate(plan.observed_per_week_this_course, t)
               }
-              label="Lessons a week, this course"
+              label={t("Lessons a week, this course")}
             />
           </dl>
           <div className="mt-5 max-w-2xl border-t border-line pt-4 text-small text-ink-muted">
-            {paceSentences(plan).map((line) => (
+            {paceSentences(plan, t).map((line) => (
               <p key={line} className="mt-1 first:mt-0">
                 {line}
               </p>
@@ -570,13 +544,11 @@ function PlanScreen({ plan, daysOff }: { plan: CoursePlan; daysOff: DayOff[] }) 
       </section>
 
       <section aria-labelledby="plan-deadline-heading">
-        <h2 id="plan-deadline-heading" className="mt-9 text-subtitle">
-          Deadline
-        </h2>
+        <h2 id="plan-deadline-heading" className="mt-9 text-subtitle"><LocalizedText text={" Deadline "} /></h2>
         <p className="mt-1.5 max-w-2xl text-small text-ink-muted">
           {plan.deadline == null
-            ? "This course has no deadline. Setting one works out the weekly rate above; it changes nothing else, and clearing it later puts everything back."
-            : "Changing the date works out a new weekly rate. It moves no review and un-completes no lesson, and clearing it puts the course back to where it was."}
+            ? t("This course has no deadline. Setting one works out the weekly rate above; it changes nothing else, and clearing it later puts everything back.")
+            : t("Changing the date works out a new weekly rate. It moves no review and un-completes no lesson, and clearing it puts the course back to where it was.")}
         </p>
         {/*
           NOT keyed on the deadline, and that is a deliberate reversal. The form does
@@ -589,17 +561,11 @@ function PlanScreen({ plan, daysOff }: { plan: CoursePlan; daysOff: DayOff[] }) 
         <DeadlineForm plan={plan} />
       </section>
 
-      <CalendarSection plan={plan} />
+      <CalendarSection plan={plan} t={t} />
 
       <section aria-labelledby="plan-days-off-heading">
-        <h2 id="plan-days-off-heading" className="mt-9 text-subtitle">
-          Days off
-        </h2>
-        <p className="mt-1.5 max-w-2xl text-small text-ink-muted">
-          Days off apply to every course, not just this one. A day marked here stops counting
-          as a study day everywhere, so the weekly rate on your other courses moves too. It
-          changes no review: your concepts still come back when they come back.
-          {daysOffCountSentence(plan, upcomingDaysOff)}
+        <h2 id="plan-days-off-heading" className="mt-9 text-subtitle"><LocalizedText text={" Days off "} /></h2>
+        <p className="mt-1.5 max-w-2xl text-small text-ink-muted"><LocalizedText text={" Days off apply to every course, not just this one. A day marked here stops counting as a study day everywhere, so the weekly rate on your other courses moves too. It changes no review: your concepts still come back when they come back. "} />{daysOffCountSentence(plan, upcomingDaysOff, t)}
         </p>
         <DaysOffControl daysOff={daysOff} today={today} />
       </section>
@@ -608,6 +574,7 @@ function PlanScreen({ plan, daysOff }: { plan: CoursePlan; daysOff: DayOff[] }) 
 }
 
 export default async function CoursePlanPage(props: PageProps<"/courses/[courseId]/plan">) {
+  const t = await getTranslator();
   const { courseId } = await props.params;
   const id = Number(courseId);
   if (!Number.isInteger(id)) notFound();
@@ -617,14 +584,14 @@ export default async function CoursePlanPage(props: PageProps<"/courses/[courseI
   try {
     // A course with no deadline answers 200 here with a null-deadline shape, so there is
     // no "has a plan" branch to take: only an unknown course id is a 404.
-    const [planResult, daysOffResult] = await Promise.all([getCoursePlan(id), listDaysOff()]);
+    const [planResult, daysOffResult] = await Promise.all([getCoursePlan(id, await getLocale()), listDaysOff(await getLocale())]);
     plan = planResult;
     daysOff = daysOffResult.days_off;
   } catch (err) {
     if (err instanceof ApiError && err.status === 404) notFound();
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
-        <PageHeader title="Plan" />
+        <PageHeader title={t("Plan")} />
         <ErrorState
           title=""
           className="mt-8"
@@ -643,14 +610,12 @@ export default async function CoursePlanPage(props: PageProps<"/courses/[courseI
       <Link
         href="/courses"
         className="text-small text-ink-muted transition-colors duration-fast ease-standard hover:text-ink"
-      >
-        &larr; All courses
-      </Link>
+      ><LocalizedText text={" ← All courses "} /></Link>
       <PageHeader className="mt-4" title={plan.title} />
 
       <CourseTabs courseId={plan.course_id} active="plan" />
 
-      <PlanScreen plan={plan} daysOff={daysOff} />
+      <PlanScreen plan={plan} daysOff={daysOff} t={t} />
     </main>
   );
 }

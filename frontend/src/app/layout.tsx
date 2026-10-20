@@ -3,6 +3,8 @@ import { Geist, Geist_Mono } from "next/font/google";
 
 import { CostBanner } from "@/components/CostBanner";
 import { SiteHeader } from "@/components/SiteHeader";
+import { LocaleProvider } from "@/components/LocaleProvider";
+import { getTranslator } from "@/lib/locale-server";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -15,21 +17,24 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "StudyForge",
-  description: "Turn any material into a structured course with quizzes.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const t = await getTranslator();
+  return { title: "StudyForge", description: t("Turn any material into a structured course with quizzes.") };
+}
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const t = await getTranslator();
   return (
     <html
-      lang="en"
+      lang={t.locale}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <CostBanner />
-        <SiteHeader />
-        {children}
+        <LocaleProvider locale={t.locale}>
+          <CostBanner />
+          <SiteHeader />
+          {children}
+        </LocaleProvider>
       </body>
     </html>
   );

@@ -1,5 +1,11 @@
 "use client";
 
+
+
+
+
+import { useI18n } from "@/components/LocaleProvider";
+
 import { useEffect, useRef, useState } from "react";
 
 import { ConceptPractice } from "@/components/ConceptPractice";
@@ -26,14 +32,15 @@ const POLL_ATTEMPTS = Math.ceil(POLL_CEILING_MS / POLL_INTERVAL_MS);
 
 /** Recall probability as a bar. Empty, not full, when the card has never been scheduled. */
 function RecallBar({ retrievability }: { retrievability: number | null }) {
+  const { t } = useI18n();
   const percent = retrievability === null ? 0 : Math.round(retrievability * 100);
   return (
     <div
       role="img"
       aria-label={
         retrievability === null
-          ? "Recall probability not known yet"
-          : `Recall probability ${percent} percent`
+          ? t("Recall probability not known yet")
+          : t("Recall probability {0} percent", percent)
       }
       className="h-[5px] w-[84px] overflow-hidden rounded-full bg-line"
     >
@@ -76,6 +83,7 @@ export function ReteachConcept({
   entry: NeedsAttentionEntry;
   initialNote: RemediationNote | null;
 }) {
+  const { t } = useI18n();
   const [note, setNote] = useState<RemediationNote | null>(initialNote);
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -166,7 +174,7 @@ export function ReteachConcept({
         setAwaiting(false);
         wantsFocus.current = true;
         setOpen(true);
-        setAnnouncement(`An explanation of ${entry.concept_label} is ready.`);
+        setAnnouncement(t("An explanation of {0} is ready.", entry.concept_label));
         return;
       }
       if (attempts >= POLL_ATTEMPTS) {
@@ -174,8 +182,7 @@ export function ReteachConcept({
         // and the button silently re-enabling is not something a screen reader user
         // can see happen.
         const gaveUp =
-          "That explanation did not arrive. The request writing it has run out of " +
-          "time, so ask again when you are ready.";
+          t("That explanation did not arrive. The request writing it has run out of time, so ask again when you are ready.");
         setAwaiting(false);
         setNotice(gaveUp);
         setAnnouncement(gaveUp);
@@ -185,7 +192,7 @@ export function ReteachConcept({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [awaiting, entry.card_id, entry.concept_label]);
+  }, [awaiting, entry.card_id, entry.concept_label, t]);
 
   // Focus lands on the explanation once it is on screen, so a keyboard or screen
   // reader user ends up at the thing they asked for rather than back at the body.
@@ -219,12 +226,12 @@ export function ReteachConcept({
     setElapsed(0);
     setError(null);
     setNotice(null);
-    setAnnouncement(`Writing an explanation of ${entry.concept_label}.`);
+    setAnnouncement(t("Writing an explanation of {0}.", entry.concept_label));
     try {
       const outcome = await requestRemediation(entry.card_id);
       if (outcome.kind === "note") {
         showNote(outcome.note);
-        setAnnouncement(`An explanation of ${entry.concept_label} is ready.`);
+        setAnnouncement(t("An explanation of {0} is ready.", entry.concept_label));
         return;
       }
       const conflict = outcome.conflict;
@@ -240,7 +247,7 @@ export function ReteachConcept({
           // Narrowing has proved there is a note here, so this branch cannot be
           // reached by an absent one however the union grows.
           showNote(conflict.note);
-          setAnnouncement(`Showing the explanation of ${entry.concept_label} you already have.`);
+          setAnnouncement(t("Showing the explanation of {0} you already have.", entry.concept_label));
           break;
         case "generation_in_progress":
           // A click that lost the race by a hair comes back to find the winner's
@@ -255,7 +262,7 @@ export function ReteachConcept({
             break;
           }
           setAwaiting(true);
-          setAnnouncement(`An explanation of ${entry.concept_label} is already being written.`);
+          setAnnouncement(t("An explanation of {0} is already being written.", entry.concept_label));
           break;
         case "not_flagged": {
           // Reachable when the list was drawn before the concept recovered. It is good
@@ -267,8 +274,7 @@ export function ReteachConcept({
           // deliver the same news by a different route and one row must not carry two
           // wordings of one fact.
           const message =
-            `${noLongerMissed(entry.concept_label)}, so there is nothing to re-teach. ` +
-            "It stays in your review queue on its usual schedule.";
+            t("{0}, so there is nothing to re-teach. It stays in your review queue on its usual schedule.", noLongerMissed(entry.concept_label, t));
           setRecovered(true);
           setNotice(message);
           setAnnouncement(message);
@@ -290,7 +296,7 @@ export function ReteachConcept({
       const message =
         err instanceof ApiError
           ? err.message
-          : "Could not reach the server. Is the backend running?";
+          : t("Could not reach the server. Is the backend running?");
       setError(message);
       // Routed through the mounted live region rather than left to a role="alert"
       // that appears with its own text, which is the announcement this project has
@@ -318,23 +324,23 @@ export function ReteachConcept({
   }
 
   const label = busy
-    ? "Writing…"
+    ? t("Writing…")
     : spent
-      ? "Not needed"
+      ? t("Not needed")
       : hasNote
         ? open
-          ? "Hide explanation"
-          : "Show explanation"
-        : "Re-teach";
+          ? t("Hide explanation")
+          : t("Show explanation")
+        : t("Re-teach");
   const accessibleName = busy
-    ? `Writing an explanation of ${entry.concept_label}`
+    ? t("Writing an explanation of {0}", entry.concept_label)
     : spent
-      ? `${entry.concept_label} no longer needs re-teaching`
+      ? t("{0} no longer needs re-teaching", entry.concept_label)
       : hasNote
         ? open
-          ? `Hide the explanation of ${entry.concept_label}`
-          : `Show the explanation of ${entry.concept_label}`
-        : `Re-teach ${entry.concept_label}`;
+          ? t("Hide the explanation of {0}", entry.concept_label)
+          : t("Show the explanation of {0}", entry.concept_label)
+        : t("Re-teach {0}", entry.concept_label);
 
   return (
     <li className="flex flex-col rounded-surface border border-line px-[18px] py-3.5">
@@ -350,8 +356,7 @@ export function ReteachConcept({
               nothing here knows the new ones. */}
           {!recovered && (
             <div className="mt-0.5 text-small text-ink-subtle">
-              Missed {entry.missed} of {entry.of} times
-              {entry.is_due && " · due now"}
+              {t("Missed {0} of {1} times", entry.missed, entry.of)}{entry.is_due && t(" · due now")}
             </div>
           )}
         </div>
@@ -418,11 +423,11 @@ export function ReteachConcept({
           <div className="text-[13px]">
             <p className="font-medium">
               {awaiting
-                ? "An explanation of this concept is already being written. Waiting for it."
-                : "Writing an explanation of this concept."}
+                ? t("An explanation of this concept is already being written. Waiting for it.")
+                : t("Writing an explanation of this concept.")}
             </p>
             <p className="mt-0.5 tabular-nums text-ink-muted">
-              Elapsed: {formatElapsed(elapsed)}
+              {t("Elapsed: ")}{formatElapsed(elapsed)}
             </p>
           </div>
         </div>
@@ -453,8 +458,7 @@ export function ReteachConcept({
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <h3 id={`${panelId}-heading`} className="text-[15px] font-semibold">
-              Explained another way
-            </h3>
+              {t("Explained another way")}</h3>
             <button
               type="button"
               onClick={() => {
@@ -463,8 +467,7 @@ export function ReteachConcept({
               }}
               className="shrink-0 rounded-lg border border-amber-300 px-3 py-1 text-[13px] font-medium text-amber-900 transition-colors hover:border-amber-500 dark:border-amber-800 dark:text-amber-200 dark:hover:border-amber-600"
             >
-              Hide
-            </button>
+              {t("Hide")}</button>
           </div>
 
           {/* Through LessonMarkdown, which runs react-markdown without rehype-raw: this
@@ -517,8 +520,8 @@ export function ReteachConcept({
               they render directly against this paragraph, and three statements of one
               fact a few lines apart is worse than one that names all of them. */}
           <p className="mt-4 border-t border-amber-200 pt-3 text-[13px] text-amber-900/80 dark:border-amber-900 dark:text-amber-200/80">
-            {SCHEDULE_PROMISE}
-            {availableFrom && ` A new explanation can be written from ${formatDay(availableFrom)}.`}
+            {t(SCHEDULE_PROMISE)}
+            {availableFrom && t(" A new explanation can be written from {0}.", formatDay(availableFrom, t.locale))}
           </p>
         </div>
       )}

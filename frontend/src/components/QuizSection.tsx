@@ -1,5 +1,11 @@
 "use client";
 
+
+
+
+
+import { useI18n } from "@/components/LocaleProvider";
+
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
@@ -77,6 +83,7 @@ function elapsedSince(shownAt: Map<number, number>, itemId: number): number | un
 }
 
 export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: QuizProgress }) {
+  const { t } = useI18n();
   const [answers, setAnswers] = useState<Record<number, ItemState>>({});
   /** When each item became answerable, for the elapsed_ms timing signal. */
   const shownAt = useRef<Map<number, number>>(new Map());
@@ -185,7 +192,7 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
       });
     } catch (err) {
       patch(item, (prev) => ({
-        error: err instanceof ApiError ? err.message : "Could not reach the server.",
+        error: err instanceof ApiError ? err.message : t("Could not reach the server."),
         errorKind: "server",
         errorNonce: prev.errorNonce + 1,
         submitting: false,
@@ -196,10 +203,9 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
   return (
     <section>
       <div className="flex items-baseline justify-between">
-        <h2 className="text-subtitle">Check your understanding</h2>
+        <h2 className="text-subtitle">{t("Check your understanding")}</h2>
         <p className="text-small tabular-nums text-ink-muted">
-          {answeredCount} of {progress.items} answered
-        </p>
+          {t("{0} of {1} answered", answeredCount, progress.items)}</p>
       </div>
 
       <ol className="mt-4 flex flex-col gap-6">
@@ -235,7 +241,7 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
                     globals.css's type scale comment, and LessonMarkdown's heading
                     comment for the same reasoning applied to this same page).
                   */
-                  <p className="mt-1 text-small text-ink-subtle">Concept: {item.concept}</p>
+                  <p className="mt-1 text-small text-ink-subtle">{t("Concept: ")}{item.concept}</p>
                 )}
 
                 {item.kind === "mcq" ? (
@@ -315,7 +321,7 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
                         void submit(item);
                       }
                     }}
-                    placeholder="Your answer"
+                    placeholder={t("Your answer")}
                     aria-labelledby={`quiz-question-${item.id}`}
                     /*
                       `border-line-strong`, which is the colour this input already had:
@@ -439,15 +445,14 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
                       */
                       className="mt-3 rounded-control bg-success-surface px-3 py-2 text-small font-medium text-success"
                     >
-                      Correct
-                    </p>
+                      {t("Correct")}</p>
                   )}
 
                   {state.feedback && !state.feedback.correct && (
                     <p className="mt-3 rounded-control bg-danger-surface px-3 py-2 text-small text-danger">
                       {solved
-                        ? "Last answer was incorrect, expected: "
-                        : "Incorrect, expected: "}
+                        ? t("Last answer was incorrect, expected: ")
+                        : t("Incorrect, expected: ")}
                       <span className="font-medium">{state.feedback.expected}</span>
                     </p>
                   )}
@@ -461,7 +466,7 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
                     disabled={state.submitting}
                     className="mt-3"
                   >
-                    {state.submitting ? "Checking…" : state.feedback ? "Try again" : "Check answer"}
+                    {state.submitting ? t("Checking…") : state.feedback ? t("Try again") : t("Check answer")}
                   </Button>
                 )}
               </Card>

@@ -1,3 +1,7 @@
+
+
+
+import { getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 
 import { CourseDeletionProvider, DeleteCourseButton } from "@/components/DeleteCourseButton";
@@ -58,13 +62,14 @@ const PRIMARY_LINK_CLASSES =
  * moment it is needed rather than captured beforehand.
  */
 export default async function CoursesPage() {
+  const t = await getTranslator();
   let courses: CourseSummary[] = [];
   let loadError: string | null = null;
   try {
-    courses = await listCourses();
+    courses = await listCourses(t.locale);
   } catch (err) {
     loadError =
-      err instanceof ApiError ? err.message : "Could not reach the server. Is the backend running?";
+      err instanceof ApiError ? err.message : t("Could not reach the server. Is the backend running?");
   }
 
   return (
@@ -73,7 +78,7 @@ export default async function CoursesPage() {
         <PageHeader
           className="mb-10"
           title="StudyForge"
-          description="Turn any material into a structured course with quizzes."
+          description={t("Turn any material into a structured course with quizzes.")}
           actions={
             // `courses` stays `[]` on the error path (see the try/catch above: it is
             // never assigned there), so `courses.length > 0` is already false whenever
@@ -82,8 +87,7 @@ export default async function CoursesPage() {
             // second guard for the same outcome was dead code, so it has been removed.
             courses.length > 0 && (
               <Link id="new-course" href="/courses/new" className={PRIMARY_LINK_CLASSES}>
-                New course
-              </Link>
+                {t("New course")}</Link>
             )
           }
         />
@@ -92,12 +96,11 @@ export default async function CoursesPage() {
           <ErrorState message={loadError} />
         ) : courses.length === 0 ? (
           <EmptyState
-            title="No courses yet"
-            description="Paste text, drop in a URL, or upload a PDF to get started."
+            title={t("No courses yet")}
+            description={t("Paste text, drop in a URL, or upload a PDF to get started.")}
             action={
               <Link id="create-first-course" href="/courses/new" className={PRIMARY_LINK_CLASSES}>
-                Create your first course
-              </Link>
+                {t("Create your first course")}</Link>
             }
           />
         ) : (

@@ -1,3 +1,10 @@
+
+import { LocalizedText } from "@/components/LocaleProvider";
+
+import type { Translator } from "@/lib/i18n";
+
+
+import { getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 
 import { ReteachConcept } from "@/components/ReteachConcept";
@@ -28,11 +35,11 @@ const NEXT_UP_COURSES = 5;
  * so it is read back in UTC to keep it from shifting a day, and the locale is fixed
  * rather than inherited so the string is stable wherever it renders.
  */
-function formatStudyDay(key: string): string {
+function formatStudyDay(key: string, locale: import("@/lib/i18n").Locale): string {
   const parsed = new Date(`${key}T00:00:00Z`);
   if (Number.isNaN(parsed.getTime())) return key;
-  const weekday = parsed.toLocaleDateString("en-GB", { weekday: "long", timeZone: "UTC" });
-  const dayMonth = parsed.toLocaleDateString("en-GB", {
+  const weekday = parsed.toLocaleDateString(locale === "en" ? "en-GB" : "zh-CN", { weekday: "long", timeZone: "UTC" });
+  const dayMonth = parsed.toLocaleDateString(locale === "en" ? "en-GB" : "zh-CN", {
     day: "numeric",
     month: "long",
     timeZone: "UTC",
@@ -40,10 +47,10 @@ function formatStudyDay(key: string): string {
   return `${weekday}, ${dayMonth}`;
 }
 
-function dueSentence(dueToday: number): string {
-  if (dueToday === 0) return "Nothing is due for review";
-  if (dueToday === 1) return "1 concept is due for review";
-  return `${dueToday} concepts are due for review`;
+function dueSentence(dueToday: number, t: Translator): string {
+  if (dueToday === 0) return t("Nothing is due for review");
+  if (dueToday === 1) return t("1 concept is due for review");
+  return t("{0} concepts are due for review", dueToday);
 }
 
 /** "18 due now, about 9 minutes." plus the struggling clause only when there is one.
@@ -52,7 +59,8 @@ function dueSentence(dueToday: number): string {
  * toward the day's workload while a session cannot serve it yet. Saying "2 due now" off
  * the day figure and then showing an empty session is the bug this distinction fixes,
  * and when the two disagree the gap is explained rather than hidden. */
-function sessionSentence(today: ReviewToday): string {
+function sessionSentence(today: ReviewToday, t: Translator): string {
+  if (t.locale === "zh-CN") return t("{0} due now, about {1} minutes. {2} return later today; {3} previously difficult concepts are due.", today.due_now, today.estimated_minutes, today.due_today - today.due_now, today.struggling_due);
   if (today.due_now === 0) {
     const later = today.due_today;
     if (later > 0) {
@@ -60,7 +68,7 @@ function sessionSentence(today: ReviewToday): string {
         later === 1 ? "concept comes" : "concepts come"
       } back later today.`;
     }
-    return "Nothing is due right now. Concepts come back as their recall probability drops.";
+    return t("Nothing is due right now. Concepts come back as their recall probability drops.");
   }
   const head = `${today.due_now} due now, about ${today.estimated_minutes} ${
     today.estimated_minutes === 1 ? "minute" : "minutes"
@@ -85,10 +93,10 @@ interface NextUp {
 }
 
 /** The first unfinished lesson across the learner's most recent courses, if any. */
-async function findNextUp(courses: CourseSummary[]): Promise<NextUp | null> {
+async function findNextUp(courses: CourseSummary[], locale: import("@/lib/i18n").Locale): Promise<NextUp | null> {
   const recent = courses.slice(0, NEXT_UP_COURSES);
   // One failing course must not take the whole Today screen down with it.
-  const details = await Promise.all(recent.map((course) => getCourse(course.id).catch(() => null)));
+  const details = await Promise.all(recent.map((course) => getCourse(course.id, locale).catch(() => null)));
   for (const course of details) {
     if (!course) continue;
     for (const courseModule of course.modules) {
@@ -100,17 +108,18 @@ async function findNextUp(courses: CourseSummary[]): Promise<NextUp | null> {
   return null;
 }
 
-function RetentionStat({ today }: { today: ReviewToday }) {
+async function RetentionStat({ today }: { today: ReviewToday }) {
+  const t = await getTranslator();
   if (today.retention === null) {
     const note = `Not enough review history yet: ${today.sample_size} ${
       today.sample_size === 1 ? "review counts" : "reviews count"
     } so far. A percentage from a handful of reviews could only read 0, 50 or 100 and would swing day to day, so it is held back until there is enough.`;
-    return <Stat value="–" label="Retained at review" title={note} note={note} />;
+    return <Stat value="–" label={t("Retained at review")} title={note} note={note} />;
   }
   return (
     <Stat
       value={`${Math.round(today.retention * 100)}%`}
-      label="Retained at review"
+      label={t("Retained at review")}
       emphasis
       title={`Over the last 30 days, across ${today.sample_size} reviews of concepts that were genuinely due.`}
     />
@@ -118,6 +127,7 @@ function RetentionStat({ today }: { today: ReviewToday }) {
 }
 
 export default async function TodayPage() {
+  const t = await getTranslator();
   let courses: CourseSummary[] = [];
   let today: ReviewToday | null = null;
   let nextUp: NextUp | null = null;
@@ -125,27 +135,27 @@ export default async function TodayPage() {
   let loadError: string | null = null;
 
   try {
-    courses = await listCourses();
+    courses = await listCourses(t.locale);
     // A learner with nothing generated has nothing to review, and the Today numbers
     // would all read zero. Skip them and show the first-run panel instead.
     if (courses.length > 0) {
-      [today, nextUp] = await Promise.all([getReviewToday(), findNextUp(courses)]);
+      [today, nextUp] = await Promise.all([getReviewToday(t.locale), findNextUp(courses, t.locale)]);
       // One free read per flagged concept, so the button can say whether an explanation
       // already exists rather than finding out by asking for one. Same fan-out shape as
       // findNextUp, and one failure must not take the screen down with it.
       attentionNotes = await Promise.all(
-        today.needs_attention.map((entry) => getRemediation(entry.card_id).catch(() => null)),
+        today.needs_attention.map((entry) => getRemediation(entry.card_id, t.locale).catch(() => null)),
       );
     }
   } catch (err) {
     loadError =
-      err instanceof ApiError ? err.message : "Could not reach the server. Is the backend running?";
+      err instanceof ApiError ? err.message : t("Could not reach the server. Is the backend running?");
   }
 
   if (loadError) {
     return (
       <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
-        <PageHeader title="Today" />
+        <PageHeader title={t("Today")} />
         <ErrorState className="mt-8" title="" message={loadError} />
       </main>
     );
@@ -157,18 +167,17 @@ export default async function TodayPage() {
         <PageHeader
           className="mb-10"
           title="StudyForge"
-          description="Turn any material into a structured course with quizzes."
+          description={t("Turn any material into a structured course with quizzes.")}
         />
         <EmptyState
-          title="No courses yet"
-          description="Paste text, drop in a URL, or upload a PDF to get started."
+          title={t("No courses yet")}
+          description={t("Paste text, drop in a URL, or upload a PDF to get started.")}
           action={
             <Link
               href="/courses/new"
               className="inline-block rounded-control bg-fill px-5 py-2.5 font-medium text-on-fill transition-colors duration-fast ease-standard hover:bg-fill-hover"
             >
-              Create your first course
-            </Link>
+              {t("Create your first course")}</Link>
           }
         />
       </main>
@@ -181,10 +190,10 @@ export default async function TodayPage() {
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-10">
       <PageHeader
-        title="Today"
+        title={t("Today")}
         description={
           <>
-            {formatStudyDay(today.date)} &middot; {dueSentence(today.due_today)}
+            {formatStudyDay(today.date, t.locale)} &middot; {dueSentence(today.due_today, t)}
           </>
         }
       />
@@ -196,39 +205,33 @@ export default async function TodayPage() {
         <div className="flex flex-wrap items-center justify-between gap-5 border-b border-line bg-surface-sunken px-[22px] py-5">
           <div>
             <h2 id="review-session-heading" className="text-subtitle">
-              Review session
-            </h2>
-            <p className="mt-1 text-ui text-ink-muted">{sessionSentence(today)}</p>
+              {t("Review session")}</h2>
+            <p className="mt-1 text-ui text-ink-muted">{sessionSentence(today, t)}</p>
           </div>
           {today.due_now > 0 && (
             <Link
               href="/review"
               className="shrink-0 whitespace-nowrap rounded-control bg-fill px-[18px] py-2.5 text-small font-medium text-on-fill transition-colors duration-fast ease-standard hover:bg-fill-hover"
             >
-              Start review
-            </Link>
+              {t("Start review")}</Link>
           )}
         </div>
         <dl className="flex flex-wrap gap-7 px-[22px] py-4">
-          <Stat value={String(today.due_today)} label="Due today" />
-          <Stat value={String(today.due_this_week)} label="This week" />
+          <Stat value={String(today.due_today)} label={t("Due today")} />
+          <Stat value={String(today.due_this_week)} label={t("This week")} />
           <RetentionStat today={today} />
-          <Stat value={String(today.day_streak)} label="Day streak" />
+          <Stat value={String(today.day_streak)} label={t("Day streak")} />
         </dl>
       </section>
 
       {today.needs_attention.length > 0 && (
         <section aria-labelledby="needs-attention-heading">
           <h2 id="needs-attention-heading" className="mt-8 text-ui font-semibold">
-            Needs attention
-          </h2>
+            {t("Needs attention")}</h2>
           {/* Offered, not automatic, and it does not gate the next review: saying it
               would re-teach these "before testing them again" promised a reset that
               nothing in the scheduler performs. */}
-          <p className="mt-1 text-small text-ink-subtle">
-            Concepts you have missed more than once. Ask StudyForge to explain one a
-            different way; it stays in your review queue either way.
-          </p>
+          <p className="mt-1 text-small text-ink-subtle"><LocalizedText text={" Concepts you have missed more than once. Ask StudyForge to explain one a different way; it stays in your review queue either way. "} /></p>
           <ul className="mt-3.5 flex flex-col gap-2">
             {today.needs_attention.map((entry, index) => (
               <ReteachConcept
@@ -244,13 +247,12 @@ export default async function TodayPage() {
       {nextUp && (
         <section aria-labelledby="next-up-heading">
           <h2 id="next-up-heading" className="mt-7 text-ui font-semibold">
-            Next up
-          </h2>
+            {t("Next up")}</h2>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-4 rounded-surface border border-line px-[18px] py-4">
             <div>
               <div className="text-ui font-medium">{nextUp.lesson.title}</div>
               <div className="mt-0.5 text-small text-ink-subtle">
-                Next unfinished lesson &middot; {nextUp.course.title}
+                {t("Next unfinished lesson · ")}{nextUp.course.title}
               </div>
             </div>
             {/* Deliberately not Button's `secondary` variant: `secondary` rests on
@@ -270,8 +272,7 @@ export default async function TodayPage() {
               href={`/courses/${nextUp.course.id}/lessons/${nextUp.lesson.id}`}
               className="shrink-0 rounded-control border border-line-strong px-4 py-1.5 text-small font-medium text-ink transition-colors duration-fast ease-standard hover:border-line-hover"
             >
-              Continue
-            </Link>
+              {t("Continue")}</Link>
           </div>
         </section>
       )}

@@ -18,5 +18,7 @@ test.each([
   vi.resetModules();
   const { listCourses } = await import("@/lib/api");
   await expect(listCourses()).resolves.toEqual([]);
-  expect(fetch).toHaveBeenCalledWith(expected, { cache: "no-store" });
+  expect(fetch).toHaveBeenCalledWith(expected, { cache: "no-store", headers: expect.any(Headers) });
+  const headers = fetch.mock.calls[0][1].headers as Headers;
+  expect(headers.get("Accept-Language")).toBe("zh-CN");
 });

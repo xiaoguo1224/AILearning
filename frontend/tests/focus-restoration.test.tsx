@@ -163,7 +163,7 @@
  *     effect, which is exactly how DeadlineForm's reseed made it observable there.
  */
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "./render";
 import { useState } from "react";
 import type { ReactNode } from "react";
 import { beforeEach, describe, expect, test, vi } from "vitest";

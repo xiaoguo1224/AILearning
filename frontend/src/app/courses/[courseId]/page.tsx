@@ -1,3 +1,9 @@
+
+import { LocalizedText } from "@/components/LocaleProvider";
+
+
+
+import { getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -15,11 +21,11 @@ const BACK_TO_COURSES_LINK = (
     href="/courses"
     className="text-small text-ink-muted transition-colors duration-fast ease-standard hover:text-ink"
   >
-    &larr; All courses
-  </Link>
+    <LocalizedText text="&larr; All courses" /></Link>
 );
 
 export default async function CoursePage(props: PageProps<"/courses/[courseId]">) {
+  const t = await getTranslator();
   const { courseId } = await props.params;
   const id = Number(courseId);
   // Preserved exactly: a non-numeric id is a genuine 404, not a backend failure, and
@@ -30,14 +36,14 @@ export default async function CoursePage(props: PageProps<"/courses/[courseId]">
 
   let course: CourseDetail;
   try {
-    course = await getCourse(id);
+    course = await getCourse(id, t.locale);
   } catch (err) {
     // A genuine 404 (course does not exist) must still 404. Everything else, backend
     // down, network failure, a 500 from the API, becomes the inline friendly message
     // instead of propagating into Next's generic error screen.
     if (err instanceof ApiError && err.status === 404) notFound();
     const message =
-      err instanceof ApiError ? err.message : "Could not reach the server. Is the backend running?";
+      err instanceof ApiError ? err.message : t("Could not reach the server. Is the backend running?");
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
         {BACK_TO_COURSES_LINK}
@@ -48,7 +54,7 @@ export default async function CoursePage(props: PageProps<"/courses/[courseId]">
           heading, unlike the courses list, whose PageHeader renders unconditionally
           before its own error/empty/list ternary.
         */}
-        <PageHeader className="mt-4" title="Course" />
+        <PageHeader className="mt-4" title={t("Course")} />
         <ErrorState className="mt-8" message={message} />
       </main>
     );
@@ -68,8 +74,7 @@ export default async function CoursePage(props: PageProps<"/courses/[courseId]">
 
         <p className="mt-5 text-ui text-ink-muted">{course.description}</p>
         <p className="mt-3 text-small font-medium text-ink-muted">
-          {completedCount} of {lessons.length} lessons complete
-        </p>
+          {completedCount}<LocalizedText text={" of "} />{lessons.length} {t(" lessons complete")}</p>
 
         <div className="mt-8 flex flex-col gap-8">
           {course.modules.map((module) => (
@@ -120,7 +125,7 @@ export default async function CoursePage(props: PageProps<"/courses/[courseId]">
                       <span className={lesson.completed ? "text-ui text-ink-muted" : "text-ui"}>
                         {lesson.title}
                       </span>
-                      {lesson.completed && <span className="sr-only">(completed)</span>}
+                      {lesson.completed && <span className="sr-only">{t("(completed)")}</span>}
                     </Link>
                   </li>
                 ))}

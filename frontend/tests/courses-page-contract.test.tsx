@@ -29,7 +29,7 @@
  * - change PRIMARY_LINK_CLASSES `px-4 py-2` to `px-3 py-1.5` -> drift test fails
  * - change Button's md size or primary variant without touching the page -> drift fails
  */
-import { render } from "@testing-library/react";
+import { render } from "./render";
 import { describe, expect, test, vi, beforeEach } from "vitest";
 
 import CoursesPage from "@/app/courses/page";

@@ -32,7 +32,7 @@
  *   - flatten ask's border-l-4 to border        -> the greyscale test fails
  */
 
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within } from "./render";
 import { describe, expect, test, vi } from "vitest";
 
 import { ConceptTutor } from "@/components/ConceptTutor";

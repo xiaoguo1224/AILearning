@@ -1,3 +1,8 @@
+
+
+
+import { getTranslator } from "@/lib/locale-server";
+import type { Translator } from "@/lib/i18n";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -17,20 +22,20 @@ export const dynamic = "force-dynamic";
  * course page factored its own back link into BACK_TO_COURSES_LINK, so the two copies
  * cannot silently drift apart from each other again.
  */
-function backToCourseLink(courseId: string) {
+function backToCourseLink(courseId: string, t: Translator) {
   return (
     <Link
       href={`/courses/${courseId}`}
       className="text-small text-ink-muted transition-colors duration-fast ease-standard hover:text-ink"
     >
-      &larr; Back to course
-    </Link>
+      {t("← Back to course")}</Link>
   );
 }
 
 export default async function LessonPage(
   props: PageProps<"/courses/[courseId]/lessons/[lessonId]">,
 ) {
+  const t = await getTranslator();
   const { courseId, lessonId } = await props.params;
   const id = Number(lessonId);
   const course = Number(courseId);
@@ -40,17 +45,17 @@ export default async function LessonPage(
 
   let lesson: LessonDetail;
   try {
-    lesson = await getLesson(id);
+    lesson = await getLesson(id, t.locale);
   } catch (err) {
     // A genuine 404 (lesson does not exist) must still 404. Everything else, backend
     // down, network failure, a 500 from the API, becomes the inline friendly message
     // instead of propagating into Next's generic error screen.
     if (err instanceof ApiError && err.status === 404) notFound();
     const message =
-      err instanceof ApiError ? err.message : "Could not reach the server. Is the backend running?";
+      err instanceof ApiError ? err.message : t("Could not reach the server. Is the backend running?");
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
-        {backToCourseLink(courseId)}
+        {backToCourseLink(courseId, t)}
         {/*
           The failed fetch means we never learned the real lesson title, so PageHeader
           gets the generic "Lesson" and no `actions`. The success path below renders the
@@ -59,7 +64,7 @@ export default async function LessonPage(
           its own <h1> next to the button instead of using PageHeader at all; see the
           restyle comment on the success branch below for why that changed.)
         */}
-        <PageHeader className="mt-4" title="Lesson" />
+        <PageHeader className="mt-4" title={t("Lesson")} />
         <ErrorState className="mt-8" message={message} />
       </main>
     );
@@ -90,7 +95,7 @@ export default async function LessonPage(
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
-      {backToCourseLink(courseId)}
+      {backToCourseLink(courseId, t)}
 
       {/*
         Previously a hand-rolled <h1 className="text-3xl ...">, kept separate from

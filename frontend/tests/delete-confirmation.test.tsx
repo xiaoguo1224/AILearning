@@ -40,7 +40,7 @@
  *   the `waitFor` times out. That is the behaviour the component documents it does
  *   NOT want, since disabling a focused control blurs it to the body.
  */
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "./render";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { CourseDeletionProvider, DeleteCourseButton } from "@/components/DeleteCourseButton";

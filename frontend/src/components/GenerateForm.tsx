@@ -1,5 +1,11 @@
 "use client";
 
+import { LocalizedText } from "@/components/LocaleProvider";
+
+
+
+import { useI18n } from "@/components/LocaleProvider";
+
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -14,6 +20,7 @@ import {
   getGenerationLimits,
 } from "@/lib/api";
 import { formatBytes, formatUsd } from "@/lib/format";
+import type { Translator } from "@/lib/i18n";
 import type { GenerateResult, SourceFailure, SourceInput, SourceLimits } from "@/lib/types";
 
 type RowKind = "text" | "url";
@@ -80,30 +87,30 @@ interface SummaryError {
   sources: number;
 }
 
-function skipReasonLabel(reason: SkipReason): string {
+function skipReasonLabel(reason: SkipReason, t: Translator): string {
   switch (reason) {
     case "not-pdf":
-      return "not a PDF";
+      return t("not a PDF");
     case "empty":
-      return "empty file";
+      return t("empty file");
     case "over-source-cap":
-      return "would go over the source limit";
+      return t("would go over the source limit");
     case "over-byte-cap":
-      return "would go over the upload size limit";
+      return t("would go over the upload size limit");
   }
 }
 
 /** A count-prefixed reason clause for the aggregate announcement, e.g. "2 not PDFs". */
-function skipReasonSummaryLabel(reason: SkipReason, count: number): string {
+function skipReasonSummaryLabel(reason: SkipReason, count: number, t: Translator): string {
   switch (reason) {
     case "not-pdf":
-      return `${count} ${count === 1 ? "not a PDF" : "not PDFs"}`;
+      return t(count === 1 ? "{0} not a PDF" : "{0} not PDFs", count);
     case "empty":
-      return `${count} ${count === 1 ? "empty file" : "empty files"}`;
+      return t(count === 1 ? "{0} empty file" : "{0} empty files", count);
     case "over-source-cap":
-      return `${count} over the source limit`;
+      return t("{0} over the source limit", count);
     case "over-byte-cap":
-      return `${count} over the upload size limit`;
+      return t("{0} over the upload size limit", count);
   }
 }
 
@@ -112,13 +119,13 @@ function skipReasonSummaryLabel(reason: SkipReason, count: number): string {
  * screen-reader learner gets them from the announced text itself rather than only from
  * the closed-by-default breakdown below it.
  */
-function summarizeSkips(skipped: SkippedFile[]): string {
+function summarizeSkips(skipped: SkippedFile[], t: Translator): string {
   const counts = new Map<SkipReason, number>();
   for (const entry of skipped) {
     counts.set(entry.reason, (counts.get(entry.reason) ?? 0) + 1);
   }
   return Array.from(counts.entries())
-    .map(([reason, count]) => skipReasonSummaryLabel(reason, count))
+    .map(([reason, count]) => skipReasonSummaryLabel(reason, count, t))
     .join(", ");
 }
 
@@ -127,8 +134,8 @@ function isPdfFile(file: File): boolean {
   return file.name.toLowerCase().endsWith(".pdf");
 }
 
-function plural(count: number, one: string, many: string): string {
-  return `${count} ${count === 1 ? one : many}`;
+function plural(count: number, one: string, many: string, t: Translator): string {
+  return `${count} ${t(count === 1 ? one : many)}`;
 }
 
 function formatElapsed(seconds: number): string {
@@ -174,6 +181,7 @@ const labelInputClasses =
   "hover:border-line-hover focus:border-line-hover disabled:opacity-60";
 
 export function GenerateForm() {
+  const { t } = useI18n();
   const router = useRouter();
   const [rows, setRows] = useState<SourceRow[]>([]);
   const [fileRows, setFileRows] = useState<FileRow[]>([]);
@@ -573,14 +581,14 @@ export function GenerateForm() {
     setFileRows((prev) => prev.map((row) => ({ ...row, error: null })));
 
     if (totalSources === 0) {
-      announceSummaryError("Add some pasted text, a URL, or a PDF first.");
+      announceSummaryError(t("Add some pasted text, a URL, or a PDF first."));
       return;
     }
     const blankRow = rows.find((row) => !row.value.trim());
     if (blankRow) {
-      const message = blankRow.kind === "text" ? "This is empty." : "Enter a URL.";
+      const message = blankRow.kind === "text" ? t("This is empty.") : t("Enter a URL.");
       setRows((prev) => prev.map((row) => (row.id === blankRow.id ? { ...row, error: message } : row)));
-      announceSummaryError("Fix the highlighted source before generating.");
+      announceSummaryError(t("Fix the highlighted source before generating."));
       return;
     }
 
@@ -602,12 +610,12 @@ export function GenerateForm() {
       if (err instanceof SourceGenerationError) {
         applyFailures(err.sources);
         announceSummaryError(
-          `${err.message} ${plural(err.sources.length, "source is", "sources are")} marked below.`,
+          t("{0} {1} marked below.", err.message, plural(err.sources.length, "source is", "sources are", t)),
         );
       } else if (err instanceof ApiError) {
         announceSummaryError(err.message);
       } else {
-        announceSummaryError("Could not reach the server. Is the backend running?");
+        announceSummaryError(t("Could not reach the server. Is the backend running?"));
       }
     }
   }
@@ -619,8 +627,7 @@ export function GenerateForm() {
           <div className="flex flex-col gap-3">
             {rows.length === 0 && fileRows.length === 0 && (
               <p className="rounded-surface border border-dashed border-line-strong px-4 py-6 text-center text-ui text-ink-muted">
-                Add pasted text, web pages, or PDFs below, in any mix.
-              </p>
+                {t("Add pasted text, web pages, or PDFs below, in any mix.")}</p>
             )}
             {rows.map((row) => (
               <SourceRowField
@@ -653,8 +660,7 @@ export function GenerateForm() {
               onClick={() => addRow("text")}
               disabled={locked || atSourceCap}
             >
-              + Add text
-            </Button>
+              {t("+ Add text")}</Button>
             <Button
               type="button"
               variant="secondary"
@@ -662,8 +668,7 @@ export function GenerateForm() {
               onClick={() => addRow("url")}
               disabled={locked || atSourceCap}
             >
-              + Add URL
-            </Button>
+              {t("+ Add URL")}</Button>
             <Button
               type="button"
               variant="secondary"
@@ -671,8 +676,7 @@ export function GenerateForm() {
               onClick={() => fileInputRef.current?.click()}
               disabled={locked || atSourceCap}
             >
-              + Add PDF(s)
-            </Button>
+              {t("+ Add PDF(s)")}</Button>
             <Button
               type="button"
               variant="secondary"
@@ -680,8 +684,7 @@ export function GenerateForm() {
               onClick={() => folderInputRef.current?.click()}
               disabled={locked || atSourceCap}
             >
-              + Add folder of PDFs
-            </Button>
+              {t("+ Add folder of PDFs")}</Button>
             <input
               ref={fileInputRef}
               type="file"
@@ -702,8 +705,8 @@ export function GenerateForm() {
 
           <p className="text-xs text-ink-muted">
             {limits
-              ? `${totalSources}/${limits.max_sources} sources · ${pastedChars.toLocaleString("en-US")} characters pasted, plus whatever the links and PDFs contain · ${formatBytes(uploadedBytes)}/${formatBytes(limits.max_upload_bytes)} uploaded`
-              : plural(totalSources, "source", "sources")}
+              ? t("{0}/{1} sources · {2} characters pasted, plus whatever the links and PDFs contain · {3}/{4} uploaded", totalSources, limits.max_sources, pastedChars.toLocaleString("en-US"), formatBytes(uploadedBytes), formatBytes(limits.max_upload_bytes))
+              : plural(totalSources, "source", "sources", t)}
           </p>
 
           {intakeNote && (
@@ -713,22 +716,19 @@ export function GenerateForm() {
             >
               <p>
                 {intakeNote.added === 0 && intakeNote.skipped.length === 0
-                  ? "No PDFs were found."
+                  ? t("No PDFs were found.")
                   : intakeNote.skipped.length > 0
-                    ? `${plural(intakeNote.added, "file", "files")} added, ${
-                        intakeNote.skipped.length
-                      } skipped: ${summarizeSkips(intakeNote.skipped)}.`
-                    : `${plural(intakeNote.added, "file", "files")} added.`}
+                    ? t("{0} added, {1} skipped: {2}.", plural(intakeNote.added, "file", "files", t), intakeNote.skipped.length, summarizeSkips(intakeNote.skipped, t))
+                    : t("{0} added.", plural(intakeNote.added, "file", "files", t))}
               </p>
               {intakeNote.skipped.length > 0 && (
                 <details className="mt-1">
                   <summary className="cursor-pointer text-ink-muted transition-colors duration-fast ease-standard hover:text-ink">
-                    Why files were skipped
-                  </summary>
+                    {t("Why files were skipped")}</summary>
                   <ul className="mt-1 list-disc pl-4">
                     {intakeNote.skipped.map((entry, index) => (
                       <li key={`${entry.name}-${index}`}>
-                        {entry.name}: {skipReasonLabel(entry.reason)}
+                        {entry.name}: {skipReasonLabel(entry.reason, t)}
                       </li>
                     ))}
                   </ul>
@@ -747,19 +747,16 @@ export function GenerateForm() {
 
       {success ? (
         <Callout tone="success" role="status">
-          <p className="font-medium">Course generated: {success.title}</p>
+          <p className="font-medium">{t("Course generated: ")}{success.title}</p>
           <p className="mt-1">
-            This run cost an estimated {formatUsd(success.usage.run_cost_usd)}. Total API spend so
-            far: {formatUsd(success.usage.total_cost_usd)}
-            {success.usage.alert_active && ", which has crossed the cost alert threshold"}.
+            {t("This run cost an estimated ")}{formatUsd(success.usage.run_cost_usd)}{t(". Total API spend so far: ")}{formatUsd(success.usage.total_cost_usd)}
+            {success.usage.alert_active && t(", which has crossed the cost alert threshold")}.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button type="button" onClick={() => router.push(`/courses/${success.id}`)}>
-              Open course
-            </Button>
+              {t("Open course")}</Button>
             <Button type="button" variant="tinted" onClick={resetForm}>
-              Generate another
-            </Button>
+              {t("Generate another")}</Button>
           </div>
         </Callout>
       ) : submitting ? (
@@ -770,13 +767,12 @@ export function GenerateForm() {
           />
           <div className="text-ui">
             <p className="font-medium">
-              Generating your course, this usually takes 1 to 3 minutes. Keep this tab open.
-            </p>
-            <p className="mt-0.5 tabular-nums text-ink-muted">Elapsed: {formatElapsed(elapsed)}</p>
+              {t("Generating your course, this usually takes 1 to 3 minutes. Keep this tab open.")}</p>
+            <p className="mt-0.5 tabular-nums text-ink-muted">{t("Elapsed: ")}{formatElapsed(elapsed)}</p>
           </div>
         </div>
       ) : (
-        <Button type="submit">Generate course</Button>
+        <Button type="submit">{t("Generate course")}</Button>
       )}
     </form>
   );
@@ -802,8 +798,9 @@ function SourceRowField({
   inputRef,
   removeButtonRef,
 }: SourceRowFieldProps) {
+  const { t } = useI18n();
   const errorId = `source-${row.id}-error`;
-  const label = row.kind === "text" ? "Pasted text" : "URL";
+  const label = row.kind === "text" ? t("Pasted text") : "URL";
 
   /* Adopting Card here (and in FileRowField) is not colour-neutral: Card hardcodes
      border-line, where this row previously drew its own line-strong boundary, so the
@@ -838,8 +835,7 @@ function SourceRowField({
           disabled={disabled}
           className="text-xs text-ink-muted transition-colors duration-fast ease-standard hover:text-danger disabled:pointer-events-none disabled:opacity-60"
         >
-          Remove
-        </button>
+          {t("Remove")}</button>
       </div>
 
       {row.kind === "text" ? (
@@ -851,7 +847,7 @@ function SourceRowField({
           rows={6}
           aria-invalid={row.error ? true : undefined}
           aria-describedby={row.error ? errorId : undefined}
-          placeholder="Paste lecture notes, an article, documentation - anything you want to learn."
+          placeholder={t("Paste lecture notes, an article, documentation - anything you want to learn.")}
           className={inputClasses}
         />
       ) : (
@@ -869,13 +865,12 @@ function SourceRowField({
       )}
 
       <label className="mt-2 block text-xs text-ink-muted">
-        Label (optional)
-        <input
+        {t("Label (optional)")}<input
           type="text"
           value={row.ref}
           onChange={(event) => onChange({ ref: event.target.value })}
           disabled={disabled}
-          placeholder={row.kind === "url" ? "Defaults to the URL" : "Defaults to a numbered label"}
+          placeholder={row.kind === "url" ? t("Defaults to the URL") : t("Defaults to a numbered label")}
           className={labelInputClasses}
         />
       </label>
@@ -898,6 +893,7 @@ interface FileRowFieldProps {
 }
 
 function FileRowField({ row, disabled, onRemove, removeButtonRef }: FileRowFieldProps) {
+  const { t } = useI18n();
   const errorId = `source-${row.id}-error`;
 
   return (
@@ -908,12 +904,12 @@ function FileRowField({ row, disabled, onRemove, removeButtonRef }: FileRowField
       // attribute and carries the error either way.
       padding={4}
       role="group"
-      aria-label={`PDF: ${row.file.name}`}
+      aria-label={t("PDF: {0}", row.file.name)}
       aria-describedby={row.error ? errorId : undefined}
     >
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <span className="text-micro uppercase text-ink-muted">PDF</span>
+          <span className="text-micro uppercase text-ink-muted"><LocalizedText text={"PDF"} /></span>
           {/* The filename came off the user's own file system and is rendered as plain
               text, never as markup, the same as every other untrusted string in this form. */}
           <p className="truncate text-ui text-ink" title={row.file.name}>
@@ -928,8 +924,7 @@ function FileRowField({ row, disabled, onRemove, removeButtonRef }: FileRowField
           disabled={disabled}
           className="shrink-0 text-xs text-ink-muted transition-colors duration-fast ease-standard hover:text-danger disabled:pointer-events-none disabled:opacity-60"
         >
-          Remove
-        </button>
+          {t("Remove")}</button>
       </div>
       {row.error && (
         <p id={errorId} className="mt-1.5 text-xs text-danger">

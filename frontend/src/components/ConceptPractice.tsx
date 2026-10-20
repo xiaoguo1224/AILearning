@@ -1,10 +1,13 @@
 "use client";
 
+import { LocalizedText, useI18n } from "@/components/LocaleProvider";
+
 import { useEffect, useRef, useState } from "react";
 
 import { ApiError, getPractice, submitPractice } from "@/lib/api";
 import { formatDay, noLongerMissed } from "@/lib/copy";
 import type { PracticeConflict, PracticeResult, PracticeState } from "@/lib/types";
+import type { Translator } from "@/lib/i18n";
 
 /** A run that still has a question to ask. */
 type ActiveRun = Extract<PracticeState, { status: "ready" | "in_progress" }>;
@@ -51,17 +54,18 @@ function gradeAnnouncement(
   answered: number,
   maxAnswers: number,
   ended: boolean,
+  t: Translator,
 ): string {
-  const position = ended ? "" : `Answer ${answered} of ${maxAnswers}. `;
-  if (correct) return `${position}Correct.`;
-  const verdict = kind === "short" ? "Not an exact match." : "Not the right option.";
-  return `${position}${verdict} The reference answer is: ${expected}`;
+  const position = ended ? "" : t("Answer {0} of {1}. ", answered, maxAnswers);
+  if (correct) return `${position}${t("Correct.")}`;
+  const verdict = t(kind === "short" ? "Not an exact match." : "Not the right option.");
+  return `${position}${verdict} ${t("The reference answer is: {0}", expected)}`;
 }
 
-function errorMessage(err: unknown): string {
+function errorMessage(err: unknown, t: Translator): string {
   return err instanceof ApiError
     ? err.message
-    : "Could not reach the server. Is the backend running?";
+    : t("Could not reach the server. Is the backend running?");
 }
 
 /**
@@ -73,23 +77,23 @@ function errorMessage(err: unknown): string {
  * "You finished" and "there was nothing here" are different sentences, and a component
  * that conflated them would congratulate a learner on a run that never happened.
  */
-function terminalCopy(run: TerminalRun, conceptLabel: string): { headline: string; body: string } {
+function terminalCopy(run: TerminalRun, conceptLabel: string, t: Translator): { headline: string; body: string } {
   if (run.status === "done") {
     switch (run.reason) {
       case "target_reached":
         return {
-          headline: "That is this concept done for today",
-          body: `You reached ${run.target_correct} right answers, which is what this run was after.`,
+          headline: t("That is this concept done for today"),
+          body: t("You reached {0} right answers, which is what this run was after.", run.target_correct),
         };
       case "attempts_spent":
         return {
-          headline: `That is today's ${run.max_answers} questions`,
-          body: "A short run is the whole idea, so this stops rather than turning into a drill.",
+          headline: t("That is today's {0} questions", run.max_answers),
+          body: t("A short run is the whole idea, so this stops rather than turning into a drill."),
         };
       case "pool_exhausted":
         return {
-          headline: "That is every question this concept has",
-          body: "You have answered all of them, so there is nothing left to ask today.",
+          headline: t("That is every question this concept has"),
+          body: t("You have answered all of them, so there is nothing left to ask today."),
         };
     }
   }
@@ -101,43 +105,43 @@ function terminalCopy(run: TerminalRun, conceptLabel: string): { headline: strin
       // phrased as something taken away. Same clause the re-teach button uses for
       // not_flagged: one fact, one wording, however the learner arrived at it.
       return {
-        headline: "You are past this one",
-        body: `Your recent reviews cleared this up, so ${noLongerMissed(conceptLabel)}.`,
+        headline: t("You are past this one"),
+        body: t("Your recent reviews cleared this up, so {0}.", noLongerMissed(conceptLabel, t)),
       };
     case "no_items":
       return {
-        headline: "No questions to practise with",
+        headline: t("No questions to practise with"),
         body:
-          "This concept has no quiz questions yet, so there is nothing to ask. The " +
-          "explanation above is still yours to re-read.",
+          t("This concept has no quiz questions yet, so there is nothing to ask. The explanation above is still yours to re-read."),
       };
   }
 }
 
 /** One answered question, as the terminal panel lists it. */
 function ResultRow({ result }: { result: PracticeResult }) {
+  const { t } = useI18n();
   return (
     <li className="border-t border-amber-200/70 pt-2.5 first:border-t-0 first:pt-0 dark:border-amber-900/70">
       {/* Blank when the item has since been regenerated away. The attempt outlives the
           question it was asked from, and dropping the row would lose an answer the
           learner actually gave. */}
       <p className="text-[13px] text-zinc-700 dark:text-zinc-300">
-        {result.question || "This question is no longer in the course."}
+        {result.question || t("This question is no longer in the course.")}
       </p>
       {/* "Your answer", not "You wrote": these rows carry no `kind`, and half of them
           are options the learner picked rather than prose they typed. Same label the
           review session uses for the same thing. */}
       <p className="mt-1 text-[13px] text-zinc-600 dark:text-zinc-400">
-        <span className="text-zinc-500 dark:text-zinc-500">Your answer: </span>
+        <span className="text-zinc-500 dark:text-zinc-500"><LocalizedText text={"Your answer: "} /></span>
         {result.submitted}
         {/* The separator is a text node, not a margin. Margins do not exist in the
             accessible name, and this used to read "Your answer: trueRight". */}
         <span className="text-zinc-500 dark:text-zinc-500"> · </span>
         {result.correct ? (
-          <span className="text-emerald-700 dark:text-emerald-500">Right</span>
+          <span className="text-emerald-700 dark:text-emerald-500"><LocalizedText text={"Right"} /></span>
         ) : (
           <>
-            <span className="text-zinc-500 dark:text-zinc-500">Reference answer: </span>
+            <span className="text-zinc-500 dark:text-zinc-500"><LocalizedText text={"Reference answer: "} /></span>
             {result.expected}
           </>
         )}
@@ -200,6 +204,7 @@ export function ConceptPractice({
    */
   onRecovered: () => void;
 }) {
+  const { t } = useI18n();
   const [run, setRun] = useState<PracticeState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -259,7 +264,7 @@ export function ConceptPractice({
         reportNews(next);
       })
       .catch((err) => {
-        const message = errorMessage(err);
+        const message = errorMessage(err, t);
         setError(message);
         onAnnounce(message);
       })
@@ -339,7 +344,7 @@ export function ConceptPractice({
       // a paragraph appearing next to where you already are is not an event. The field
       // carries aria-invalid rather than aria-describedby pointing at this same
       // sentence, which would have it read twice in the one case where focus stays put.
-      const empty = "Enter an answer first.";
+      const empty = t("Enter an answer first.");
       setError(empty);
       onAnnounce(empty);
       return;
@@ -377,6 +382,7 @@ export function ConceptPractice({
             result.state.answered,
             result.state.max_answers,
             ended,
+            t,
           ),
         );
         setFeedback(
@@ -418,7 +424,7 @@ export function ConceptPractice({
           // serve is a finished one and answers `session_complete` instead. The next
           // question is therefore already in the state below, and this only explains
           // the jump to it.
-          onAnnounce("You already answered that one today. Here is the next question.");
+          onAnnounce(t("You already answered that one today. Here is the next question."));
           break;
         case "session_complete":
         case "no_note":
@@ -447,7 +453,7 @@ export function ConceptPractice({
       // has to be placed rather than left.
       adopt(conflict.state, "answer");
     } catch (err) {
-      const message = errorMessage(err);
+      const message = errorMessage(err, t);
       setError(message);
       onAnnounce(message);
       pendingFocus.current = "submit";
@@ -469,9 +475,7 @@ export function ConceptPractice({
       className="mt-4 border-t border-amber-200 pt-4 dark:border-amber-900"
     >
       {loading && !run && (
-        <p className="text-[13px] text-amber-900/70 dark:text-amber-200/70">
-          Loading today&rsquo;s practice…
-        </p>
+        <p className="text-[13px] text-amber-900/70 dark:text-amber-200/70"><LocalizedText text={" Loading today’s practice… "} /></p>
       )}
 
       {error && !run && (
@@ -482,9 +486,7 @@ export function ConceptPractice({
             onClick={load}
             disabled={loading}
             className="mt-2 rounded-lg border border-amber-300 px-3 py-1 text-[13px] font-medium text-amber-900 transition-colors hover:border-amber-500 disabled:opacity-60 dark:border-amber-800 dark:text-amber-200 dark:hover:border-amber-600"
-          >
-            Try again
-          </button>
+          ><LocalizedText text={" Try again "} /></button>
         </div>
       )}
 
@@ -557,6 +559,7 @@ function ActivePanel({
   nextRef: React.RefObject<HTMLButtonElement | null>;
   submitRef: React.RefObject<HTMLButtonElement | null>;
 }) {
+  const { t } = useI18n();
   const item = run.item;
   // Two members of the union rather than one, because the copy genuinely differs.
   // Deriving this from `answered > 0` would be exactly the shape test the union exists
@@ -585,33 +588,30 @@ function ActivePanel({
           <p className="text-[13px] text-zinc-700 dark:text-zinc-300">{feedback.question}</p>
           <p className="mt-2 text-[13px] font-medium">
             {feedback.correct ? (
-              <span className="text-emerald-700 dark:text-emerald-500">Correct</span>
+              <span className="text-emerald-700 dark:text-emerald-500"><LocalizedText text={"Correct"} /></span>
             ) : feedback.kind === "short" ? (
               /* Not "wrong". The grader is an exact, case-insensitive string comparison,
                  so a learner who understands the concept and words it differently lands
                  here, and unlike a review session there is no rating button to overrule
                  it. Calling that wrong would be the component asserting something it
                  does not know. */
-              <span className="text-amber-800 dark:text-amber-400">Not an exact match</span>
+              <span className="text-amber-800 dark:text-amber-400"><LocalizedText text={"Not an exact match"} /></span>
             ) : (
-              <span className="text-amber-800 dark:text-amber-400">Not the right option</span>
+              <span className="text-amber-800 dark:text-amber-400"><LocalizedText text={"Not the right option"} /></span>
             )}
           </p>
           <p className="mt-1.5 text-[13px] text-zinc-600 dark:text-zinc-400">
-            <span className="text-zinc-500 dark:text-zinc-500">Your answer: </span>
+            <span className="text-zinc-500 dark:text-zinc-500"><LocalizedText text={"Your answer: "} /></span>
             {feedback.submitted}
           </p>
           {!feedback.correct && (
             <>
               <p className="mt-1 text-[13px] text-zinc-600 dark:text-zinc-400">
-                <span className="text-zinc-500 dark:text-zinc-500">Reference answer: </span>
+                <span className="text-zinc-500 dark:text-zinc-500"><LocalizedText text={"Reference answer: "} /></span>
                 {feedback.expected}
               </p>
               {feedback.kind === "short" && (
-                <p className="mt-2 text-[12px] text-zinc-500 dark:text-zinc-500">
-                  Answers here are compared word for word, so a different wording can miss
-                  even when you have the idea.
-                </p>
+                <p className="mt-2 text-[12px] text-zinc-500 dark:text-zinc-500"><LocalizedText text={" Answers here are compared word for word, so a different wording can miss even when you have the idea. "} /></p>
               )}
             </>
           )}
@@ -620,9 +620,7 @@ function ActivePanel({
             ref={nextRef}
             onClick={onNext}
             className="mt-3 rounded-lg border border-amber-300 px-3.5 py-1.5 text-[13px] font-medium text-amber-900 transition-colors hover:border-amber-500 dark:border-amber-800 dark:text-amber-200 dark:hover:border-amber-600"
-          >
-            Next question
-          </button>
+          ><LocalizedText text={" Next question "} /></button>
         </div>
       ) : (
         <div
@@ -638,7 +636,7 @@ function ActivePanel({
           <div className="mt-3">
             {item.kind === "mcq" ? (
               <fieldset className="flex flex-col gap-1.5">
-                <legend className="sr-only">Choose an answer</legend>
+                <legend className="sr-only"><LocalizedText text={"Choose an answer"} /></legend>
                 {item.options.map((option) => (
                   <label key={option} className="flex cursor-pointer items-center gap-2 text-[13px]">
                     <input
@@ -654,9 +652,7 @@ function ActivePanel({
               </fieldset>
             ) : (
               <>
-                <label htmlFor={`${baseId}-answer-input`} className="sr-only">
-                  Your answer
-                </label>
+                <label htmlFor={`${baseId}-answer-input`} className="sr-only"><LocalizedText text={" Your answer "} /></label>
                 <input
                   id={`${baseId}-answer-input`}
                   ref={answerRef}
@@ -670,7 +666,7 @@ function ActivePanel({
                       onSubmit();
                     }
                   }}
-                  placeholder="Your answer"
+                  placeholder={t("Your answer")}
                   className="w-full rounded-lg border border-amber-300 bg-transparent px-3 py-1.5 text-[13px] outline-none focus:border-amber-500 dark:border-amber-800"
                 />
               </>
@@ -686,7 +682,7 @@ function ActivePanel({
             disabled={busy}
             className="mt-3 rounded-lg bg-amber-800 px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-amber-700 disabled:opacity-60 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-100"
           >
-            {busy ? "Checking…" : "Check answer"}
+            {busy ? t("Checking…") : t("Check answer")}
           </button>
         </div>
       )}
@@ -714,7 +710,8 @@ function TerminalPanel({
   conceptLabel: string;
   panelRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const { headline, body } = terminalCopy(run, conceptLabel);
+  const { t } = useI18n();
+  const { headline, body } = terminalCopy(run, conceptLabel, t);
 
   return (
     <div
@@ -731,9 +728,7 @@ function TerminalPanel({
           dropped them would make good news feel like a lost session. Held back only
           when there is nothing to report, where "0 of 0 right" is worse than silence. */}
       {run.answered > 0 && (
-        <p className="mt-2.5 text-[13px] font-medium">
-          You got {run.correct} of {run.answered} right.
-        </p>
+        <p className="mt-2.5 text-[13px] font-medium"><LocalizedText text={" You got "} />{run.correct}<LocalizedText text={" of "} />{run.answered}<LocalizedText text={" right. "} /></p>
       )}
 
       {run.results.length > 0 && (
@@ -748,8 +743,7 @@ function TerminalPanel({
           which is right: "come back tomorrow" answers a question nobody asked when the
           concept has stopped being flagged at all. */}
       {run.status === "done" && run.resets_at && (
-        <p className="mt-3 text-[13px] text-amber-900/80 dark:text-amber-200/80">
-          Practice opens again on {formatDay(run.resets_at)}.
+        <p className="mt-3 text-[13px] text-amber-900/80 dark:text-amber-200/80"><LocalizedText text={" Practice opens again on "} />{formatDay(run.resets_at, t.locale)}.
         </p>
       )}
       {/* The schedule promise is the note panel's, immediately below this one, and it

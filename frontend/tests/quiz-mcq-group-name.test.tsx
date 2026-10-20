@@ -14,7 +14,7 @@
  * by name. The fourth is the short-answer one, which asserts the group's ABSENCE and so
  * correctly survives all three.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "./render";
 import { describe, expect, test, vi } from "vitest";
 
 import { QuizSection } from "@/components/QuizSection";

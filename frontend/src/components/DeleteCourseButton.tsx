@@ -1,5 +1,8 @@
 "use client";
 
+import type { Translator } from "@/lib/i18n";
+import { LocalizedText, useI18n } from "@/components/LocaleProvider";
+
 import {
   createContext,
   useContext,
@@ -151,6 +154,7 @@ const Ctx = createContext<DeletionContext | null>(null);
  * awaits the request; this awaits the re-render.
  */
 export function CourseDeletionProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [refreshing, startTransition] = useTransition();
   const [announcement, setAnnouncement] = useState("");
@@ -179,7 +183,7 @@ export function CourseDeletionProvider({ children }: { children: ReactNode }) {
       return;
     }
     wantsFocus.current = true;
-    setAnnouncement(`${title} deleted.`);
+    setAnnouncement(t("{0} deleted.", title));
     startTransition(() => router.refresh());
   }
 
@@ -211,8 +215,8 @@ export function CourseDeletionProvider({ children }: { children: ReactNode }) {
     window.sessionStorage.removeItem(DELETED_TITLE_KEY);
     wantsFocus.current = true;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- see the comment above: the second commit is the announcement, not incidental to it.
-    setAnnouncement(`${handoffTitle} deleted.`);
-  }, [handoffTitle]);
+    setAnnouncement(t("{0} deleted.", handoffTitle));
+  }, [handoffTitle, t]);
 
   /**
    * Put focus somewhere real once the refreshed list has committed.
@@ -269,7 +273,13 @@ function plural(count: number, one: string, many: string): string {
  * own sake, which is why the Usage line stays even though it is the only comforting
  * sentence here.
  */
-function previewLines(preview: CourseDeletion): string[] {
+function previewLines(preview: CourseDeletion, t: Translator): string[] {
+  if (t.locale === "zh-CN") return [
+    t("Delete {0} lessons ({1} completed) and {2} answers permanently.", preview.lessons, preview.lessons_completed, preview.attempts),
+    t("Stop reviewing {0} concepts and remove their history. Keep {1} concepts shared by other courses.", preview.concepts_retired, preview.concepts_kept),
+    t("Your retention, streak and pace are measured from your history, so they may change."),
+    t("What this course cost you is kept in Usage."),
+  ];
   const lines = [
     `${plural(preview.lessons, "lesson", "lessons")}, ${preview.lessons_completed} of them completed, and ${plural(preview.attempts, "answer", "answers")} you have given are deleted permanently.`,
   ];
@@ -308,6 +318,7 @@ export function DeleteCourseButton({
   /** See `AfterDelete` above. Defaults to the list's existing in-place behaviour. */
   afterDelete?: AfterDelete;
 }) {
+  const { t } = useI18n();
   const ctx = useContext(Ctx);
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<CourseDeletion | null>(null);
@@ -377,7 +388,7 @@ export function DeleteCourseButton({
       if (generationRef.current !== generation) return;
       // A 404 arrives here as its bare-string detail, already turned into a message by
       // `request`, so this branch does not care which shape the server used.
-      setError(err instanceof ApiError ? err.message : "Could not reach the server.");
+      setError(err instanceof ApiError ? err.message : t("Could not reach the server."));
     } finally {
       if (generationRef.current === generation) {
         setBusy(false);
@@ -464,7 +475,7 @@ export function DeleteCourseButton({
       await deleteCourse(courseId);
       onDeleted(title, afterDelete);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not reach the server.");
+      setError(err instanceof ApiError ? err.message : t("Could not reach the server."));
       setBusy(false);
     }
     // No setBusy(false) on success: this component is about to unmount with its row, and
@@ -491,8 +502,7 @@ export function DeleteCourseButton({
             "Delete <title>" name, measured; the span is preferred because aria-label
             would restate the visible word in a second place that can drift from it,
             and because machine translation skips attributes. See issue #54.
-          */}
-          Delete <span className="sr-only">{title}</span>
+          */}<LocalizedText text={" Delete "} /><span className="sr-only">{title}</span>
         </button>
       </div>
     );
@@ -500,7 +510,7 @@ export function DeleteCourseButton({
 
   return (
     <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3.5 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-[13px] font-medium">Delete &ldquo;{title}&rdquo;?</p>
+      <p className="text-[13px] font-medium"><LocalizedText text={"Delete “"} />{title}&rdquo;?</p>
       {error ? (
         <p
           id={consequenceId}
@@ -514,7 +524,7 @@ export function DeleteCourseButton({
           id={consequenceId}
           className="mt-1.5 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-400"
         >
-          {previewLines(preview).map((line) => (
+          {previewLines(preview, t).map((line) => (
             <p key={line} className="mt-1 first:mt-0">
               {line}
             </p>
@@ -529,9 +539,7 @@ export function DeleteCourseButton({
           id={consequenceId}
           aria-live="polite"
           className="mt-1.5 text-[13px] text-zinc-500 dark:text-zinc-400"
-        >
-          Checking what this would delete…
-        </p>
+        ><LocalizedText text={" Checking what this would delete… "} /></p>
       )}
       <div className="mt-3.5 flex flex-wrap items-center gap-3">
         <button
@@ -565,9 +573,7 @@ export function DeleteCourseButton({
           // allowed to use (see confirmDelete's comment), stated the other way round.
           disabled={busy && !loadingPreview}
           className="rounded-lg border border-zinc-300 px-3.5 py-1.5 text-xs font-medium transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:hover:border-zinc-500"
-        >
-          Cancel
-        </button>
+        ><LocalizedText text={" Cancel "} /></button>
         <button
           type="button"
           ref={confirmRef}
@@ -584,7 +590,7 @@ export function DeleteCourseButton({
           disabled={loadingPreview}
           className="rounded-lg bg-red-700 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-800 dark:bg-red-800 dark:hover:bg-red-700"
         >
-          {busy && !loadingPreview ? "Deleting…" : "Delete permanently"}
+          {busy && !loadingPreview ? t("Deleting…") : t("Delete permanently")}
         </button>
       </div>
     </div>
