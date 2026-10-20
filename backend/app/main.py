@@ -45,12 +45,14 @@ from app.llm import get_provider
 from app.llm.base import LLMCallError
 from app.locale import TeachingLocaleMiddleware
 from app.metering import CostLimitExceeded, MeteredLLM, acknowledge_alert, alert_state
+from app.projects.router import router as projects_router
 from app.rating import rating_v1
 
 logger = logging.getLogger("studyforge.api")
 
 app = FastAPI(title="StudyForge", version="0.1.0")
 app.add_middleware(TeachingLocaleMiddleware)
+app.include_router(projects_router)
 
 _cors_origins = os.environ.get("STUDYFORGE_CORS_ORIGINS", "http://localhost:3000")
 app.add_middleware(

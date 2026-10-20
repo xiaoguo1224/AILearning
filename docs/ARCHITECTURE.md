@@ -103,6 +103,8 @@ flowchart TD
 
 API 是**目标草案**，Codex 要先核对上游风格，并维护 Pydantic schema / 前端契约测试。
 
+P1-01 已交付 Project 子集：GET/POST `/api/projects`、GET/PATCH `/api/projects/{id}`、POST `/api/projects/{id}/archive`、PUT/DELETE `/api/projects/{id}/courses/{course_id}`。列表返回 `{items,total}`，默认 active，支持 status/limit/offset；详情包含课程引用。归档只读且保留课程历史；解除关联不调用 Course 删除。其余上表接口仍以 TASKS 为准。
+
 ## 6. 教学状态机
 
 `LEARNING -> PRACTICING -> REVIEWING_SUBMISSION -> DIAGNOSING -> REMEDIATING -> RETESTING -> COMPLETED`

@@ -17,8 +17,8 @@
 
 ## P1 — Project 和资源持久化
 
-- [-] P1-01 新建 Project 及 ProjectCourse 模型、迁移、API 与测试。
-- [ ] P1-02 新建 Project 页面与导航；保留现有 Course 功能。
+- [x] P1-01 新建 Project 及 ProjectCourse 模型、迁移、API 与测试。
+- [-] P1-02 新建 Project 页面与导航；保留现有 Course 功能。
 - [ ] P1-03 Resource / ResourceChunk / ProjectResource 持久化，支持 PDF、DOCX、Markdown、URL 基础路径。
 - [ ] P1-04 SQLite 全文检索与来源定位；实现资源再次打开、删除前引用检查。
 - [ ] P1-05 测试跨项目共享课程与归档项目不删除学习历史。
@@ -65,6 +65,7 @@
 - [ ] P5-03 整体端到端验证三条用户流程。
 - [ ] P5-04 执行全量 pytest、Vitest、构建和手工回归。
 - [ ] P5-05 完成安装、使用、备份恢复和隐私说明。
+- [ ] P5-06 补齐少量 Today 记忆率说明和后端动态冲突/诊断消息的双语，复核异常态语言切换。
 
 **完成定义：** 单人可独立使用学习→提交→诊断→复测与论文自由学习两个闭环。
 

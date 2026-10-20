@@ -495,7 +495,7 @@ def test_every_altered_table_is_seeded(databases):
         )
 
 
-def test_upgrade_adds_the_tutor_table_and_nothing_else(databases):
+def test_upgrade_adds_the_tutor_and_explicit_project_tables(databases):
     """Scoped to the pin that PREDATES the tutor, rather than weakened to pass at both.
 
     At d453f50 the base already has tutor_messages, so the first assertion below would be
@@ -513,7 +513,8 @@ def test_upgrade_adds_the_tutor_table_and_nothing_else(databases):
         f"forward past the change it is supposed to measure."
     )
     assert NEW_TABLE in databases.upgraded
-    assert set(databases.upgraded) - set(databases.base) == {NEW_TABLE}
+    # New independent P1 tables; keep the exact whitelist so accidental schema growth fails.
+    assert set(databases.upgraded) - set(databases.base) == {NEW_TABLE, "projects", "project_courses"}
     assert not set(databases.base) - set(databases.upgraded), "create_all cannot drop a table"
 
 

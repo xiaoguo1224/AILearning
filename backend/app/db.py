@@ -173,6 +173,7 @@ def _add_missing_columns() -> None:
 
 def init_db() -> None:
     from app import models  # noqa: F401  (register models with Base)
+    from app.projects import models as project_models  # noqa: F401
 
     Base.metadata.create_all(engine)
     # AFTER create_all, and the order is load-bearing. create_all is what brings a brand

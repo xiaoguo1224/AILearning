@@ -10,7 +10,7 @@
 - 已有源码审查：通过 GitHub 阅读 StudyForge 目录、models、ingest、generation、tutor、remediation、db、部分 API 及依赖文件。
 - 当前运行：本机 FastAPI `http://localhost:8000`、Next.js `http://localhost:3000`；Docker 两服务已停止、卷保留。真实模型根 `.env` 已接通，本机开发验收进程暂设 Fake，正式使用时清除该覆盖即可使用 Gemini。
 - 已完成：基线文档合并、容器/本机测试、浏览器课程/Quiz/Review/Tutor、SQLite 快照/恢复、Gemini adapter 和一次真实 Shape 教学。提交截至 `c2e3e0f`。
-- 正在进行：P1-01 项目模型/API；前端双语协作已交付，主 Agent 接续实现，只读协作 Agent 核查共享课程/归档/迁移契约。旧初始化“未运行”表仅是历史记录。
+- 正在进行：P1-01 已验收，接续 P1-02 项目页面；主 Agent 单独写入，只读协作 Agent 核查共享课程/归档/迁移契约。旧初始化“未运行”表仅是历史记录。
 
 ## 上游静态审查主要观察
 
@@ -38,6 +38,15 @@
 3. 完成 Project 模型/API、项目页面，再实现 Resource 持久化；每项按改动范围验收。
 
 ## 追加记录模板
+
+### 2026-10-20 — P1-01 Project 模型、迁移和 API
+- 前项双语提交 `bf0bb5c`；本项见 `git log --grep="P1-01"`。新增独立 `app/projects/` 模型、schema、service、router；main 仅注册路由，db 显式注册新表。
+- `/api/projects` 支持列表（状态/分页）、创建；`/{id}` 支持查看/编辑；`/{id}/archive` 幂等归档；`/{id}/courses/{course_id}` PUT/DELETE 幂等关联/解除。归档项目可读，写操作返回 project_archived；没有项目硬删除。
+- 所有项目修改先取得 SQLite 写锁再检查归档状态；共享课程关联使用复合主键/upsert，双向 ORM 仅级联清理关联行，不删共享课程。新接口校验 Origin（存在时），限制输入、拒绝额外字段和 null，数据库繁忙返回脱敏 503；日志使用项目/课程 ID。
+- 本机 `uv run pytest tests/test_projects.py tests/test_tutor_migration.py tests/test_deletion_api.py -q`：**54 passed, 2 skipped**，约 8.3 秒。显式新增表白名单，保留历史 pin、旧数据、重复升级和 upgraded==fresh 验证；两项 skip 与历史 pin 无关当前功能，未新增跳过。
+- 修正归档重复调用不改变 updated_at、时间戳带 UTC 后，重跑项目测试 **20 passed**；`uv run ruff check app tests` 全部通过。
+- 协作复核确认生产课程删除在 `_stamp_spend` UPDATE 后才加载并删除关联，因此与项目关联写锁串行；未为无法经当前 API 发生的裸 ORM 交错增加触发器。
+- 剩余：项目 UI 和资源能力未交付；原双语尚有少量 Today 详细说明及后端动态错误英文，已明列 P5-06，未声称逐项文案全部翻译。
 
 ### 2026-10-20 — P0-08 双语验收
 - 后端语言链路提交 `df3709a`；前端与文档提交见 `git log --grep="P0-08"`。
