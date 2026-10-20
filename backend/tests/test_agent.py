@@ -10,6 +10,7 @@ import json
 import pytest
 
 from app.agent import prompt as explore_prompt
+from app.agent import router as agent_router
 from app.agent.retrieval import MAX_SOURCES, Source, retrieve
 from app.agent.router import EXPLORE_STAGE
 from app.llm.base import LLMResult
@@ -414,3 +415,100 @@ def test_the_usage_page_can_explain_the_exploration_stage(client, explore_provid
     groups = client.get("/usage").json()["per_course"]
     labels = [group["label"] for group in groups]
     assert main.GROUP_LABELS[main.GROUP_EXPLORE] in labels
+
+
+# --------------------------------------------------------------------------
+# P3-05: context length, model errors, and the spend cap
+# --------------------------------------------------------------------------
+
+
+def test_the_prompt_does_not_grow_with_the_conversation(client, explore_provider):
+    """MAX_HISTORY_TURNS is the only bound on how far this prompt can grow, exactly as it
+    is for the tutor: a long conversation must not turn into a longer request."""
+    project_id = _project(client)
+    _resource(client, project_id, "Broadcasting", BROADCAST_NOTES)
+    session_id = _session(client, project_id)
+    provider = explore_provider(_reply())
+
+    for index in range(explore_prompt.MAX_HISTORY_TURNS + 2):
+        response = client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"body": f"Question {index} about broadcasting " + ("detail " * 200)},
+        )
+        assert response.status_code == 201
+
+    sent = provider.prompts[-1][1]
+    turns = sent.count("LEARNER:") + sent.count("YOU:")
+    assert turns <= explore_prompt.MAX_HISTORY_TURNS
+    # Each turn is clipped, so the block cannot grow with the length of one message.
+    for line in sent.splitlines():
+        if line.startswith(("LEARNER: ", "YOU: ")):
+            assert len(line) <= explore_prompt.MAX_HISTORY_CHARS + len("LEARNER: ") + 2
+
+
+def test_a_provider_error_is_recorded_as_spend_and_saves_no_question(client, monkeypatch):
+    from app import models
+    from app.db import SessionLocal
+    from app.llm.base import LLMCallError
+
+    class _Refused:
+        name = "fake"
+        model = "refusing-model"
+        is_paid = False
+
+        def generate(self, system, prompt, max_tokens=64000):
+            raise LLMCallError("refused", input_tokens=40, output_tokens=0)
+
+    project_id = _project(client)
+    session_id = _session(client, project_id)
+    monkeypatch.setattr(agent_router, "get_provider", lambda: _Refused())
+
+    response = client.post(
+        f"/api/sessions/{session_id}/messages", json={"body": "Explain broadcasting."}
+    )
+    assert response.status_code == 502
+    assert client.get(f"/api/sessions/{session_id}").json()["messages"] == []
+
+    with SessionLocal() as session:
+        rows = session.query(models.LlmCall).filter_by(stage=EXPLORE_STAGE).all()
+    assert rows, "a call that failed after consuming tokens is still spend"
+    assert rows[-1].input_tokens == 40
+
+
+def test_the_spend_cap_answers_402_with_both_figures_and_calls_nothing(client, monkeypatch):
+    from app import metering
+    from app.db import SessionLocal
+
+    class _Paid:
+        name = "fake"
+        model = "paid-explore"
+        is_paid = True
+
+        def __init__(self):
+            self.calls = 0
+
+        def generate(self, system, prompt, max_tokens=64000):
+            self.calls += 1
+            return LLMResult(text=_reply(), input_tokens=1, output_tokens=1)
+
+    provider = _Paid()
+    project_id = _project(client)
+    session_id = _session(client, project_id)
+    monkeypatch.setattr(agent_router, "get_provider", lambda: provider)
+
+    with SessionLocal() as session:
+        spent = metering.total_spend(session)
+    monkeypatch.setenv("STUDYFORGE_COST_LIMIT_USD", str(spent))
+
+    response = client.post(
+        f"/api/sessions/{session_id}/messages", json={"body": "Explain broadcasting."}
+    )
+    assert response.status_code == 402
+    detail = response.json()["detail"]
+    assert detail["error"] == "cost_limit_exceeded"
+    # Both figures, because the client prints them and a surface that dropped them would
+    # fail nowhere else.
+    assert detail["limit_usd"] == pytest.approx(spent)
+    assert detail["spent_usd"] == pytest.approx(spent)
+    assert provider.calls == 0
+    assert client.get(f"/api/sessions/{session_id}").json()["messages"] == []
