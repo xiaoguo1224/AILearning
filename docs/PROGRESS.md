@@ -4,13 +4,13 @@
 
 ## 当前状态
 
-- 当前里程碑：**P0/P1/P2 已验收，下一步 P3 项目级自由学习 Agent**。
+- 当前里程碑：**P0/P1/P2/P3 已验收，下一步 P4 知识沉淀与跨项目建议**。
 - 已确定：产品需求、单人本地运行边界、项目化、课程/自由学习、自动知识草稿与核心审核、跨项目确认。
 - 已准备：AGENTS、PRD、ARCHITECTURE、TASKS、DECISIONS、README 的目标文档草案。
 - 已有源码审查：通过 GitHub 阅读 StudyForge 目录、models、ingest、generation、tutor、remediation、db、部分 API 及依赖文件。
 - 当前运行：本机 FastAPI `http://localhost:8000`、Next.js `http://localhost:3000`；Docker 两服务已停止、卷保留。Fake QA 后端已停止并以根 `.env` 默认配置重新启动，正式教学使用 Gemini；自动测试仍使用独立临时库及确定性 provider。
-- 已完成：基线文档合并、容器/本机测试、浏览器课程/Quiz/Review/Tutor、SQLite 快照/恢复、Gemini adapter 和一次真实 Shape 教学。提交截至 `c2e3e0f`。
-- 正在进行：P2 全部任务已验收（提交、静态/AI 评审、提示阶梯、变式题草稿）；下一步 P3-01 AgentSession/Message 与项目知识检索上下文。旧初始化“未运行”表仅是历史记录。
+- 已完成：基线文档合并、容器/本机测试、浏览器课程/Quiz/Review/Tutor、SQLite 快照/恢复、Gemini adapter 和一次真实 Shape 教学。功能提交截至 `12419d0`（P3 收尾），本段之后为文档批次。
+- 已完成：P3 全部任务（项目级自由学习：会话、项目内检索、引文快照、教学策略单一所有者、临时讲解与练习草稿）；下一步 P4-01 KnowledgeEntry 等知识沉淀模型。旧初始化“未运行”表仅是历史记录。
 
 ## 上游静态审查主要观察
 
@@ -66,6 +66,22 @@
 - 环境说明：本机 `.next` 缓存清理触发 safe-delete 守卫（非代码错误）；以 `NODE_OPTIONS=` 关闭该 shim 后构建成功。开发库中三张空的 P2 草稿表已按“先确认 0 行再删除”的方式重建，未触碰任何学习历史。
 - 剩余风险：静态规则为启发式（仅对二维标量索引提示形状降维），可能误报/漏报；AI 评审与变式题均为显式动作并消耗额度；未做真实模型端到端验收（仅 stub/fake 契约测试）。
 - 下一步：P3-01 AgentSession/Message 与项目知识检索上下文。
+
+### 2026-10-21 — P3 完整验收（项目自由学习、引文、教学策略复用、临时练习）
+- 提交：`b34a8ee`（会话/检索/引文后端）、`892faab`（P3-01 测试）、`aa08f91`（教学策略抽取）、`f50becd`（自由学习前端）、`e7450d8`（临时讲解与练习后端）、`a5a7656`（P3-04 测试）、`84769dd`（402 载荷统一）、`aa6c43f`（练习与消息关联）、`0065f9c`（P3-05 与迁移测试）、`12419d0`（练习前端）；本记录为文档批次。
+- 新增 `backend/app/agent/`：`AgentSession` / `AgentMessage`（`beyond`、`check_question`、`source_refs` 快照、`grounded`、`model`、`run_id`、`exercise_id`）、`retrieval.py`（仅本项目 chunk，FTS5 优先 + 有界 LIKE 回退，5 段 / 6000 字符上限）、`prompt.py`（围栏与 JSON 解析，未提供的引文标记落库前剔除）、`practice.py`（一次调用产出临时讲解 + 一道练习草稿）、`router.py`（5 个端点）。
+- 新增 `backend/app/teaching.py`：把 Tutor 的“先解释”“两个回答字段”“四种情形”“共同拒绝项”“围栏段落”抽成唯一所有者，Tutor 与自由学习共用；Tutor 的 system prompt 抽取前后**逐字节一致**（用快照 diff 验证，非仅靠断言）。
+- 前端新增 `/projects/[projectId]/explore`：服务端渲染会话列表与选定会话，客户端追问、引文徽章（`[S1] 文件名 · 定位`）、`beyond` 独立区块与免责句、`check_question` 卡片、练习卡片（草稿/未审核/未运行 + 回链提交）。
+- 迁移边界：`variant_exercises` 新增 `session_id` / `source_question`，`agent_messages` 新增 `exercise_id`，均走 `ADDED_COLUMNS` 且**不声明外键**——SQLite 无法给既有表补外键，声明了会让升级库与全新库静默分叉。
+- 实际执行：
+  1. `uv run pytest -q --junitxml=...`：**1261 passed, 2 skipped**（两项为历史 pin 有意跳过）。
+  2. `uv run ruff check app tests`：通过。
+  3. 前端 `npx tsc --noEmit`、`npm run lint`：通过；`npm test`：**19 files / 152 passed**；`NODE_OPTIONS= npm run build`：成功，构建清单含 `/projects/[projectId]/explore`。
+  4. 定向：`tests/test_agent.py` 22 项、`tests/test_practice.py` 12 项、`tests/test_teaching.py` 6 项。
+  5. 真实开发库副本升级验证：`init_db()` 后新建 6 张表，课程/答题/复习日志/复习卡片计数 3/5/4/2 前后完全一致。
+- 修复的既有缺陷：`/usage` 的 402 载荷此前只有 code 与 message，缺 `limit_usd` / `spent_usd`，而客户端会渲染这两个数字；现由 `metering.cost_limit_detail` 统一，四个计费面共用。迁移守卫测试只注册了 `app.models`，导致任何指向 submissions 表的 `ADDED_COLUMNS` 条目被误判为“模型已删除该表”；已改为注册 `init_db` 全部模型模块。
+- 剩余风险：检索为词法匹配（FTS5 + LIKE），语义相近但用词不同的提问可能检索不到，界面会如实显示“没有引用项目资料”；单题上下文有上限，超长资料不会被完整送入；引文正确性由“只允许引用已提供标记”保证，但模型仍可能把某个标记挂在并不支持该句的段落上，本轮未做语义一致性校验；临时练习未经人工审核，仅以草稿呈现；未做真实模型端到端验收（全部为 stub/fake 契约测试）。
+- 下一步：P4-01 KnowledgeEntry / ProjectKnowledge / Relation 与知识草稿（ADR-019 已预留“跨项目引用与知识沉淀另立决策”的边界）。
 
 ## 追加记录模板
 

@@ -50,7 +50,7 @@ flowchart TD
 ## 3. 代码模块规划
 
 - 保留：`ingest.py`、`generation.py`、`attempts.py`、`fsrs.py`、`review.py`、`remediation.py` 既有功能与测试。
-- 新增：`projects/`（项目）、`resources/`（持久资料）、`submissions/`（手动上传与历史）、`code_review/`（静态评审与日志）、`agent/`（教学协调器）、`knowledge/`（草稿与关联）、`suggestions/`（跨项目确认）。
+- 新增：`projects/`（项目）、`resources/`（持久资料）、`submissions/`（手动上传与历史，静态与模型评审都在此）、`agent/`（项目级自由学习：会话、检索、引文、临时练习）、`teaching.py`（各教学端共用的教学策略）、`knowledge/`（草稿与关联）、`suggestions/`（跨项目确认）。
 - 优先将新 API 写进独立 `APIRouter`，避免继续扩大 `main.py`。旧路由采用渐进迁移，不一次性重构。
 - 新功能尽量复用现有 SQLAlchemy session、LLM Provider、错误响应格式与测试模式。
 
@@ -66,8 +66,8 @@ flowchart TD
 | Submission | id, project_id, exercise_id?, version, created_at, user_note | 一次上传/粘贴记录 |
 | SubmissionArtifact | submission_id, kind, filename, content, size_bytes, sha256 | 代码、日志、配置（文本存库，便于整库备份） |
 | CodeReview | id, submission_id, summary, evidence, model, created_at | 静态分析结果及证据等级 |
-| AgentSession | id, project_id, mode, created_at | 项目级自由/课程对话 |
-| AgentMessage | session_id, role, body, source_refs | 消息与出处 |
+| AgentSession | id, project_id, mode, title, updated_at | 项目级自由对话；会话不跨项目 |
+| AgentMessage | session_id, role, body, beyond, check_question, source_refs, grounded, model, run_id | 消息与出处快照（非外键，资料删除后仍可追溯） |
 | KnowledgeEntry | id, title, markdown_path, status, provenance | 草稿/待审/确认知识 |
 | ProjectKnowledge | project_id, knowledge_id, relation | 知识与项目关联 |
 | KnowledgeRelation | from_id, to_id, kind | 前置依赖、相关、扩展 |
@@ -95,13 +95,16 @@ flowchart TD
 | POST | `/api/submissions/{id}/review` | 触发 AI 静态审查 |
 | GET | `/api/submissions/{id}/reviews` | 评审历史 |
 | GET/POST | `/api/projects/{id}/sessions` | 项目会话 |
-| POST | `/api/sessions/{id}/messages` | 发送教学消息 |
+| POST | `/api/sessions/{id}/messages` | 发送教学消息（回答 + 引文） |
+| POST | `/api/sessions/{id}/practice` | 由提问生成临时讲解与一道练习草稿 |
 | GET | `/api/projects/{id}/knowledge` | 项目知识 |
 | POST | `/api/knowledge/{id}/confirm` | 确认知识 |
 | GET | `/api/projects/{id}/suggestions` | 跨项目建议 |
 | POST | `/api/suggestions/{id}/decide` | 接受/拒绝 |
 
 API 是**目标草案**，Codex 要先核对上游风格，并维护 Pydantic schema / 前端契约测试。
+
+P3 已交付自由学习子集：GET/POST `/api/projects/{id}/sessions`、GET/DELETE `/api/sessions/{id}`、POST `/api/sessions/{id}/messages`、POST `/api/sessions/{id}/practice`。检索仅限本项目 `resource_chunks`（FTS5 优先，有界 LIKE 回退覆盖中文与带标点提问），引文以 S1..Sn 标记给出并在落库前剔除未提供的标记；模型失败或输出不可解析时不落库。详见 ADR-019。
 
 P1-01 已交付 Project 子集：GET/POST `/api/projects`、GET/PATCH `/api/projects/{id}`、POST `/api/projects/{id}/archive`、PUT/DELETE `/api/projects/{id}/courses/{course_id}`。列表返回 `{items,total}`，默认 active，支持 status/limit/offset；详情包含课程引用。归档只读且保留课程历史；解除关联不调用 Course 删除。其余上表接口仍以 TASKS 为准。
 
