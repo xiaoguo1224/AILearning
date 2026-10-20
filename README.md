@@ -1,166 +1,71 @@
-# StudyForge
+# Personal AI Learning Agent
 
-**Open-source adaptive learning platform.** Turn a PDF, a link, or pasted notes into a personalized course with quizzes and spaced review. Self-hosted, your data stays yours. There is an AI tutor, scoped to the concepts you keep missing.
+基于 [StudyForge](https://github.com/Akhilvallala1/studyforge) 的**个人 AI 自适应编程学习工作台**。这是提供给 Codex 的**目标项目文档集**，不是已经完成开发的功能清单。
 
-> Inspired by platforms like paradigm.study, but open: bring your own API key or run a local model, own your learning data.
+## 产品目标
 
-## Why open source?
+在一个网站里管理多个学习项目，以固定课程和自由学习两种方式学习；在本地 IDE 写、跑代码，然后手动上传代码/运行日志，由 AI 提供静态审查、分级提示、针对性补课与变式题。上传论文、PDF 或网页后，自动整理知识草稿并建立跨项目关联。
 
-Closed adaptive-learning platforms lock in your content, your progress history, and your study data. StudyForge takes the opposite approach:
+## 三个完整使用场景
 
-- **Self-hosted** - run it on your own machine or server; your courses and progress never leave it, though the material you feed it goes to your model provider unless that provider is Ollama
-- **Bring your own model** - Claude, or any local model via Ollama
-- **No lock-in** - your courses and progress live in a SQLite file you own, not behind anyone's account. Export to Markdown, JSON, or Anki decks is on the roadmap, not built
-- **Community courses** (planned) - course templates as plain files in git, not a walled garden
+1. **计划学习**：PyTorch Day 1 → 学习知识点 → 本地代码练习 → 上传代码和日志 → 分级诊断 → 修复 → 新题复测 → 学习记录。
+2. **自由学习**：进入「多模态 Token 对齐」项目 → 上传论文 → 询问 SPDM → AI 引用资料解释 → 生成小练习 → 保存知识草稿。
+3. **跨项目建议**：自由学习中发现矩阵运算薄弱 → 提示在 PyTorch 项目安排复习 → 用户确认 → 写入目标项目计划。
 
-## Core features (roadmap)
+## 核心边界
 
-### Phase 1 - Content to course (MVP)
-- [x] Upload a PDF / paste text or a URL
-- [x] LLM structures it into a course: modules → lessons → key concepts
-- [x] Auto-generated quizzes per lesson (multiple choice + short answer)
-- [x] Progress tracking in SQLite
-- [x] Web UI (Next.js)
-- [x] API cost tracking, with a spend alert and an optional hard cap
-- [x] Delete a course, with the whole cascade counted out before you confirm
-- [x] YouTube links as a source, read from the video's captions
-- [ ] Source-anchored study: the video or the PDF shown in the app, with questions under it and no rewritten explanation
+- **仅供个人使用**，不需要多用户账户。
+- **不执行上传代码**：用户本地运行、主动上传文件及日志；平台进行静态分析和 AI 辅导。
+- 无额外 CLI、在线 IDE、沙箱、GPU 调度和云端训练。
+- 固定课程主线 + 自由学习；普通笔记自动保存草稿，权威核心内容须审核。
+- 课程与学习系统尽量复用 StudyForge；扩展 Project、Resource、Submission、AgentSession 等模块。
 
-**Deleting a course deletes what you did in it.** The cascade is larger than the word suggests: the course goes, and with it its modules, its lessons, their quiz items, and every answer you ever gave in it, which is the table your mastery signal is derived from. Concepts that no surviving course teaches stop being reviewed, and their review history goes with them. A concept another course still teaches keeps its card and its history untouched, which matters more than it sounds: getting that wrong would wipe your memory of a concept because you tidied up one of the two courses that happened to mention it. Your retention, streak and pace are all measured from history, so they can move afterwards, and that is correct rather than a bug, because you really have not done those things any more. The one thing kept is the spend: `/usage` still shows what the course cost, under its own title, permanently, since that is money that was really spent. The confirmation is all that stands between you and the rest of it, so it shows the real counts for your course, produced by the same code that performs the delete rather than by a second description of it that could drift.
+## 技术基线
 
-Over the API, `DELETE /courses/{course_id}` is deliberately not idempotent: a second delete of the same id is a 404. `DELETE /plan/days-off/{day}` is idempotent because a day off is set membership and removing an absent one leaves you where you asked to be, but a course is an entity, and answering 200 for one that is not there would tell a client its delete had worked when there was nothing to delete.
+上游源码当前是 **Next.js / React + FastAPI + SQLAlchemy + SQLite**。优先保留现有技术栈，并根据实际安装情况配置模型供应商。新增模块不能破坏现有课程、Quiz、FSRS、Tutor 及课程删除语义。
 
-**Source-anchored study is not built yet.** Reading a YouTube link works: a watch page carries no transcript in its HTML, so StudyForge reads the video's captions instead, and a link that names no video is refused rather than fetched. What is missing is showing the source back to you. Nothing about a source is stored at present, so the PDF you upload and the URL you paste are both gone by the time the course exists, and displaying either needs that storage first. It is meant to sit alongside course generation rather than replace it, because one video or one paper is best studied directly, while six weeks of lecture notes are worth synthesising across.
+## 文档导航
 
-### Phase 2 - Adaptive learning
-- [x] Spaced repetition scheduling (FSRS-6) for review: a card per concept, a daily due queue, and a rating session at `/review`
-- [x] Mastery per concept, drawn as a per-course concept map (mastered / solid / shaky / not started)
-- [x] Re-teaching: a concept you keep missing is explained again in plainer words, with a worked example
-- [x] Remedial practice: a short run at a weak concept, using the quiz questions the course already has
-- [ ] Concept prerequisites
+- [`AGENTS.md`](AGENTS.md)：主 Agent 长期开发规范。
+- [`docs/PRD.md`](docs/PRD.md)：需求、页面、用户流程和验收。
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)：目标系统、领域模型、接口和边界。
+- [`docs/TASKS.md`](docs/TASKS.md)：可逐项执行的工程任务。
+- [`docs/DECISIONS.md`](docs/DECISIONS.md)：技术及产品决策记录。
+- [`docs/PROGRESS.md`](docs/PROGRESS.md)：真实进度与测试证据。
 
-Three of these are narrower than they sound, deliberately, so you know before you go looking.
+## Codex 开发入口
 
-**Re-teaching is offered, not forced.** Miss a concept on two or more of its last five ratings and StudyForge offers to explain it again, at most once a week per concept. Taking the explanation does not reschedule the card and does not mark the concept learned: it keeps its stability, its lapses, and its due date, and it stays in the review queue. The lapse history is exactly what the trigger reads, so wiping it would make the next failure look like a first offence.
+在**克隆或 Fork 的 StudyForge 仓库根目录**放置这些文档。注意：上游仓库可能已经包含 README、`docs/ARCHITECTURE.md`、`AGENTS.md` 或局部 Agent 规则。**先阅读并合并，不要直接覆盖原文件**。本文件是产品目标 README 草案；原项目安装说明与许可证应保留。
 
-**Practice does not advance your schedule.** After reading the explanation you get a short run at the concept, built from quiz questions the course already has: no new questions are written for it and the feature makes no model call at all. It stops at two correct answers, at three answers, or when that concept's questions run out, whichever comes first, and there is one run per concept per study day. It is a study event and not an assessment, so it writes no review log and touches no column of the review card: not the due date, not the mastery bucket, not the "needs attention" flag, not the retention figure, and not where the concept sits in the review queue. Whether the re-teaching worked is measured at your next cold scheduled review, because that is the only place it can be measured honestly. Every answer is still recorded as an attempt, and the only thing practice moves is which of that concept's questions comes up next, since one you have just answered rotates to the back. Practice lives inside the re-teaching panel, so the explanation is on screen before any question is asked, and it is deliberately not reachable from inside a review session, because that session is the cold measurement.
+建议首次给 Codex：
 
-Practice attempts are stored with `source` set to `remedial_practice`, a third value on `GET /lessons/{lesson_id}/attempts` alongside `lesson_quiz` and `review_session`. Nothing was removed or renamed, but anything switching on that field needs to handle it.
+> 阅读 AGENTS.md 与 docs 下全部文档；检查当前源码和 git 状态，完成 P0 环境与基线验证。之后自主按 TASKS.md 的依赖顺序实现、测试、修复并更新进度。没有产品冲突或外部阻塞时不要只做计划就停止。不要执行用户上传代码。
 
-**The concept map has no prerequisite arrows and no locked concepts.** Nothing in the system extracts real dependencies between concepts, and inferring them from lesson order would draw confident arrows that are frequently wrong. The map shows each concept grouped under the lesson that teaches it, coloured by how well you are holding it, and no more than that. It is not a prerequisite graph and it does not plot a path through the course.
+## 运行与验证
 
-### Phase 3 - AI tutor
-- [x] Chat with a tutor grounded in the course material
-- [x] Work-it-out mode: the tutor stops one move short and hands that move back to you
-- [x] Study planning: a deadline per course, the weekly rate it implies against the pace you are keeping across all your courses, days off, and a calendar file
+需要 Python >=3.11、Node.js >=20。后端（在 `backend/`）：
 
-All three are narrower than the lines above sound, in the same deliberate way Phase 2 is.
-
-**The tutor is per concept, and it lives where the re-teaching does.** It is not a course-wide chat window. It sits inside the re-teaching panel on Today, underneath the explanation and the practice run, so you reach it for a concept you keep missing rather than from anywhere in the course. It answers from your course material, and it splits what it says into two registers, one of which states outright that the content is not from your course. It is never shown the answer key for a question you could still be asked and have your recall counted. Two daily caps bound it, 12 turns on one concept and 40 across all of them. A conversation is not a retrieval test: nothing the tutor writes touches a review card, a review log, or an attempt, so you cannot talk your way to a longer interval.
-
-**Work-it-out mode is not a tutor that answers a question with a question.** It sets out everything in your course that bears on what you asked, carries it forward until exactly one move is left, and hands you that move. Whatever it withholds has to be answerable from the explanation directly above it, or it is a riddle rather than a step. It fades over two turns: the first withholds the final move, the second states the method for that move and withholds only the value it produces. After that the tutor answers outright, because below the second rung there is nothing left to withhold that is still worth asking for. The run is counted off the conversation itself rather than stored anywhere, and any ordinary answer resets it. It is two buttons in the panel rather than a setting: "Let me work it out" sits beside the ordinary Ask, which stays the default and is what Ctrl or Cmd and Enter sends. A toggle would claim to hold a choice that the next ordinary answer resets underneath it. A line below the buttons says what the second one does, and once you have spent both rungs it changes to say the next reply will be the full answer: the button stays live, that answer arrives as an ordinary reply rather than as an error, and the line clears itself on the following turn. The withheld move gets a heading of its own, directly under the explanation and above anything marked as not from your course, because what it asks for is grounded in the course material. Over the API it is `mode` set to `guided` on `POST /tutor/messages`.
-
-**Study planning owns the rate new material goes in, and nothing else.** A course takes one deadline, labelled in your own words. From it you get two figures side by side: the lessons a week you need in order to finish this course's remaining ones in time, and the lessons a week you have actually been finishing across all your courses over the last 30 days. The second counts every completion anywhere rather than only the ones here, and so does the minimum of five it waits for before showing a number instead of a dash. Counted per course that minimum was not slow to reach but unreachable, because a course of four lessons can never produce five completions, which made the dash permanent however much work you did. The finish date comes from a third number again: this course's share of that throughput, which reduces to the rate you are putting into this course alone. So the date deliberately does not equal your remaining lessons divided by the rate on display, and the page names the share in the same sentence as the date rather than leaving the arithmetic looking broken. The rate is a fact about you, the date is a fact about this course. Projecting it off your whole throughput instead would answer when you would finish if you dropped everything else, which runs optimistic by roughly the number of courses you have open and never pessimistic, and optimistic is the wrong direction to be wrong in about a deadline. A course you have already finished gets no date rather than one reading today, and if you have cleared the minimum elsewhere but finished nothing here inside the window, the page says exactly that instead of implying you have never worked here. Days off are global rather than per course, since a day you are away is a day you are away from all of it. The date stays a projection and not a promise: the page sets it beside the deadline and draws no conclusion from the pair, because whether that gap is comfortable depends on the fortnight you have coming and nothing here knows anything about that. There is no threshold, no at-risk colouring, and no verdict. None of it moves a review: a deadline schedules no card, pulls nothing forward, and marks no concept at risk, because a card due after your exam is predicted at about 90% recall on the day of it.
-
-That work changed the plan payload. `GET /courses/{course_id}/plan` renamed `observed_per_week` to `observed_per_week_all_courses` and `observed_sample` to `observed_sample_all_courses`, and added `observed_per_week_this_course` and `projection_reason`. The old names are gone rather than deprecated, and deliberately so: a key that kept its spelling while its meaning moved underneath it is a wrong answer nobody goes looking for, and a client still dividing its remaining lessons by `observed_per_week` would have gone on producing a different date from the one the server projects, with nothing anywhere to reveal the disagreement. StudyForge's own plan page did exactly that for a few hours, which is the best evidence available that breaking the name was worth it.
-
-**StudyForge cannot remind you.** There are no accounts here and no server running while you are not using it, so nothing in this program sends an email, a push notification, or a reminder of any kind. What the plan page offers instead is a calendar file: one all-day event on your deadline, which you download and open once. It is a file, not a feed your calendar keeps checking, because a calendar provider on the internet cannot reach a server on your own machine. Download it again after changing the date and it updates that same entry rather than adding a second one.
-
-### Phase 4 - Community
-- [ ] Export courses and progress as Markdown, JSON, or Anki decks
-- [ ] Course template format (portable, git-friendly)
-- [ ] Public course registry
-- [ ] Multi-user / classroom mode
-
-## Architecture
-
-```
-┌─────────────────┐     ┌──────────────────┐     ┌─────────────┐
-│  Next.js web UI │────▶│  FastAPI backend  │────▶│  LLM        │
-│  (courses,      │     │  (ingestion,      │     │  (Claude /  │
-│   quizzes, chat)│     │   scheduling, API)│     │   Ollama)   │
-└─────────────────┘     └────────┬─────────┘     └─────────────┘
-                                 │
-                        ┌────────▼─────────┐
-                        │  SQLite/Postgres │
-                        │  (courses,       │
-                        │   progress, SRS) │
-                        └──────────────────┘
+```powershell
+uv sync --extra dev --frozen
+Copy-Item .env.example .env
+# 在 .env 中设置 STUDYFORGE_LLM_PROVIDER=fake，可离线验证且不需要密钥
+uv run uvicorn app.main:app --reload --host 127.0.0.1
 ```
 
-- **Frontend:** Next.js (App Router) + TypeScript + Tailwind - course creation and deletion, lessons, quizzes, progress, review sessions, concept map, re-teaching with its practice panel and tutor, and a per-course plan screen
-- **Backend:** FastAPI (Python) - document ingestion, course generation and deletion, quiz grading, progress, FSRS review scheduling, re-teaching, remedial practice, the tutor, study planning and calendar export
-- **Storage:** SQLite by default (zero-config), Postgres for multi-user deployments
-- **LLM:** provider-agnostic adapter - Anthropic API first, Ollama for fully-local setups
+前端（在 `frontend/`，另一个终端）：
 
-Everything in the diagram is real now, the tutor chat and the SRS column included.
-
-## Getting started
-
-You'll run two processes: the FastAPI backend and the Next.js frontend (Node.js 20+), one terminal each.
-
-**Terminal 1 - backend:**
-
-```bash
-git clone https://github.com/Akhilvallala1/studyforge.git
-cd studyforge/backend
-python -m venv .venv
-# Windows: .venv\Scripts\activate    macOS/Linux: source .venv/bin/activate
-pip install -e ".[dev]"
-# Windows: copy .env.example .env    macOS/Linux: cp .env.example .env
-# then edit .env and set ANTHROPIC_API_KEY, or switch to Ollama
-uvicorn app.main:app --reload   # .env is loaded automatically at startup
-```
-
-**Terminal 2 - frontend:**
-
-```bash
-cd studyforge/frontend
-npm install
-# Windows: copy .env.local.example .env.local    macOS/Linux: cp .env.local.example .env.local
+```powershell
+npm ci
+Copy-Item .env.local.example .env.local
 npm run dev
 ```
 
-Open http://localhost:3000 and create your first course - paste text, drop in a URL, or upload a PDF. The frontend talks to the backend via `NEXT_PUBLIC_API_URL` in `frontend/.env.local` (defaults to http://localhost:8000); if you change the frontend's origin, update `STUDYFORGE_CORS_ORIGINS` in `backend/.env` to match.
+访问 <http://localhost:3000>；API 文档为 <http://localhost:8000/docs>。前端 `NEXT_PUBLIC_API_URL` 与后端地址一致；后端 `STUDYFORGE_CORS_ORIGINS` 默认允许 `http://localhost:3000`。数据库由 `STUDYFORGE_DB` 指定，默认位于后端工作目录。真实教学需配置 Anthropic 或 Ollama；Fake 仅用于确定性验收，不代表真实教学质量。模型配置和费用限制见 [`backend/.env.example`](backend/.env.example)。请仅绑定本机访问，本项目没有登录保护。
 
-Once a course exists, Today (http://localhost:3000) shows what is due, http://localhost:3000/review runs a rating session over it, and each course has a Concept map tab showing how well you are holding each concept. A concept you keep missing is offered on Today with an explanation in plainer words, and a short practice run and the tutor sit inside that explanation. Each course also has a Plan tab, where a deadline gets you the weekly rate it implies beside the pace you have been keeping across all your courses.
+验证：后端 `uv run pytest -q`、`uv run ruff check app tests`；前端 `npm test`、`npm run lint`、`npm exec tsc -- --noEmit`、`npm run build`。实际结果持续记录在 [`docs/PROGRESS.md`](docs/PROGRESS.md)。
 
-If you're generating against a paid API, the run reports its estimated cost when it finishes, and http://localhost:3000/usage keeps a running total. See [Cost control](#cost-control) before you point it at a large PDF.
+现有课程入口 `/courses`、测验、`/review`、概念 Tutor 和 `/usage` 保留。Project 等目标功能以 TASKS 验收状态为准。上游安装、费用估算及删除语义原文完整保留在 [`docs/upstream/README.md`](docs/upstream/README.md)，其中社区/多人路线不属于本项目范围。数据库升级前必须备份，参见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md)。
 
-Prefer the raw API? The interactive docs live at http://localhost:8000/docs:
+## 许可证与上游
 
-```bash
-curl -X POST http://localhost:8000/courses/generate \
-  -H "Content-Type: application/json" \
-  -d '{"sources": [{"kind": "text", "value": "<paste your study material here>"}]}'
-```
-
-Pass several sources in one request, up to 5 of them and 150,000 characters in total. PDFs go to `POST /courses/generate/pdf` instead, which takes one or more files under the `file` field; a single request is either JSON sources or PDF uploads, not both. The legacy `text` and `url` fields still work but are deprecated and will be removed in 0.4.0. Run tests with `pytest backend/tests`.
-
-## Cost control
-
-One course is dozens of LLM calls, so a careless PDF upload can be a surprising bill. StudyForge meters its own API usage and shows you the running total instead of letting you find out later. Every call is recorded with its provider, model, stage (outline, lesson, remediation, or tutor), token counts, and estimated cost, and the same line is logged to the backend console as it happens.
-
-- **Every page** in the web UI shows total estimated spend. **`/usage`** breaks it down by course and lists the recent calls.
-- **Generating a course** reports what that run cost when it finishes.
-- **The tutor** spends one call per question you ask, bounded by its own daily caps of 12 turns on a concept and 40 overall, so a long conversation cannot quietly run away with your budget. Study planning and remedial practice call no model at all.
-- **`STUDYFORGE_COST_ALERT_USD`** (default 10) raises a banner when cumulative spend crosses the threshold, with an Acknowledge button. It recurs: it fires again at every further multiple, so acknowledging at 10 USD does not silence 20.
-- **`STUDYFORGE_COST_LIMIT_USD`** (unset by default, meaning no cap) is a hard cap. Once estimated spend reaches it, further paid calls are refused with HTTP 402. Ollama and the `fake` provider cost nothing and are never blocked.
-
-Upgrading an existing install needs no migration: the two new tables are created on startup.
-
-Two things worth being blunt about.
-
-**These are estimates, not bills.** Costs are computed from the token counts the provider reports, priced against a table built into `backend/app/costs.py`. They are not billed amounts from Anthropic. A model that isn't in that table falls back to `STUDYFORGE_PRICE_DEFAULT_IN_USD` and `STUDYFORGE_PRICE_DEFAULT_OUT_USD` (5.00 and 25.00 per million tokens by default), and every figure derived from it is flagged approximate. Your provider's own dashboard remains the source of truth.
-
-**The cap can overshoot by one call.** The check runs before a call and cannot know what that call will cost, so the call that trips the cap still completes and is billed. With the default model and the default 64k output limit, a single overshoot tops out around 1.60 USD; a more expensive model raises that ceiling proportionally. Set the cap below what you'd actually tolerate spending.
-
-This tracks StudyForge's own API usage only. It has no view of anything else you spend on the same key.
-
-## Contributing
-
-Contributions welcome - see [CONTRIBUTING.md](CONTRIBUTING.md). Good first areas: document ingestion (PDF parsing), quiz generation prompts, and the Phase 4 export formats (Markdown, JSON, Anki), which nothing has been written for yet.
-
-## License
-
-[MIT](LICENSE)
+基于 StudyForge（基点 `d6fc957`），保留 [MIT LICENSE](LICENSE) 及 Akhil Vallala 的版权声明。Git `origin` 为本项目，`upstream` 为 StudyForge；开发提交默认不自动推送。

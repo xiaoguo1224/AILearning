@@ -38,6 +38,12 @@
 
 ## 追加记录模板
 
+### 2026-10-20 — P0-02 上游文档合并
+- 前项提交：P0-01 `4989e74`。本项提交：本记录所在提交（`git log --grep="P0-02"`）。
+- 将 `d6fc957` 的 README/ARCHITECTURE 字节原文保存在 `docs/upstream/`；当前 README 恢复安装、配置、测试、许可证入口，ARCHITECTURE 合并真实 API、计量、删除、FSRS/Tutor 与迁移语义。
+- 上游旧 ARCHITECTURE 的 FSRS/Tutor planned 描述已明确标为历史，不作为当前事实；保留用户目标需求和已有删除文件的状态。
+- 验证：通过 Git 原文与本地文件字节比较；LICENSE 未改。运行测试尚在下一项进行，不声称本项已验证应用。
+
 ### 2026-10-20 — P0-01 仓库与工作区核查
 - 上游基点：`d6fc957`；分支：`codex/personal-learning-p0`。提交：本记录所在提交（`git log --grep="P0-01"`）。
 - 完整读取根 AGENTS、README、PRD、ARCHITECTURE、TASKS、DECISIONS、PROGRESS 及上游 README/ARCHITECTURE、MIT LICENSE。

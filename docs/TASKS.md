@@ -5,7 +5,7 @@
 ## P0 — 上游基线与环境（必须首先完成）
 
 - [x] P0-01 核查目标本地仓库 HEAD、目录、现有文档与 Git 状态；建立独立工作分支。
-- [ ] P0-02 阅读现有 StudyForge README / ARCHITECTURE / LICENSE，合并目标文档而非覆盖原文件。
+- [x] P0-02 阅读现有 StudyForge README / ARCHITECTURE / LICENSE，合并目标文档而非覆盖原文件。
 - [ ] P0-03 安装后端依赖并运行 `pytest -q`；记录环境、通过/失败/跳过详情。
 - [ ] P0-04 安装前端依赖并运行 `npm test`、`npm run build`；记录结果。
 - [ ] P0-05 启动原应用，手工验证课程生成、测验、复习和 Tutor（可使用 fake provider）。
