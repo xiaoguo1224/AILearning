@@ -31,6 +31,26 @@ class CostLimitExceeded(Exception):
         self.spent_usd = spent_usd
 
 
+COST_LIMIT_MESSAGE = "LLM spend limit reached"
+
+
+def cost_limit_detail(exc: CostLimitExceeded) -> dict:
+    """The 402 body every metered surface answers a reached cap with.
+
+    ONE function, because there are four surfaces now and each of them used to spell this
+    dict out itself. The client branches on `error` and reads both figures, so a surface
+    that answered with the code and the message but dropped `limit_usd` and `spent_usd`
+    would fail nowhere: the learner would be told the cap was reached and not what it was
+    or how close they are. That is the drift this function exists to make impossible.
+    """
+    return {
+        "error": "cost_limit_exceeded",
+        "message": COST_LIMIT_MESSAGE,
+        "limit_usd": exc.limit_usd,
+        "spent_usd": exc.spent_usd,
+    }
+
+
 def total_spend(session) -> float:
     """Cumulative estimated_cost_usd across every recorded llm_calls row."""
     total = session.query(func.sum(models.LlmCall.estimated_cost_usd)).scalar()

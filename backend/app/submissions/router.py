@@ -1,10 +1,10 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session, selectinload
 
-from app.metering import CostLimitExceeded
+from app.metering import CostLimitExceeded, cost_limit_detail
 from app.models import utcnow
 from app.projects.service import (
     get_project,
@@ -52,8 +52,8 @@ PREVIEW_CHARS = 100_000
 
 
 def _cost_limit(exc: CostLimitExceeded):
-    # Same body as the other metered surfaces; the client branches on `error`.
-    return project_error(402, "cost_limit_exceeded", "LLM spend limit reached")
+    # One body for every metered surface; metering.cost_limit_detail owns its shape.
+    return HTTPException(402, detail=cost_limit_detail(exc))
 
 
 def _submission_or_404(session: Session, submission_id: int) -> Submission:

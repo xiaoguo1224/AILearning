@@ -23,6 +23,7 @@ from app import (
     generation,
     ics,
     ingest,
+    metering,
     models,
     planning,
     remediation,
@@ -464,15 +465,7 @@ def _cost_limit_exceeded(exc: CostLimitExceeded) -> HTTPException:
     branches on `error` and reads `limit_usd` and `spent_usd`, and each extra copy of
     that shape is another chance for one surface to spell it differently from the rest.
     """
-    return HTTPException(
-        402,
-        detail={
-            "error": "cost_limit_exceeded",
-            "message": "LLM spend limit reached",
-            "limit_usd": exc.limit_usd,
-            "spent_usd": exc.spent_usd,
-        },
-    )
+    return HTTPException(402, detail=metering.cost_limit_detail(exc))
 
 
 def _save_course(session: Session, course: dict) -> models.Course:
