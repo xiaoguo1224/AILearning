@@ -110,3 +110,31 @@ class KnowledgeDetail(KnowledgeSummary):
 class KnowledgeList(BaseModel):
     items: list[KnowledgeSummary]
     total: int
+
+
+class DraftFromMessageInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    session_id: int
+    message_id: int
+
+
+class CandidateOut(BaseModel):
+    id: int
+    title: str
+    status: Literal["draft", "pending_review", "confirmed"]
+    kind: Literal["note", "definition", "standard_answer"]
+    # 1.0 is the same title, 0.9 a shared concept key, otherwise character similarity.
+    score: float
+
+
+class DraftResult(BaseModel):
+    """What a draft request produced, and what it deliberately did not produce.
+
+    `entry` is null when the title already existed: the request is answered with
+    `duplicate_of` instead of a second copy of the same note. Both null would mean a bug,
+    which is why the router never returns it that way.
+    """
+
+    entry: KnowledgeDetail | None = None
+    duplicate_of: int | None = None
+    candidates: list[CandidateOut] = Field(default_factory=list)

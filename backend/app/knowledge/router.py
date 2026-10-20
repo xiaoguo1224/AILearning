@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
+from app.knowledge import draft as knowledge_draft
 from app.knowledge import service
 from app.knowledge.models import (
     RELATION_PREREQUISITE,
@@ -16,7 +17,10 @@ from app.knowledge.models import (
     ProjectKnowledge,
 )
 from app.knowledge.schemas import (
+    CandidateOut,
     CreateKnowledgeInput,
+    DraftFromMessageInput,
+    DraftResult,
     KnowledgeDetail,
     KnowledgeList,
     KnowledgeSummary,
@@ -225,3 +229,41 @@ def link_knowledge_project(knowledge_id: int, body: LinkProjectInput, session: D
     service.link_project(session, body.project_id, knowledge_id)
     entry = service.entry_or_404(session, knowledge_id)
     return _projects(session, entry)
+
+
+@router.post(
+    "/projects/{project_id}/knowledge/drafts",
+    response_model=DraftResult,
+    status_code=201,
+    dependencies=MUTATION,
+)
+def draft_from_answer(project_id: int, body: DraftFromMessageInput, session: Db):
+    """Keep one grounded answer as a draft note.
+
+    Deliberately not a model call: the answer already exists, already cites the material,
+    and already cost what it cost. A repeat of a title returns the existing entry instead
+    of a second copy, and a confirmed entry is reported as a candidate rather than being
+    rewritten — a draft from today's answer is not evidence about something a person
+    already settled.
+    """
+    entry, duplicate_of, found = knowledge_draft.draft_from_message(
+        session, project_id, session_id=body.session_id, message_id=body.message_id
+    )
+    if entry is None:
+        logger.info(
+            "knowledge_draft_duplicate project_id=%s duplicate_of=%s", project_id, duplicate_of
+        )
+        return DraftResult(
+            duplicate_of=duplicate_of,
+            candidates=[CandidateOut(**item) for item in found],
+        )
+    logger.info(
+        "knowledge_draft_created project_id=%s knowledge_id=%s candidates=%s",
+        project_id,
+        entry.id,
+        len(found),
+    )
+    return DraftResult(
+        entry=_detail(session, entry),
+        candidates=[CandidateOut(**item) for item in found],
+    )
