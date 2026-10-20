@@ -135,7 +135,13 @@ export interface UsageTotals {
  * Which kind of row this is: one course, re-teaching that no single course owns, or
  * a generation run that failed before its course could be saved.
  */
-export type SpendGroup = "course" | "remediation" | "failed_run";
+export type SpendGroup =
+  | "course"
+  | "remediation"
+  | "tutor"
+  | "code_review"
+  | "variant_exercise"
+  | "failed_run";
 
 export interface PerCourseUsage {
   group: SpendGroup;
