@@ -6,8 +6,9 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
 from app.knowledge import draft as knowledge_draft
-from app.knowledge import service
+from app.knowledge import history, service
 from app.knowledge.models import (
+    CORE_KINDS,
     RELATION_PREREQUISITE,
     STATUS_CONFIRMED,
     STATUS_DRAFT,
@@ -18,7 +19,9 @@ from app.knowledge.models import (
 )
 from app.knowledge.schemas import (
     CandidateOut,
+    CompareResult,
     CreateKnowledgeInput,
+    DiffLine,
     DraftFromMessageInput,
     DraftResult,
     KnowledgeDetail,
@@ -27,6 +30,9 @@ from app.knowledge.schemas import (
     ProjectRefOut,
     RelationInput,
     RelationOut,
+    RevisionDetail,
+    RevisionList,
+    RevisionSummary,
     UpdateKnowledgeInput,
 )
 from app.projects.models import Project
@@ -103,6 +109,7 @@ def list_project_knowledge(
     session: Db,
     status: str | None = Query(default=None),
     kind: str | None = Query(default=None),
+    core: bool = Query(default=False),
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0, le=MAX_SQLITE_INTEGER),
 ):
@@ -118,6 +125,11 @@ def list_project_knowledge(
         query = query.filter(KnowledgeEntry.status == status)
     if kind is not None:
         query = query.filter(KnowledgeEntry.kind == kind)
+    # `core` is the review queue: the kinds that must be confirmed before they are
+    # presented as settled. Filtering here rather than in the client keeps "what needs
+    # reviewing" a rule the server states once.
+    if core:
+        query = query.filter(KnowledgeEntry.kind.in_(CORE_KINDS))
     total = query.count()
     rows = (
         query.order_by(KnowledgeEntry.updated_at.desc(), KnowledgeEntry.id.desc())
@@ -167,6 +179,7 @@ def read_knowledge(knowledge_id: int, session: Db):
 def update_knowledge(knowledge_id: int, body: UpdateKnowledgeInput, session: Db):
     entry = service.editable_entry(session, knowledge_id)
     sent_back = service.apply_edit(
+        session,
         entry,
         title=body.title,
         body=body.body,
@@ -191,11 +204,87 @@ def update_knowledge(knowledge_id: int, body: UpdateKnowledgeInput, session: Db)
 )
 def confirm_knowledge(knowledge_id: int, session: Db):
     entry = service.editable_entry(session, knowledge_id)
-    service.confirm_entry(entry)
+    service.confirm_entry(session, entry)
     session.commit()
     session.refresh(entry)
     logger.info("knowledge_confirmed knowledge_id=%s", knowledge_id)
     return _detail(session, entry)
+
+
+@router.get("/knowledge/{knowledge_id}/revisions", response_model=RevisionList)
+def list_knowledge_revisions(knowledge_id: int, session: Db):
+    """Every snapshot of this entry, oldest first.
+
+    Readable for an archived project on purpose: the history is what makes a past
+    decision checkable, and freezing writes must not also freeze the record of them.
+    """
+    entry = service.entry_or_404(session, knowledge_id)
+    rows = history.revisions(session, entry.id)
+    confirmed = history.latest_confirmed(rows)
+    return RevisionList(
+        items=[RevisionSummary.model_validate(row) for row in rows],
+        total=len(rows),
+        confirmed_version=confirmed.version if confirmed is not None else None,
+        current_version=rows[-1].version if rows else 0,
+    )
+
+
+@router.get("/knowledge/{knowledge_id}/revisions/{version}", response_model=RevisionDetail)
+def read_knowledge_revision(knowledge_id: int, version: int, session: Db):
+    service.entry_or_404(session, knowledge_id)
+    for row in history.revisions(session, knowledge_id):
+        if row.version == version:
+            return RevisionDetail.model_validate(row)
+    raise project_error(404, "revision_not_found", "That version does not exist.")
+
+
+@router.get("/knowledge/{knowledge_id}/compare", response_model=CompareResult)
+def compare_knowledge_revision(
+    knowledge_id: int,
+    session: Db,
+    from_version: int | None = Query(default=None, ge=1),
+):
+    """One version against the entry as it stands now.
+
+    With no version named, the comparison opens on the last version a person confirmed —
+    the question the review step exists to answer. Falling back to the newest revision
+    when nothing was ever confirmed keeps the endpoint useful for an entry that is still
+    a draft, rather than refusing to show anything until it has a decision attached.
+    """
+    entry = service.entry_or_404(session, knowledge_id)
+    rows = history.revisions(session, entry.id)
+    if not rows:
+        raise project_error(
+            404,
+            "no_revision",
+            "This entry has no recorded versions, so there is nothing to compare against.",
+        )
+    if from_version is None:
+        start = history.latest_confirmed(rows) or rows[-1]
+    else:
+        start = next((row for row in rows if row.version == from_version), None)
+        if start is None:
+            raise project_error(404, "revision_not_found", "That version does not exist.")
+
+    lines, truncated = history.diff_lines(start.body, entry.body)
+    changed = (
+        start.title != entry.title
+        or start.kind != entry.kind
+        or start.concept_key != (entry.concept_key or "")
+        or any(line["op"] in ("delete", "insert") for line in lines)
+    )
+    return CompareResult(
+        from_version=start.version,
+        from_title=start.title,
+        from_kind=start.kind,
+        from_status=start.status,
+        to_title=entry.title,
+        to_kind=entry.kind,
+        to_status=entry.status,
+        changed=changed,
+        truncated=truncated,
+        lines=[DiffLine(**line) for line in lines],
+    )
 
 
 @router.post(

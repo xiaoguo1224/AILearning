@@ -10,6 +10,11 @@ Three rules carry the feature, and each of them is a rule about what a STATUS me
 3. Confirming is a separate, explicit act that stamps when it happened. Nothing else sets
    `confirmed_at`.
 
+Each of those is also a moment worth keeping, so every one of them writes a revision
+(`app/knowledge/history.py`). The rules stay here because they are rules about status, and
+the history module stays ignorant of them: it records whatever the entry says at the
+moment it is called.
+
 There is deliberately no "trusted writer" that skips rule 1. An importer that wants to
 seed confirmed entries has to confirm them, one at a time, which is the same amount of
 work as being sure.
@@ -20,11 +25,15 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from app.concepts import normalize_concept
+from app.knowledge import history
 from app.knowledge.models import (
     CORE_KINDS,
     KIND_NOTE,
     KNOWLEDGE_KINDS,
     KNOWLEDGE_SOURCES,
+    REASON_CONFIRMED,
+    REASON_CREATED,
+    REASON_EDITED,
     RELATION_PREREQUISITE,
     SOURCE_MANUAL,
     STATUS_CONFIRMED,
@@ -141,6 +150,7 @@ def create_entry(
     )
     session.add(entry)
     session.flush()
+    history.record(session, entry, reason=REASON_CREATED)
     if project_id is not None and link_project:
         session.add(ProjectKnowledge(project_id=project_id, knowledge_id=entry.id))
     session.commit()
@@ -170,6 +180,7 @@ def editable_entry(session: Session, knowledge_id: int) -> KnowledgeEntry:
 
 
 def apply_edit(
+    session: Session,
     entry: KnowledgeEntry,
     *,
     title: str | None = None,
@@ -220,16 +231,26 @@ def apply_edit(
             # Promoting a note to a definition is a change of kind, and the new kind
             # carries the review requirement with it.
             entry.status = STATUS_PENDING_REVIEW
+        history.record(session, entry, reason=REASON_EDITED, now=entry.updated_at)
     return reverted
 
 
-def confirm_entry(entry: KnowledgeEntry, now: datetime | None = None) -> KnowledgeEntry:
-    """Mark an entry confirmed. Idempotent, and it keeps the first confirmation time."""
+def confirm_entry(
+    session: Session, entry: KnowledgeEntry, now: datetime | None = None
+) -> KnowledgeEntry:
+    """Mark an entry confirmed. Idempotent, and it keeps the first confirmation time.
+
+    A revision is recorded even though the text did not change. The version a person
+    approved is the one a later edit is compared against, and finding it by looking for
+    the newest revision that happens to be confirmed would fail the moment somebody
+    confirms the same text twice for two different reasons.
+    """
     if entry.status == STATUS_CONFIRMED:
         return entry
     entry.status = STATUS_CONFIRMED
     entry.confirmed_at = now or utcnow()
     entry.updated_at = entry.confirmed_at
+    history.record(session, entry, reason=REASON_CONFIRMED, now=entry.confirmed_at)
     return entry
 
 

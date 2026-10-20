@@ -138,3 +138,66 @@ class DraftResult(BaseModel):
     entry: KnowledgeDetail | None = None
     duplicate_of: int | None = None
     candidates: list[CandidateOut] = Field(default_factory=list)
+
+
+class RevisionSummary(BaseModel):
+    """One snapshot, without its text.
+
+    The list is what a reviewer scans before choosing two versions to compare, so it
+    carries the facts that make a version recognisable — number, reason, status, size —
+    and leaves the text to the detail endpoint and to the diff.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+    version: int
+    title: str
+    kind: Literal["note", "definition", "standard_answer"]
+    status: Literal["draft", "pending_review", "confirmed"]
+    reason: Literal["created", "edited", "confirmed"]
+    body_chars: int
+    created_at: datetime
+
+    @field_serializer("created_at")
+    def utc_timestamp(self, value: datetime) -> str:
+        return iso_utc(value)
+
+
+class RevisionDetail(RevisionSummary):
+    body: str
+    concept_key: str = ""
+
+
+class RevisionList(BaseModel):
+    items: list[RevisionSummary]
+    total: int
+    # The version a person last signed off, or null when nothing was ever confirmed. The
+    # UI opens the comparison on it by default, because "what changed since I approved
+    # this" is the question the review step exists to answer.
+    confirmed_version: int | None = None
+    current_version: int = 0
+
+
+class DiffLine(BaseModel):
+    op: Literal["equal", "delete", "insert", "gap"]
+    text: str
+
+
+class CompareResult(BaseModel):
+    """One revision against the entry as it stands now.
+
+    The bodies are not repeated here — the diff carries the text, and sending both halves
+    twice would make a large definition four times larger on the wire. The titles, kinds
+    and statuses are sent because a change of kind or a status flip is not visible in a
+    line diff of the body and matters more than most line changes do.
+    """
+
+    from_version: int
+    from_title: str
+    from_kind: str
+    from_status: str
+    to_title: str
+    to_kind: str
+    to_status: str
+    changed: bool
+    truncated: bool = False
+    lines: list[DiffLine] = Field(default_factory=list)

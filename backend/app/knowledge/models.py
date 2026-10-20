@@ -1,6 +1,6 @@
 """Knowledge: what a project has learned, kept apart from what it was told.
 
-THREE TABLES, AND THE REASON EACH EXISTS.
+FOUR TABLES, AND THE REASON EACH EXISTS.
 
 `KnowledgeEntry` is the content. It carries a status because the product distinguishes
 two very different things wearing the same word "note": an ordinary draft that the model
@@ -18,6 +18,13 @@ speak for it.
 `KnowledgeRelation` is the graph. `prerequisite` is the only edge with a rule attached:
 a cycle would make "what do I need first" unanswerable, so one is refused rather than
 stored and quietly ignored.
+
+`KnowledgeRevision` is the history. Confirming a definition is a judgement about specific
+words, and the words change afterwards; without a record of what was confirmed, "approved"
+would mean "approved at some point" and the difference between the two would be
+unrecoverable. Every revision keeps the whole entry rather than the edit that produced it,
+because the only question this table answers is "what did this say then" and a patch chain
+can answer it wrongly after one bad replay.
 
 WHY PROVENANCE IS A JSON SNAPSHOT. The same reason the exploration messages keep theirs:
 a resource can be deleted, and an entry that claimed to derive from it would then point
@@ -68,6 +75,14 @@ RELATION_PREREQUISITE = "prerequisite"
 RELATION_RELATED = "related"
 RELATION_EXTENDS = "extends"
 KNOWLEDGE_RELATIONS = (RELATION_PREREQUISITE, RELATION_RELATED, RELATION_EXTENDS)
+
+# Why a snapshot was taken. Confirmation is recorded as its own reason even when the text
+# did not change, because the version a person signed off is the one later edits are
+# compared against, and "which one was that" must not depend on guessing from timestamps.
+REASON_CREATED = "created"
+REASON_EDITED = "edited"
+REASON_CONFIRMED = "confirmed"
+REVISION_REASONS = (REASON_CREATED, REASON_EDITED, REASON_CONFIRMED)
 
 
 class KnowledgeEntry(Base):
@@ -158,3 +173,48 @@ class KnowledgeRelation(Base):
         String(20), server_default=text("'related'"), default=RELATION_RELATED
     )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class KnowledgeRevision(Base):
+    """One snapshot of what an entry said, and why the snapshot was taken.
+
+    `version` counts from 1 within one entry and is unique per entry, so a comparison can
+    name its two ends by number instead of by row id, which is what a person reading a
+    diff actually wants to see.
+
+    The status is stored beside the text on purpose. A revision of a pending_review entry
+    and a revision of a confirmed one can hold identical words; keeping the status makes
+    the list read as a history of decisions rather than a history of strings.
+    """
+
+    __tablename__ = "knowledge_revisions"
+    __table_args__ = (
+        UniqueConstraint("knowledge_id", "version", name="uq_knowledge_revision_version"),
+        CheckConstraint(
+            "reason IN ('created', 'edited', 'confirmed')", name="ck_knowledge_revision_reason"
+        ),
+        CheckConstraint(
+            "status IN ('draft', 'pending_review', 'confirmed')",
+            name="ck_knowledge_revision_status",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    knowledge_id: Mapped[int] = mapped_column(
+        ForeignKey("knowledge_entries.id"), index=True
+    )
+    version: Mapped[int] = mapped_column(Integer)
+    title: Mapped[str] = mapped_column(String(200))
+    body: Mapped[str] = mapped_column(Text)
+    kind: Mapped[str] = mapped_column(String(20))
+    concept_key: Mapped[str] = mapped_column(
+        String(200), server_default=text("''"), default=""
+    )
+    status: Mapped[str] = mapped_column(String(20))
+    reason: Mapped[str] = mapped_column(String(20))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    @property
+    def body_chars(self) -> int:
+        """Size only. The version list shows how much text a snapshot holds, not the text."""
+        return len(self.body or "")

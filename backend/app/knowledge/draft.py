@@ -32,8 +32,10 @@ from sqlalchemy.orm import Session
 
 from app.agent.models import AgentMessage, AgentSession
 from app.concepts import normalize_concept
+from app.knowledge import history
 from app.knowledge.models import (
     KIND_NOTE,
+    REASON_CREATED,
     SOURCE_EXPLORATION,
     KnowledgeEntry,
     ProjectKnowledge,
@@ -223,6 +225,9 @@ def draft_from_message(
     )
     session.add(entry)
     session.flush()
+    # A promoted answer starts its history here, so the first edit has something to be
+    # compared against. Nothing else about the draft differs from a hand-written note.
+    history.record(session, entry, reason=REASON_CREATED)
     session.add(ProjectKnowledge(project_id=project_id, knowledge_id=entry.id))
     session.commit()
     session.refresh(entry)
