@@ -4,6 +4,20 @@ export interface CourseSummary {
   description: string;
 }
 
+export type ProjectMode = "course" | "research" | "practice";
+export type ProjectStatus = "active" | "archived";
+export interface ProjectInput { name: string; goal: string; mode: ProjectMode }
+export interface ProjectSummary extends ProjectInput {
+  id: number;
+  status: ProjectStatus;
+  created_at: string;
+  updated_at: string;
+}
+export interface ProjectDetail extends ProjectSummary {
+  courses: { course_id: number; title: string; description: string; position: number }[];
+}
+export interface ProjectList { items: ProjectSummary[]; total: number }
+
 export interface LessonSummary {
   id: number;
   title: string;

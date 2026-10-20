@@ -6,6 +6,7 @@ import { LanguageSwitcher, useI18n } from "./LocaleProvider";
 
 const LINKS: { href: string; label: string }[] = [
   { href: "/", label: "Today" },
+  { href: "/projects", label: "Projects" },
   { href: "/courses", label: "Courses" },
   { href: "/usage", label: "Usage" },
 ];
@@ -30,7 +31,7 @@ export function SiteHeader() {
         <Link href="/" className="text-subtitle tracking-tight text-ink">
           StudyForge
         </Link>
-        <div className="flex items-center gap-5 text-ui">
+        <div className="flex flex-wrap items-center gap-4 text-ui">
           {LINKS.map((link) => {
             const active = isActive(pathname, link.href);
             return (

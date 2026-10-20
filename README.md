@@ -66,6 +66,8 @@ node node_modules/next/dist/bin/next dev --hostname 127.0.0.1
 
 现有课程入口 `/courses`、测验、`/review`、概念 Tutor 和 `/usage` 保留。Project 等目标功能以 TASKS 验收状态为准。上游安装、费用估算及删除语义原文完整保留在 [`docs/upstream/README.md`](docs/upstream/README.md)，其中社区/多人路线不属于本项目范围。数据库升级前必须备份，参见 [`docs/OPERATIONS.md`](docs/OPERATIONS.md)。
 
+项目入口 `/projects` 支持创建、编辑、跨项目关联已有课程及归档。解除课程关联会保留课程和学习历史；归档项目保持可读。资料持久化等后续能力以 TASKS 的验收状态为准。
+
 界面默认简体中文，顶部语言选择可切换 English，选择保存在本机浏览器 Cookie。后续课程生成、补课和 Tutor 通过 `Accept-Language` 使用相同语言；已有课程、答案、概念标识和原始资料保留原文。Fake 的确定性教学内容用于测试，语言效果以真实模型验证为准。
 
 ## 许可证与上游

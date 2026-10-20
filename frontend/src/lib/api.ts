@@ -17,6 +17,10 @@ import type {
   PracticeAnswer,
   PracticeConflict,
   PracticeState,
+  ProjectDetail,
+  ProjectInput,
+  ProjectList,
+  ProjectStatus,
   RemediationConflict,
   RemediationNote,
   ReviewAnswerResult,
@@ -177,6 +181,28 @@ function putJson<T>(path: string, body: unknown): Promise<T> {
 
 export function listCourses(locale?: Locale): Promise<CourseSummary[]> {
   return get("/courses", locale);
+}
+
+export function listProjects(status: ProjectStatus = "active", offset = 0, locale?: Locale): Promise<ProjectList> {
+  return get(`/api/projects?status=${status}&offset=${offset}&limit=20`, locale);
+}
+export function getProject(id: number, locale?: Locale): Promise<ProjectDetail> {
+  return get(`/api/projects/${id}`, locale);
+}
+export function createProject(body: ProjectInput): Promise<ProjectDetail> {
+  return postJson("/api/projects", body);
+}
+export function updateProject(id: number, body: Partial<ProjectInput>): Promise<ProjectDetail> {
+  return request(`/api/projects/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}
+export function archiveProject(id: number): Promise<ProjectDetail> {
+  return request(`/api/projects/${id}/archive`, { method: "POST" });
+}
+export function linkProjectCourse(id: number, courseId: number, position: number): Promise<ProjectDetail> {
+  return putJson(`/api/projects/${id}/courses/${courseId}`, { position });
+}
+export function unlinkProjectCourse(id: number, courseId: number): Promise<ProjectDetail> {
+  return request(`/api/projects/${id}/courses/${courseId}`, { method: "DELETE" });
 }
 
 /**

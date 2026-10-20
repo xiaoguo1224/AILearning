@@ -18,8 +18,8 @@
 ## P1 — Project 和资源持久化
 
 - [x] P1-01 新建 Project 及 ProjectCourse 模型、迁移、API 与测试。
-- [-] P1-02 新建 Project 页面与导航；保留现有 Course 功能。
-- [ ] P1-03 Resource / ResourceChunk / ProjectResource 持久化，支持 PDF、DOCX、Markdown、URL 基础路径。
+- [x] P1-02 新建 Project 页面与导航；保留现有 Course 功能。
+- [-] P1-03 Resource / ResourceChunk / ProjectResource 持久化，支持 PDF、DOCX、Markdown、URL 基础路径。
 - [ ] P1-04 SQLite 全文检索与来源定位；实现资源再次打开、删除前引用检查。
 - [ ] P1-05 测试跨项目共享课程与归档项目不删除学习历史。
 

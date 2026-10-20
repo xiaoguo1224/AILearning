@@ -8,9 +8,9 @@
 - 已确定：产品需求、单人本地运行边界、项目化、课程/自由学习、自动知识草稿与核心审核、跨项目确认。
 - 已准备：AGENTS、PRD、ARCHITECTURE、TASKS、DECISIONS、README 的目标文档草案。
 - 已有源码审查：通过 GitHub 阅读 StudyForge 目录、models、ingest、generation、tutor、remediation、db、部分 API 及依赖文件。
-- 当前运行：本机 FastAPI `http://localhost:8000`、Next.js `http://localhost:3000`；Docker 两服务已停止、卷保留。真实模型根 `.env` 已接通，本机开发验收进程暂设 Fake，正式使用时清除该覆盖即可使用 Gemini。
+- 当前运行：本机 FastAPI `http://localhost:8000`、Next.js `http://localhost:3000`；Docker 两服务已停止、卷保留。Fake QA 后端已停止并以根 `.env` 默认配置重新启动，正式教学使用 Gemini；自动测试仍使用独立临时库及确定性 provider。
 - 已完成：基线文档合并、容器/本机测试、浏览器课程/Quiz/Review/Tutor、SQLite 快照/恢复、Gemini adapter 和一次真实 Shape 教学。提交截至 `c2e3e0f`。
-- 正在进行：P1-01 已验收，接续 P1-02 项目页面；主 Agent 单独写入，只读协作 Agent 核查共享课程/归档/迁移契约。旧初始化“未运行”表仅是历史记录。
+- 正在进行：P1-01/02 已验收，接续 P1-03 Resource 持久化；主 Agent 单独写入，只读协作 Agent 复核契约与安全边界。旧初始化“未运行”表仅是历史记录。
 
 ## 上游静态审查主要观察
 
@@ -38,6 +38,14 @@
 3. 完成 Project 模型/API、项目页面，再实现 Resource 持久化；每项按改动范围验收。
 
 ## 追加记录模板
+
+### 2026-10-20 — P1-02 项目页面与导航
+- P1-01 审查修复提交 `b4b00db`。本项见 `git log --grep="P1-02"`。
+- 新增 `/projects` 列表/创建/归档筛选/分页与 `/projects/{id}` 编辑/课程关联/归档确认；顶部加入项目导航。保留 `/courses`、旧学习路由及原始课程内容。
+- 复用现有 API 请求与双语边界，新增明确类型；表单统一防重复、pending/error/success、失败保留输入；课程选项加载失败不隐藏已有项目，归档后的课程仍能打开。
+- 实际 `npm test`：**18 文件 / 139 passed**；新增 7 项创建防重、失败重试、共享关联、归档确认/只读、项目与课程加载失败、404；`npm run lint`、`node node_modules/typescript/bin/tsc --noEmit`、`npm run build` 均通过，新路由出现在生产构建清单。
+- Playwright 本机验收：创建 QA 项目 #1/#2、修改模板、共享课程 #3、解除 #1 后 #2 的关联仍在、归档 #1 只读、切换英文、390px 页面无横向溢出。首轮脚本使用 getByLabel 精确匹配嵌套 select 超时，改为真实可访问角色 combobox 后完整场景通过，未绕过产品错误。
+- QA 项目与测试课程明确命名并保留，没有删除学习数据。P1 原始资料持久化/搜索尚未交付，不能宣称整个 P1 完成。
 
 ### 2026-10-20 — P1-01 协作审查回归修复
 - P1-01 提交 `c0a9685`。只读协作在独立临时库发现两项实际边界：超过 SQLite int64 的路径/offset 返回 500；课程恰在两次详情 SELECT 间被删除会使关联 Course 为 None。
