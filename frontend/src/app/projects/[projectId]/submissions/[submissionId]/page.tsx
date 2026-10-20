@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SubmissionReviewPanel } from "@/components/SubmissionReviewPanel";
+import { VariantPanel } from "@/components/VariantPanel";
 import { Badge } from "@/components/ui/Badge";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -126,6 +127,8 @@ export default async function SubmissionDetailPage({
             </section>
 
             <SubmissionReviewPanel submissionId={detail.id} initialReviews={detail.reviews} />
+
+            <VariantPanel submissionId={detail.id} projectId={detail.project_id} />
 
             {history && history.items.length > 1 && (
               <section className="space-y-2">

@@ -17,7 +17,14 @@ const LABEL = "block text-small font-medium text-ink";
  * One submission at a time, pasted or uploaded. Nothing here runs the code: the form
  * only hands text to the server, which stores it and analyses it statically.
  */
-export function SubmissionForm({ projectId }: { projectId: number }) {
+export function SubmissionForm({
+  projectId,
+  variantId,
+}: {
+  projectId: number;
+  /** Set when the learner arrived from a drafted variant, so the resubmission links back. */
+  variantId?: number;
+}) {
   const { t } = useI18n();
   const router = useRouter();
 
@@ -47,6 +54,7 @@ export function SubmissionForm({ projectId }: { projectId: number }) {
       if (mode === "paste") {
         await createSubmission(projectId, {
           exercise_id: exerciseId.trim() || undefined,
+          variant_id: variantId,
           user_note: note.trim() || undefined,
           code_filename: codeName.trim() || "solution.py",
           code_content: code.trim() ? code : undefined,
@@ -60,6 +68,7 @@ export function SubmissionForm({ projectId }: { projectId: number }) {
           codeFile,
           logFile,
           exerciseId,
+          variantId,
           userNote: note,
         });
         setCodeFile(null);
@@ -105,6 +114,12 @@ export function SubmissionForm({ projectId }: { projectId: number }) {
           </button>
         ))}
       </div>
+
+      {variantId && (
+        <p className="text-small text-ink-muted">
+          {t("This submission will be linked to variant draft #{0}.", variantId)}
+        </p>
+      )}
 
       {error && <ErrorState message={error} />}
       {done && !error && (

@@ -28,6 +28,7 @@ import type {
   ReviewHint,
   SubmissionDetail,
   SubmissionList,
+  VariantDraft,
   CreateSubmissionPayload,
   CodeReviewSummary,
   UploadSubmissionInput,
@@ -856,6 +857,7 @@ export async function uploadSubmission(
   if (input.codeFile) form.append("code_file", input.codeFile);
   if (input.logFile) form.append("log_file", input.logFile);
   if (input.exerciseId?.trim()) form.append("exercise_id", input.exerciseId.trim());
+  if (input.variantId) form.append("variant_id", String(input.variantId));
   if (input.userNote?.trim()) form.append("user_note", input.userNote.trim());
 
   const res = await localizedFetch(`${BASE_URL}/api/projects/${projectId}/submissions/upload`, {
@@ -903,6 +905,14 @@ export function revealReviewHint(reviewId: number, level: 1 | 2 | 3): Promise<Re
  */
 export function revealReviewSolution(reviewId: number): Promise<ReferenceSolution> {
   return request(`/api/reviews/${reviewId}/solution`, { method: "POST" });
+}
+
+/**
+ * Draft a practice variant from one submission. Model-only: there is no static
+ * fallback, so a 502 means the model produced nothing usable.
+ */
+export function createVariant(submissionId: number): Promise<VariantDraft> {
+  return request(`/api/submissions/${submissionId}/variant`, { method: "POST" });
 }
 
 /** Delete one version, its artifacts and its reviews. Irreversible; confirm first. */

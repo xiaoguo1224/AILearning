@@ -534,5 +534,14 @@
   "Warning": "警告",
   "Info": "提示",
   "Could not load submissions.": "无法加载提交记录。",
-  "Open code review": "进入代码评审"
+  "Open code review": "进入代码评审",
+  "Practice a variant": "变式练习",
+  "A similar exercise on the same knowledge point, with the numbers changed.": "同一知识点的相似练习，换了数值与场景。",
+  "Drafting...": "生成中……",
+  "Draft a variant (uses model budget)": "生成变式题（消耗模型额度）",
+  "Draft, unreviewed": "草稿，未审核",
+  "Acceptance: {0}": "验收条件：{0}",
+  "Practise this and submit again": "练习后再次提交",
+  "Could not draft a variant.": "无法生成变式题。",
+  "This submission will be linked to variant draft #{0}.": "本次提交将关联到变式题草稿 #{0}。"
 }

@@ -1036,6 +1036,7 @@ export interface SubmissionSummary {
   version: number;
   status: SubmissionStatus;
   user_note: string | null;
+  variant_id: number | null;
   created_at: string;
   artifact_count: number;
   latest_review: { id: number; summary: string; finding_count: number } | null;
@@ -1053,6 +1054,7 @@ export interface SubmissionDetail {
   version: number;
   status: SubmissionStatus;
   user_note: string | null;
+  variant_id: number | null;
   created_at: string;
   artifacts: SubmissionArtifactDetail[];
   reviews: CodeReviewSummary[];
@@ -1060,8 +1062,22 @@ export interface SubmissionDetail {
   privacy_warnings: string[];
 }
 
+/** A model-drafted practice exercise. Always a draft: nobody has reviewed it. */
+export interface VariantDraft {
+  id: number;
+  project_id: number;
+  source_submission_id: number | null;
+  title: string;
+  prompt: string;
+  starter_code: string | null;
+  acceptance: string;
+  status: "draft";
+  created_at: string;
+}
+
 export interface CreateSubmissionPayload {
   exercise_id?: string;
+  variant_id?: number;
   user_note?: string;
   code_filename: string;
   /** One of code or log is required; the server refuses a submission with neither. */
@@ -1075,5 +1091,6 @@ export interface UploadSubmissionInput {
   codeFile?: File | null;
   logFile?: File | null;
   exerciseId?: string;
+  variantId?: number;
   userNote?: string;
 }
