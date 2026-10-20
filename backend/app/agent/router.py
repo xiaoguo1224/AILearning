@@ -6,12 +6,15 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session, selectinload
 
 from app.agent.models import AgentMessage, AgentSession
+from app.agent.practice import draft_practice
 from app.agent.prompt import EXPLORE_SYSTEM, build_prompt, parse_reply
 from app.agent.retrieval import retrieve
 from app.agent.schemas import (
     AskResult,
     MessageInput,
     MessageOut,
+    PracticeInput,
+    PracticeResult,
     SessionCreate,
     SessionDetail,
     SessionList,
@@ -27,6 +30,8 @@ from app.projects.service import (
     project_session,
     writable_project,
 )
+from app.submissions.models import VariantExercise
+from app.submissions.schemas import VariantOut
 
 logger = logging.getLogger("studyforge.agent")
 
@@ -210,4 +215,115 @@ def ask(session_id: int, body: MessageInput, session: Db):
     return AskResult(
         user=MessageOut.model_validate(user_message),
         assistant=MessageOut.model_validate(assistant_message),
+    )
+
+
+def _last_question(row: AgentSession) -> str:
+    for message in reversed(row.messages):
+        if message.role == "user":
+            return message.body
+    return ""
+
+
+@router.post(
+    "/sessions/{session_id}/practice",
+    response_model=PracticeResult,
+    status_code=201,
+    dependencies=MUTATION,
+)
+def create_practice(session_id: int, body: PracticeInput, session: Db):
+    """Explain the current question at length and hand back one small exercise.
+
+    Two things are stored and one is not. The explanation is stored as an assistant
+    message so the conversation shows it and its citations survive a reload; the exercise
+    is stored as a draft so the learner can submit code against it. Nothing is stored when
+    the call fails, and the question is NOT stored a second time — it is already in the
+    conversation, and a duplicate would read as if the learner had asked twice.
+    """
+    row = _session_or_404(session, session_id)
+    project_id = row.project_id
+    project = get_project(session, project_id)
+    if project.status == "archived":
+        raise project_error(409, "project_archived", "Archived projects are read-only.")
+
+    question = (body.body or _last_question(row)).strip()
+    if not question:
+        raise project_error(
+            422, "nothing_to_practise", "Ask a question in this session before asking for practice."
+        )
+
+    sources = retrieve(session, project_id, question)
+    # Release the read transaction before the metered call writes its own row.
+    session.rollback()
+
+    run_id = f"practice-{uuid.uuid4().hex[:12]}"
+    provider = get_provider()
+    try:
+        draft = draft_practice(provider, sources, question, run_id)
+    except CostLimitExceeded as exc:
+        raise _cost_limit() from exc
+    except Exception:
+        logger.warning("practice_model_unavailable session_id=%s", session_id, exc_info=True)
+        raise project_error(
+            502,
+            "practice_unavailable",
+            "The model did not return a usable practice set. Nothing was saved.",
+        ) from None
+
+    if draft is None:
+        raise project_error(
+            502,
+            "practice_unavailable",
+            "The model did not return a usable practice set. Nothing was saved.",
+        )
+
+    refs = [
+        {
+            "marker": source.marker,
+            "chunk_id": source.chunk_id,
+            "resource_id": source.resource_id,
+            "filename": source.filename,
+            "locator": source.locator,
+        }
+        for source in sources
+        if f"[{source.marker}]" in draft.explanation
+    ]
+
+    writable_project(session, project_id)
+    row = _session_or_404(session, session_id)
+    message = AgentMessage(
+        session_id=row.id,
+        role="assistant",
+        body=draft.explanation,
+        beyond=draft.beyond or None,
+        source_refs=refs,
+        grounded=1 if refs else 0,
+        model=provider.model,
+        run_id=run_id,
+    )
+    exercise = VariantExercise(
+        project_id=project_id,
+        session_id=row.id,
+        source_question=question,
+        title=draft.title,
+        prompt=draft.prompt,
+        starter_code=draft.starter_code,
+        acceptance=draft.acceptance,
+        status="draft",
+    )
+    session.add_all([message, exercise])
+    row.updated_at = utcnow()
+    session.commit()
+    session.refresh(message)
+    session.refresh(exercise)
+    logger.info(
+        "practice_created session_id=%s exercise_id=%s sources=%s cited=%s",
+        row.id,
+        exercise.id,
+        len(sources),
+        len(refs),
+    )
+    return PracticeResult(
+        message=MessageOut.model_validate(message),
+        exercise=VariantOut.model_validate(exercise),
     )

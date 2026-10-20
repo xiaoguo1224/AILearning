@@ -29,6 +29,7 @@ from app import (
     review,
     tutor,
 )
+from app.agent import practice as agent_practice
 from app.agent import router as agent_router_module
 from app.agent.router import router as agent_router
 from app.attempts import (
@@ -2060,6 +2061,7 @@ GROUP_TUTOR = "tutor"
 GROUP_CODE_REVIEW = "code_review"
 GROUP_VARIANT = "variant_exercise"
 GROUP_EXPLORE = "explore"
+GROUP_PRACTICE = "practice"
 GROUP_FAILED_RUN = "failed_run"
 
 GROUP_LABELS = {
@@ -2068,6 +2070,7 @@ GROUP_LABELS = {
     GROUP_CODE_REVIEW: "Code review (no single course)",
     GROUP_VARIANT: "Variant exercises (no single course)",
     GROUP_EXPLORE: "Free exploration (no single course)",
+    GROUP_PRACTICE: "Practice from a question (no single course)",
     GROUP_FAILED_RUN: "Unattributed",
 }
 
@@ -2130,6 +2133,14 @@ GROUP_NOTES = {
         "is charged to no course. Questions are metered whether or not the project "
         "material covered them, and nothing is recorded when the model returns an "
         "unusable answer."
+    ),
+    # Separate from exploration because it buys something different and the learner chose
+    # it explicitly: one longer explanation and one exercise, rather than an answer to the
+    # question they asked.
+    GROUP_PRACTICE: (
+        "Practice drafted from a free-exploration question is charged to no course: it "
+        "belongs to a conversation, not to any curriculum. Nothing is recorded when the "
+        "model returns an unusable practice set."
     ),
     GROUP_FAILED_RUN: (
         '"Unattributed" calls have no course to attach to: they come from a generation run '
@@ -2227,6 +2238,8 @@ def _unattributed_group(stage: str) -> str:
         return GROUP_VARIANT
     if stage == agent_router_module.EXPLORE_STAGE:
         return GROUP_EXPLORE
+    if stage == agent_practice.PRACTICE_STAGE:
+        return GROUP_PRACTICE
     return GROUP_FAILED_RUN
 
 
@@ -2274,7 +2287,8 @@ def _spend_groups(session: Session) -> list[dict]:
         GROUP_CODE_REVIEW: 3,
         GROUP_VARIANT: 4,
         GROUP_EXPLORE: 5,
-        GROUP_FAILED_RUN: 6,
+        GROUP_PRACTICE: 6,
+        GROUP_FAILED_RUN: 7,
     }
     groups = []
     for (group, course_id, stamped), bucket in sorted(

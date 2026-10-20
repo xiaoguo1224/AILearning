@@ -122,11 +122,20 @@ class CodeReview(Base):
 
 
 class VariantExercise(Base):
-    """A draft exercise derived from one submission's findings.
+    """A draft exercise derived from one submission's findings, or from one question.
 
     It is a draft on purpose: model-written practice is useful immediately, but it is
     not a reviewed curriculum item, so nothing here is ever presented as confirmed
     course material.
+
+    TWO ORIGINS, ONE TABLE. `source_submission_id` is set when the exercise came from a
+    submission's review; `session_id` and `source_question` are set when it came from a
+    free-exploration question. The second origin is why the two extra columns are plain
+    columns rather than foreign keys: app/db.py's ADDED_COLUMNS can add a column with a
+    constant default and nothing else, so declaring a REFERENCES clause here would leave
+    every upgraded install without the constraint that a fresh one has. The id is stored
+    for traceability, and nothing cascades on it — deleting a conversation must not delete
+    practice the learner may still want to work through.
     """
 
     __tablename__ = "variant_exercises"
@@ -136,6 +145,9 @@ class VariantExercise(Base):
     source_submission_id: Mapped[int | None] = mapped_column(
         ForeignKey("submissions.id"), nullable=True, index=True
     )
+    # See the class docstring: an integer, not a ForeignKey, for migration honesty.
+    session_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_question: Mapped[str | None] = mapped_column(Text, nullable=True)
     title: Mapped[str] = mapped_column(String(200))
     prompt: Mapped[str] = mapped_column(Text)
     starter_code: Mapped[str | None] = mapped_column(Text, nullable=True)

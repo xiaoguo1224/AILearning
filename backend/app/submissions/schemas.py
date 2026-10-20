@@ -133,6 +133,11 @@ class VariantOut(BaseModel):
     id: int
     project_id: int
     source_submission_id: int | None = None
+    # Set when the exercise was drafted from a free-exploration question instead of from a
+    # submission. `source_question` is what the learner asked, kept verbatim so the
+    # exercise can be shown next to the question that produced it.
+    session_id: int | None = None
+    source_question: str | None = None
     title: str
     prompt: str
     starter_code: str | None = None

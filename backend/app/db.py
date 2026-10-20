@@ -118,6 +118,18 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # means this row's course still exists, so its id may be resolved. Rows already in
     # the wild backfill to NULL and go on resolving exactly as they did.
     ("llm_calls", "course_title_at_deletion", "VARCHAR(300)"),
+    # P3-04: practice drafted from a free-exploration question. Both nullable with no
+    # default, because NULL is the meaningful value here rather than a placeholder: it
+    # says this exercise came from a submission instead, which is the older origin.
+    #
+    # NEITHER CARRIES A REFERENCES CLAUSE, and that is the ceiling talking rather than an
+    # oversight. SQLite cannot add a foreign key to an existing table, so an upgraded
+    # install would end up without a constraint a fresh one has — a divergence the
+    # upgraded == fresh comparison would not catch, because it compares type, nullability,
+    # default and primary-key membership. The model declares them as plain columns for the
+    # same reason; see the VariantExercise docstring.
+    ("variant_exercises", "session_id", "INTEGER"),
+    ("variant_exercises", "source_question", "TEXT"),
 )
 
 
