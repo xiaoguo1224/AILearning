@@ -38,6 +38,13 @@
 
 ## 追加记录模板
 
+### 2026-10-20 — P0-06 基线、备份与恢复
+- P0-05 提交 `43d1ef9`。本项提交：本记录所在提交（`git log --grep="P0-06"`）。
+- `docs/OPERATIONS.md` 定义一致快照、恢复前保留故障副本、integrity_check 与数据计数核对，明确未来资料与知识正文一同备份。
+- 本机实际通过 SQLite Backup API 将当前库只读快照保存到仓库外临时目录，并恢复到另一临时数据库；integrity_check 为 ok，courses/attempts/review_logs 计数 **3/5/4** 与原库一致。没有覆盖正在使用的数据库。
+- 数据库、WAL/SHM、个人数据、密钥、构建日志、浏览器产物均被 Git 忽略；README 改为默认本机命令，ADR-013/014 记录用户追加的本机、减少重复测试和双语要求。
+- P0 原始 6 项全部实际验收。继续用户追加的真实模型适配与双语，再进入 P1。
+
 ### 2026-10-20 — P0-05 浏览器学习闭环验收
 - P0-04 提交 `1a819c6`。本项提交：本记录所在提交（`git log --grep="P0-05"`）。
 - Playwright 实际操作：添加文本 → Generate course → Open course → 打开课程 → MCQ 错答与简答正确 → Mark complete；页面状态和持久化均成功。

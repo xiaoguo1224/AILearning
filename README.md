@@ -43,7 +43,7 @@
 
 ## 运行与验证
 
-需要 Python >=3.11、Node.js >=20。后端（在 `backend/`）：
+默认本机运行，需要 Python >=3.11、Node.js >=20.19（建议 24）。后端（在 `backend/`）：
 
 ```powershell
 uv sync --extra dev --frozen
@@ -57,7 +57,7 @@ uv run uvicorn app.main:app --reload --host 127.0.0.1
 ```powershell
 npm ci
 Copy-Item .env.local.example .env.local
-npm run dev
+node node_modules/next/dist/bin/next dev --hostname 127.0.0.1
 ```
 
 访问 <http://localhost:3000>；API 文档为 <http://localhost:8000/docs>。前端 `NEXT_PUBLIC_API_URL` 与后端地址一致；后端 `STUDYFORGE_CORS_ORIGINS` 默认允许 `http://localhost:3000`。数据库由 `STUDYFORGE_DB` 指定，默认位于后端工作目录。真实教学需配置 Anthropic 或 Ollama；Fake 仅用于确定性验收，不代表真实教学质量。模型配置和费用限制见 [`backend/.env.example`](backend/.env.example)。请仅绑定本机访问，本项目没有登录保护。

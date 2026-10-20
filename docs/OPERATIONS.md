@@ -2,6 +2,8 @@
 
 本项目没有账户体系，只用于可信本机。不要将开发服务或 API 文档直接公开。API Key 只放环境变量/被忽略的 `.env`；付费模型前先用 Fake 完成验收。上传代码始终只解析，不执行。
 
+默认本机启动命令见 README。开发测试使用 `backend/` 内的 `uv run pytest <相关测试>`，前端 `npm test -- <相关测试>`；功能优先，集成节点再运行全套。Compose 是可选配置，不作为日常运行前提。
+
 ## 数据备份
 
 升级前停止前后端写入。数据库实际位置由后端 `STUDYFORGE_DB` 决定，默认 `backend/studyforge.sqlite3`。将数据库复制到仓库外按日期命名的目录；如果数据库仍在运行或存在 WAL，使用 Python 标准库 SQLite backup API 生成一致快照，不能只复制活跃数据库主文件：
