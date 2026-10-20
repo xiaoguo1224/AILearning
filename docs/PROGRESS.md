@@ -4,13 +4,13 @@
 
 ## 当前状态
 
-- 当前里程碑：**P0 原始基线、Gemini 与中英双语已验收，进入 P1 Project/Resource**。
+- 当前里程碑：**P0/P1/P2 已验收，下一步 P3 项目级自由学习 Agent**。
 - 已确定：产品需求、单人本地运行边界、项目化、课程/自由学习、自动知识草稿与核心审核、跨项目确认。
 - 已准备：AGENTS、PRD、ARCHITECTURE、TASKS、DECISIONS、README 的目标文档草案。
 - 已有源码审查：通过 GitHub 阅读 StudyForge 目录、models、ingest、generation、tutor、remediation、db、部分 API 及依赖文件。
 - 当前运行：本机 FastAPI `http://localhost:8000`、Next.js `http://localhost:3000`；Docker 两服务已停止、卷保留。Fake QA 后端已停止并以根 `.env` 默认配置重新启动，正式教学使用 Gemini；自动测试仍使用独立临时库及确定性 provider。
 - 已完成：基线文档合并、容器/本机测试、浏览器课程/Quiz/Review/Tutor、SQLite 快照/恢复、Gemini adapter 和一次真实 Shape 教学。提交截至 `c2e3e0f`。
-- 正在进行：P1-01/02 已验收，接续 P1-03 Resource 持久化；主 Agent 单独写入，只读协作 Agent 复核契约与安全边界。旧初始化“未运行”表仅是历史记录。
+- 正在进行：P2 全部任务已验收（提交、静态/AI 评审、提示阶梯、变式题草稿）；下一步 P3-01 AgentSession/Message 与项目知识检索上下文。旧初始化“未运行”表仅是历史记录。
 
 ## 上游静态审查主要观察
 
@@ -50,6 +50,22 @@
 - 自动化测试验证：
   1. 后端 `tests/test_resources.py` + `tests/test_projects.py` 24 项测试全部通过。
   2. 前端 TypeScript 类型检查通过，无额外报错。
+
+
+### 2026-10-21 — P2 完整验收（提交、静态与 AI 评审、提示阶梯、变式题）
+- 提交：`875efd9`（P2-01~05、07 后端与前端）、`fa28d27`（P2-06 后端）、`dab793e`（P2-06 前端）；本记录所在提交为文档批次。
+- 新增 `backend/app/submissions/`：Submission / SubmissionArtifact / CodeReview / VariantExercise 模型，`service.py` 统一文件与粘贴校验（扩展名白名单、512KB 代码 / 2MB 日志、UTF-8 严格解码、拒绝二进制与路径文件名、凭据扫描不回显），`static_check.py`（AST 形状隐患、日志症状、静态与日志相关性推断、无日志时必给 needs_local_check），`llm_review.py`（结构化评审，失败降级为 static-only 并标 `llm_status`），`llm_variant.py`（变式题草稿，失败返回 502 不伪造），`router.py` 9 个端点。
+- 前端新增 `/projects/[id]/submissions` 与 `/projects/[id]/submissions/[id]`：粘贴/上传两种提交、历史版本、代码与日志预览、隐私提示、证据级别徽章、三级提示按需解锁、参考解法二次确认并标注 `ai_generated_unverified`、变式题草稿与回链提交。
+- 同步 `/usage`：新增 `code_review` 与 `variant_exercise` 分组及说明，使“每个实际记录的 stage 都能被页面解释”的守卫测试继续成立。
+- 实际执行：
+  1. `uv run pytest -q --junitxml=junit-p2.xml`：**1222 tests, 0 failures, 0 errors, 2 skipped**（两项为历史 pin 有意跳过）。
+  2. `uv run ruff check app tests`：通过。
+  3. 前端 `node node_modules/typescript/bin/tsc --noEmit`、`npm run lint`：通过；`npm test`：**18 files / 142 passed**；`NODE_OPTIONS= npm run build`：成功，构建清单含两个新路由。
+  4. 定向 `uv run pytest tests/test_submissions.py -q`：**15 passed**，覆盖广播错误、日志/代码冲突、无日志、恶意上传（类型/路径/二进制/超限/空提交）、模型输出不可用降级、变式题跨项目拒绝。
+- 修复的既有回归：`test_tutor_endpoints.py` 两处对 system prompt 的精确比较没有包含 P0-08 追加的语言说明（P0-08 之后未跑全量，属既有缺口）；改为与 `teaching_system(...)` 比较，没有跳过或删除断言。
+- 环境说明：本机 `.next` 缓存清理触发 safe-delete 守卫（非代码错误）；以 `NODE_OPTIONS=` 关闭该 shim 后构建成功。开发库中三张空的 P2 草稿表已按“先确认 0 行再删除”的方式重建，未触碰任何学习历史。
+- 剩余风险：静态规则为启发式（仅对二维标量索引提示形状降维），可能误报/漏报；AI 评审与变式题均为显式动作并消耗额度；提交删除仅有 API、尚无界面入口；未做真实模型端到端验收（仅 stub/fake 契约测试）。
+- 下一步：P3-01 AgentSession/Message 与项目知识检索上下文。
 
 ## 追加记录模板
 

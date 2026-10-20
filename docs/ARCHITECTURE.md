@@ -64,7 +64,7 @@ flowchart TD
 | ProjectResource | project_id, resource_id | 一个资料可被多个项目引用 |
 | ResourceChunk | id, resource_id, locator, text, ordinal | PDF 页码/文本片段，可全文检索 |
 | Submission | id, project_id, exercise_id?, version, created_at, user_note | 一次上传/粘贴记录 |
-| SubmissionArtifact | submission_id, type, path, sha256 | 代码、日志、配置 |
+| SubmissionArtifact | submission_id, kind, filename, content, size_bytes, sha256 | 代码、日志、配置（文本存库，便于整库备份） |
 | CodeReview | id, submission_id, summary, evidence, model, created_at | 静态分析结果及证据等级 |
 | AgentSession | id, project_id, mode, created_at | 项目级自由/课程对话 |
 | AgentMessage | session_id, role, body, source_refs | 消息与出处 |
@@ -110,6 +110,8 @@ P1-01 已交付 Project 子集：GET/POST `/api/projects`、GET/PATCH `/api/proj
 `LEARNING -> PRACTICING -> REVIEWING_SUBMISSION -> DIAGNOSING -> REMEDIATING -> RETESTING -> COMPLETED`
 
 自由学习允许进入 `EXPLORING`，其输出可形成 `KnowledgeEntry(draft)`。状态属于业务决策，不代表每次必须调用一次 LLM。User 始终可以选择跳过、查看参考答案、切换项目。
+
+状态迁移由掌握证据驱动，不由日期驱动：`REVIEWING_SUBMISSION` 之后是否进入 `REMEDIATING`/`RETESTING` 取决于本次评审证据与用户选择；FSRS 仅作为底层记忆强度数据，不按到期日生成强制任务（ADR-017）。
 
 ### 教学提示分层
 
