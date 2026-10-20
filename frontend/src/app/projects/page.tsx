@@ -28,7 +28,7 @@ export default async function ProjectsPage({ searchParams }: {
       <Link href="/projects?status=archived" aria-current={status === "archived" ? "page" : undefined} className="text-accent underline">{t("Archived projects")}</Link>
     </nav>
     {error ? <ErrorState message={error} /> : projects && <>
-      {projects.items.length === 0 ? <EmptyState title={t("No projects in this view.")} description={t("Create a project below to begin.")} /> :
+      {projects.items.length === 0 ? <EmptyState title={t("No projects in this view.")} description={t(status === "active" ? "Create a project below to begin." : "Archived projects will appear here.")} /> :
         <ul className="grid gap-4 sm:grid-cols-2">{projects.items.map(project => <li key={project.id}><Card><Link href={`/projects/${project.id}`} className="block space-y-2"><h2 className="break-words text-title">{project.name}</h2><p className="line-clamp-3 whitespace-pre-wrap break-words text-small text-ink-muted">{project.goal}</p><span className="text-small text-accent">{t("Open project")}</span></Link></Card></li>)}</ul>}
       <nav aria-label={t("Project pages")} className="flex gap-5">
         {offset > 0 && <Link href={`/projects?status=${status}&offset=${Math.max(0, offset - 20)}`} className="text-accent underline">{t("Previous")}</Link>}

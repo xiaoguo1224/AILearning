@@ -204,3 +204,29 @@ def test_course_details_are_read_in_one_snapshot(client):
     assert len(response.json()["courses"]) == 1
     assert not deleting, "Course details must be fetched with membership in one JOIN."
     assert sum("FROM project_courses" in statement for statement in statements) == 1
+
+
+def test_edit_revision_prevents_silent_overwrite(client):
+    project = create(client)
+    url = f"/api/projects/{project['id']}"
+    changed = client.patch(
+        url, json={"goal": "New goal", "expected_updated_at": project["updated_at"]}
+    )
+    assert changed.status_code == 200
+    stale = client.patch(
+        url, json={"name": "Stale edit", "expected_updated_at": project["updated_at"]}
+    )
+    assert stale.status_code == 409
+    assert stale.json()["detail"]["error"] == "project_changed"
+    assert client.get(url).json()["goal"] == "New goal"
+    assert client.get(url).json()["name"] == project["name"]
+    fresh = client.patch(
+        url, json={"name": "Reviewed edit", "expected_updated_at": changed.json()["updated_at"]}
+    )
+    assert fresh.status_code == 200 and fresh.json()["goal"] == "New goal"
+    assert (
+        client.patch(
+            url, json={"goal": "Invalid", "expected_updated_at": "2026-10-20T00:00:00"}
+        ).status_code
+        == 422
+    )

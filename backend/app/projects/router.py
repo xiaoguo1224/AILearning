@@ -66,8 +66,10 @@ def read_project(project_id: EntityId, session: Db):
 
 @router.patch("/{project_id}", response_model=ProjectDetail, dependencies=MUTATION)
 def edit_project(project_id: EntityId, body: ProjectPatch, session: Db):
-    project = writable_project(session, project_id)
-    for field, value in body.model_dump(exclude_unset=True).items():
+    project = writable_project(session, project_id, body.expected_updated_at)
+    for field, value in body.model_dump(
+        exclude_unset=True, exclude={"expected_updated_at"}
+    ).items():
         setattr(project, field, value)
     session.commit()
     logger.info("project_updated project_id=%s", project_id)

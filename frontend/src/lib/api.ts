@@ -52,6 +52,7 @@ export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    public readonly code?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -137,6 +138,7 @@ async function request<T>(
   const res = await localizedFetch(`${BASE_URL}${path}`, init, locale);
   if (!res.ok) {
     let message = res.statusText || `Request failed with status ${res.status}`;
+    let code: string | undefined;
     try {
       const body = await res.json();
       const detail = body?.detail;
@@ -145,12 +147,13 @@ async function request<T>(
       } else if (Array.isArray(detail)) {
         message = messageFromValidationDetail(detail) ?? message;
       } else if (detail && typeof detail === "object") {
+        if (typeof detail.error === "string") code = detail.error;
         message = messageFromObjectDetail(detail as ObjectDetail, costLimitConsequence, locale) ?? message;
       }
     } catch {
       // Non-JSON error body - keep the statusText fallback.
     }
-    throw new ApiError(res.status, createTranslator(locale ?? browserLocale())(message));
+    throw new ApiError(res.status, createTranslator(locale ?? browserLocale())(message), code);
   }
   return res.json() as Promise<T>;
 }
@@ -192,7 +195,7 @@ export function getProject(id: number, locale?: Locale): Promise<ProjectDetail> 
 export function createProject(body: ProjectInput): Promise<ProjectDetail> {
   return postJson("/api/projects", body);
 }
-export function updateProject(id: number, body: Partial<ProjectInput>): Promise<ProjectDetail> {
+export function updateProject(id: number, body: Partial<ProjectInput> & { expected_updated_at?: string }): Promise<ProjectDetail> {
   return request(`/api/projects/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
 }
 export function archiveProject(id: number): Promise<ProjectDetail> {

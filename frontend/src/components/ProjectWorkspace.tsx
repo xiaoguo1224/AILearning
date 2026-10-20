@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Field } from "@/components/ui/Field";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ApiError, archiveProject, createProject, linkProjectCourse, unlinkProjectCourse, updateProject } from "@/lib/api";
-import type { CourseSummary, ProjectDetail, ProjectMode } from "@/lib/types";
+import type { CourseSummary, ProjectDetail, ProjectInput, ProjectMode } from "@/lib/types";
 
 const INPUT = "mt-1 w-full rounded-control border border-line bg-transparent px-3 py-2 text-ui text-ink disabled:opacity-60";
 
@@ -17,21 +17,28 @@ export function ProjectWorkspace({ project, courses = [], coursesError }: {
 }) {
   const { t } = useI18n();
   const router = useRouter();
-  const [name, setName] = useState(project?.name ?? "");
-  const [goal, setGoal] = useState(project?.goal ?? "");
-  const [mode, setMode] = useState<ProjectMode>(project?.mode ?? "course");
+  const [draft, setDraft] = useState<Partial<Record<keyof ProjectInput, { value: string; base: string }>>>({});
+  const name = draft.name?.value ?? project?.name ?? "";
+  const goal = draft.goal?.value ?? project?.goal ?? "";
+  const mode = (draft.mode?.value ?? project?.mode ?? "course") as ProjectMode;
+  const conflicts = project && Object.entries(draft).some(([key, edit]) =>
+    edit.base !== project[key as keyof ProjectInput] && edit.value !== project[key as keyof ProjectInput]);
+  function change(field: keyof ProjectInput, value: string) {
+    setDraft(current => ({ ...current, [field]: { value, base: current[field]?.base ?? project?.[field] ?? (field === "mode" ? "course" : "") } }));
+  }
   const [selected, setSelected] = useState("");
   const [confirmArchive, setConfirmArchive] = useState(false);
   const [busy, setBusy] = useState(false);
   const [refreshing, startTransition] = useTransition();
   const lock = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsReload, setNeedsReload] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const pending = busy || refreshing;
   const archived = project?.status === "archived";
   const available = courses.filter(course => !project?.courses.some(link => link.course_id === course.id));
 
-  async function act(operation: () => Promise<ProjectDetail>, success: string) {
+  async function act(operation: () => Promise<ProjectDetail>, success: string, clearDraft = false) {
     if (lock.current || pending) return;
     lock.current = true;
     setBusy(true);
@@ -39,6 +46,7 @@ export function ProjectWorkspace({ project, courses = [], coursesError }: {
     setNotice(null);
     try {
       const saved = await operation();
+      if (clearDraft) setDraft({});
       setNotice(success);
       setConfirmArchive(false);
       setSelected("");
@@ -48,6 +56,7 @@ export function ProjectWorkspace({ project, courses = [], coursesError }: {
       });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not reach the server. Is the backend running?");
+      if (err instanceof ApiError && err.code === "project_changed") setNeedsReload(true);
       if (err instanceof ApiError && err.status === 409) startTransition(() => router.refresh());
     } finally {
       lock.current = false;
@@ -58,20 +67,34 @@ export function ProjectWorkspace({ project, courses = [], coursesError }: {
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const body = { name: name.trim(), goal: goal.trim(), mode };
-    void act(() => project ? updateProject(project.id, body) : createProject(body), "Project saved.");
+    if (conflicts || needsReload) {
+      setError("This project changed. Reload saved values before saving again.");
+      return;
+    }
+    if (!project) { void act(() => createProject(body), "Project saved.", true); return; }
+    const edits: Partial<ProjectInput> = {};
+    if (draft.name && body.name !== project.name) edits.name = body.name;
+    if (draft.goal && body.goal !== project.goal) edits.goal = body.goal;
+    if (draft.mode && body.mode !== project.mode) edits.mode = body.mode;
+    if (Object.keys(edits).length === 0) { setNotice("No changes to save."); return; }
+    void act(() => updateProject(project.id, { ...edits, expected_updated_at: project.updated_at }), "Project saved.", true);
   }
 
   return <div className="space-y-8">
     {error && <ErrorState message={t(error)} />}
     {notice && <p role="status" className="text-small text-success">{t(notice)}</p>}
+    {!archived && (conflicts || needsReload) && <div className="space-y-2">
+      <p>{t("Your draft is preserved. Reloading saved values discards these edits.")}</p>
+      <Button variant="secondary" disabled={pending} onClick={() => { setDraft({}); setError(null); setNeedsReload(false); }}>{t("Discard draft and reload saved values")}</Button>
+    </div>}
     {archived ? <p className="rounded-surface border border-line p-4 text-ink-muted">{t("This project is archived. Courses and learning history are preserved.")}</p> :
       <form onSubmit={save} className="space-y-4" aria-label={t(project ? "Edit project" : "Create project")}>
-        <Field id="project-name" label={t("Project name")} value={name} onChange={e => setName(e.target.value)} required maxLength={200} disabled={pending} />
+        <Field id="project-name" label={t("Project name")} value={name} onChange={e => change("name", e.target.value)} required maxLength={200} disabled={pending} />
         <label className="block text-small text-ink-muted" htmlFor="project-goal">{t("Learning goal")}
-          <textarea id="project-goal" value={goal} onChange={e => setGoal(e.target.value)} maxLength={5000} rows={3} disabled={pending} className={INPUT} />
+          <textarea id="project-goal" value={goal} onChange={e => change("goal", e.target.value)} maxLength={5000} rows={3} disabled={pending} className={INPUT} />
         </label>
         <label className="block text-small text-ink-muted" htmlFor="project-mode">{t("Initial template")}
-          <select id="project-mode" value={mode} onChange={e => setMode(e.target.value as ProjectMode)} disabled={pending} className={INPUT}>
+          <select id="project-mode" value={mode} onChange={e => change("mode", e.target.value)} disabled={pending} className={INPUT}>
             <option value="course">{t("Course study")}</option><option value="research">{t("Research reading")}</option><option value="practice">{t("Programming practice")}</option>
           </select>
         </label>

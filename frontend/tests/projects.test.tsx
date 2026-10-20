@@ -101,3 +101,38 @@ test("invalid and absent projects use the not-found route", async () => {
   vi.mocked(getProject).mockRejectedValue(new ApiError(404, "Project not found."));
   await expect(ProjectPage({ params: Promise.resolve({ projectId: "1" }) })).rejects.toThrow("NOT_FOUND");
 });
+
+test("refresh updates untouched fields and preserves an unrelated draft", async () => {
+  vi.mocked(updateProject).mockResolvedValue({ ...project, name: "My draft", goal: "Updated elsewhere" });
+  const { rerender } = render(<ProjectWorkspace project={project} />);
+  fireEvent.change(screen.getByLabelText("Project name"), { target: { value: "My draft" } });
+  const changed = { ...project, goal: "Updated elsewhere", updated_at: "2026-10-20T01:00:00+00:00" };
+  rerender(<ProjectWorkspace project={changed} />);
+  expect(screen.getByLabelText("Learning goal")).toHaveValue("Updated elsewhere");
+  expect(screen.getByLabelText("Project name")).toHaveValue("My draft");
+  fireEvent.click(screen.getByRole("button", { name: "Save project" }));
+  await waitFor(() => expect(updateProject).toHaveBeenCalledWith(1, { name: "My draft", expected_updated_at: changed.updated_at }));
+});
+
+test("a conflicting draft is retained and must be reviewed before saving", async () => {
+  const { rerender } = render(<ProjectWorkspace project={project} />);
+  fireEvent.change(screen.getByLabelText("Learning goal"), { target: { value: "My draft" } });
+  rerender(<ProjectWorkspace project={{ ...project, goal: "Updated elsewhere" }} />);
+  expect(screen.getByLabelText("Learning goal")).toHaveValue("My draft");
+  fireEvent.click(screen.getByRole("button", { name: "Save project" }));
+  expect(updateProject).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert")).toHaveTextContent("This project changed.");
+  fireEvent.click(screen.getByRole("button", { name: "Discard draft and reload saved values" }));
+  expect(screen.getByLabelText("Learning goal")).toHaveValue("Updated elsewhere");
+});
+
+test("a server revision conflict retains the draft even with a translated message", async () => {
+  vi.mocked(updateProject).mockRejectedValue(new ApiError(409, "项目已被更新。", "project_changed"));
+  render(<ProjectWorkspace project={project} />);
+  fireEvent.change(screen.getByLabelText("Learning goal"), { target: { value: "My draft" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save project" }));
+  await screen.findByRole("alert");
+  expect(screen.getByLabelText("Learning goal")).toHaveValue("My draft");
+  expect(screen.getByRole("button", { name: "Discard draft and reload saved values" })).toBeInTheDocument();
+  expect(refresh).toHaveBeenCalled();
+});

@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import UTC, datetime
 
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy import update
@@ -48,17 +49,25 @@ def get_project(session: Session, project_id: int) -> Project:
     return project
 
 
-def writable_project(session: Session, project_id: int) -> Project:
+def writable_project(
+    session: Session, project_id: int, expected_updated_at: datetime | None = None
+) -> Project:
     # Conditional UPDATE acquires SQLite's write lock before membership changes or archive checks.
+    statement = update(Project).where(Project.id == project_id, Project.status == "active")
+    if expected_updated_at is not None:
+        statement = statement.where(
+            Project.updated_at == expected_updated_at.astimezone(UTC).replace(tzinfo=None)
+        )
     changed = session.execute(
-        update(Project)
-        .where(Project.id == project_id, Project.status == "active")
-        .values(updated_at=utcnow())
-        .returning(Project.id)
+        statement.values(updated_at=utcnow()).returning(Project.id)
     ).scalar_one_or_none()
     if changed is None:
-        get_project(session, project_id)
-        raise project_error(409, "project_archived", "Archived projects are read-only.")
+        project = get_project(session, project_id)
+        if project.status == "archived":
+            raise project_error(409, "project_archived", "Archived projects are read-only.")
+        raise project_error(
+            409, "project_changed", "This project changed. Reload saved values before saving again."
+        )
     return get_project(session, project_id)
 
 

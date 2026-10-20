@@ -30,13 +30,16 @@ class ProjectPatch(BaseModel):
     name: ProjectName | None = None
     goal: ProjectGoal | None = None
     mode: ProjectMode | None = None
+    expected_updated_at: datetime | None = None
 
     @model_validator(mode="after")
     def nonempty_patch(self):
-        if not self.model_fields_set or any(
+        if not self.model_fields_set - {"expected_updated_at"} or any(
             getattr(self, field) is None for field in self.model_fields_set
         ):
             raise ValueError("Provide at least one project field; null values are not allowed.")
+        if self.expected_updated_at is not None and self.expected_updated_at.utcoffset() is None:
+            raise ValueError("The project version timestamp must include a timezone.")
         return self
 
 

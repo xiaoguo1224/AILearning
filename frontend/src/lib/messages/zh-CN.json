@@ -1,5 +1,10 @@
 {
   "Language": "语言",
+  "This project changed. Reload saved values before saving again.": "项目已被更新。请先重新载入已保存的内容，再保存。",
+  "Your draft is preserved. Reloading saved values discards these edits.": "草稿已保留；重新载入已保存内容会丢弃当前编辑。",
+  "Discard draft and reload saved values": "丢弃草稿并载入已保存内容",
+  "No changes to save.": "没有需要保存的更改。",
+  "Archived projects will appear here.": "归档后的项目会显示在这里。",
   "That page doesn't exist.": "该页面不存在。",
   "Today": "今日学习",
   "Courses": "课程",
