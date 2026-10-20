@@ -29,6 +29,8 @@ from app import (
     review,
     tutor,
 )
+from app.agent import router as agent_router_module
+from app.agent.router import router as agent_router
 from app.attempts import (
     _attempt_state,
     _attempts_by_item,
@@ -58,6 +60,7 @@ app.add_middleware(TeachingLocaleMiddleware)
 app.include_router(projects_router)
 app.include_router(resources_router)
 app.include_router(submissions_router)
+app.include_router(agent_router)
 
 _cors_origins = os.environ.get("STUDYFORGE_CORS_ORIGINS", "http://localhost:3000")
 app.add_middleware(
@@ -2056,6 +2059,7 @@ GROUP_REMEDIATION = "remediation"
 GROUP_TUTOR = "tutor"
 GROUP_CODE_REVIEW = "code_review"
 GROUP_VARIANT = "variant_exercise"
+GROUP_EXPLORE = "explore"
 GROUP_FAILED_RUN = "failed_run"
 
 GROUP_LABELS = {
@@ -2063,6 +2067,7 @@ GROUP_LABELS = {
     GROUP_TUTOR: "Tutor chat (no single course)",
     GROUP_CODE_REVIEW: "Code review (no single course)",
     GROUP_VARIANT: "Variant exercises (no single course)",
+    GROUP_EXPLORE: "Free exploration (no single course)",
     GROUP_FAILED_RUN: "Unattributed",
 }
 
@@ -2116,6 +2121,15 @@ GROUP_NOTES = {
     GROUP_VARIANT: (
         "A variant exercise is drafted from one submission, so it is charged to no course. "
         "Nothing is recorded when the model returns an unusable draft."
+    ),
+    # Different from the two above in one way that matters to a learner reading the
+    # number: exploration is the only stage here that can be asked repeatedly about the
+    # same material, so a rising figure is a conversation, not a repair loop.
+    GROUP_EXPLORE: (
+        "A free-exploration question is answered from one project's own resources, so it "
+        "is charged to no course. Questions are metered whether or not the project "
+        "material covered them, and nothing is recorded when the model returns an "
+        "unusable answer."
     ),
     GROUP_FAILED_RUN: (
         '"Unattributed" calls have no course to attach to: they come from a generation run '
@@ -2211,13 +2225,15 @@ def _unattributed_group(stage: str) -> str:
         return GROUP_CODE_REVIEW
     if stage == llm_variant.VARIANT_STAGE:
         return GROUP_VARIANT
+    if stage == agent_router_module.EXPLORE_STAGE:
+        return GROUP_EXPLORE
     return GROUP_FAILED_RUN
 
 
 def _spend_groups(session: Session) -> list[dict]:
     """Spend for the /usage table: one row per course, then one row per reason a call
-    has no course. Courses first in id order, then re-teaching, then the tutor, then
-    the failed runs."""
+    has no course. Courses first in id order, then the non-course stages in the order
+    `rank` gives them, then the failed runs."""
     rows = (
         session.query(
             models.LlmCall.course_id,
@@ -2257,7 +2273,8 @@ def _spend_groups(session: Session) -> list[dict]:
         GROUP_TUTOR: 2,
         GROUP_CODE_REVIEW: 3,
         GROUP_VARIANT: 4,
-        GROUP_FAILED_RUN: 5,
+        GROUP_EXPLORE: 5,
+        GROUP_FAILED_RUN: 6,
     }
     groups = []
     for (group, course_id, stamped), bucket in sorted(
