@@ -266,3 +266,216 @@ def test_a_missing_entry_is_a_404(client):
         client.patch("/api/knowledge/999999", json={"body": "x"}).json()["detail"]["error"]
         == "knowledge_not_found"
     )
+
+
+# --------------------------------------------------------------------------
+# P4-02: a grounded answer becomes a draft, and repeats are noticed
+# --------------------------------------------------------------------------
+
+
+def _session_with_answer(
+    client, project_id, *, question="Why does broadcasting align trailing dimensions?",
+    body="A size-1 dimension is stretched to match the other operand.",
+    beyond=None, grounded=True,
+):
+    """Seed a conversation the way the agent endpoints would, then return its ids."""
+    from app.agent.models import AgentMessage, AgentSession
+    from app.db import SessionLocal
+
+    with SessionLocal() as session:
+        conversation = AgentSession(project_id=project_id, mode="explore", title=question)
+        session.add(conversation)
+        session.flush()
+        asked = AgentMessage(session_id=conversation.id, role="user", body=question)
+        answered = AgentMessage(
+            session_id=conversation.id,
+            role="assistant",
+            body=body,
+            beyond=beyond,
+            grounded=1 if grounded else 0,
+            source_refs=(
+                [
+                    {
+                        "marker": "S1",
+                        "chunk_id": 4,
+                        "resource_id": 2,
+                        "filename": "notes.md",
+                        "locator": "p.3",
+                    }
+                ]
+                if grounded
+                else []
+            ),
+        )
+        session.add_all([asked, answered])
+        session.commit()
+        return conversation.id, answered.id
+
+
+def _draft(client, project_id, session_id, message_id):
+    return client.post(
+        f"/api/projects/{project_id}/knowledge/drafts",
+        json={"session_id": session_id, "message_id": message_id},
+    )
+
+
+def test_a_grounded_answer_becomes_a_draft_with_its_citations(client):
+    project_id = _project(client)
+    session_id, message_id = _session_with_answer(client, project_id)
+
+    response = _draft(client, project_id, session_id, message_id)
+    assert response.status_code == 201
+    body = response.json()
+
+    entry = body["entry"]
+    assert entry["status"] == "draft"
+    assert entry["kind"] == "note"
+    assert entry["source_kind"] == "exploration"
+    assert entry["title"] == "Why does broadcasting align trailing dimensions?"
+    assert entry["body"].startswith("A size-1 dimension")
+    # The ungrounded half is NOT promoted into a note, even when it exists.
+    assert "beyond" not in entry
+    assert {item["kind"] for item in entry["provenance"]} == {"exploration", "resource"}
+    assert entry["provenance"][1]["filename"] == "notes.md"
+    assert body["duplicate_of"] is None
+
+
+def test_an_ungrounded_answer_is_refused_with_a_reason(client):
+    """A note is where "we checked this" is implied, so general knowledge stays out."""
+    project_id = _project(client)
+    session_id, message_id = _session_with_answer(
+        client,
+        project_id,
+        question="What is a tensor?",
+        body="A tensor is a multidimensional array.",
+        grounded=False,
+    )
+
+    response = _draft(client, project_id, session_id, message_id)
+    assert response.status_code == 422
+    assert response.json()["detail"]["error"] == "not_grounded"
+    assert client.get(f"/api/projects/{project_id}/knowledge").json()["total"] == 0
+
+
+def test_only_an_answer_can_become_a_note(client):
+    project_id = _project(client)
+    session_id, _ = _session_with_answer(client, project_id)
+
+    from app.agent.models import AgentMessage
+    from app.db import SessionLocal
+
+    with SessionLocal() as session:
+        asked = (
+            session.query(AgentMessage)
+            .filter_by(session_id=session_id, role="user")
+            .one()
+        )
+        asked_id = asked.id
+
+    response = _draft(client, project_id, session_id, asked_id)
+    assert response.status_code == 422
+    assert response.json()["detail"]["error"] == "not_an_answer"
+
+
+def test_a_message_from_another_conversation_is_not_draftable(client):
+    project_id = _project(client)
+    first_session, _ = _session_with_answer(client, project_id, question="First question?")
+    _, second_message = _session_with_answer(client, project_id, question="Second question?")
+
+    response = _draft(client, project_id, first_session, second_message)
+    assert response.status_code == 404
+    assert response.json()["detail"]["error"] == "message_not_found"
+
+
+def test_the_same_title_is_not_stored_twice(client):
+    project_id = _project(client)
+    first_session, first_message = _session_with_answer(client, project_id)
+    created = _draft(client, project_id, first_session, first_message).json()["entry"]
+
+    second_session, second_message = _session_with_answer(client, project_id)
+    response = _draft(client, project_id, second_session, second_message)
+    assert response.status_code == 201
+    body = response.json()
+
+    assert body["entry"] is None
+    assert body["duplicate_of"] == created["id"]
+    assert [item["id"] for item in body["candidates"]] == [created["id"]]
+    assert body["candidates"][0]["score"] == 1.0
+    assert client.get(f"/api/projects/{project_id}/knowledge").json()["total"] == 1
+
+
+def test_a_confirmed_entry_is_reported_as_a_candidate_and_left_alone(client):
+    project_id = _project(client)
+    confirmed = _create(
+        client,
+        project_id,
+        title="Why does broadcasting align trailing dimensions?",
+        body="A settled definition somebody wrote by hand.",
+        kind="definition",
+    ).json()
+    client.post(f"/api/knowledge/{confirmed['id']}/confirm")
+
+    session_id, message_id = _session_with_answer(client, project_id)
+    body = _draft(client, project_id, session_id, message_id).json()
+
+    # Same title, so nothing new is written and the confirmed body is untouched.
+    assert body["entry"] is None
+    assert body["duplicate_of"] == confirmed["id"]
+    after = client.get(f"/api/knowledge/{confirmed['id']}").json()
+    assert after["status"] == "confirmed"
+    assert after["body"] == "A settled definition somebody wrote by hand."
+
+
+def test_a_near_duplicate_is_reported_without_blocking_the_new_draft(client):
+    project_id = _project(client)
+    _create(
+        client,
+        project_id,
+        title="Why broadcasting aligns trailing dimensions",
+        body="An older note about the same idea.",
+    )
+
+    session_id, message_id = _session_with_answer(client, project_id)
+    body = _draft(client, project_id, session_id, message_id).json()
+
+    assert body["entry"] is not None
+    assert body["duplicate_of"] is None
+    scores = [item["score"] for item in body["candidates"]]
+    assert scores and scores[0] < 1.0
+    assert len(body["candidates"]) == 1
+
+
+def test_the_title_falls_back_to_the_answer_when_nothing_was_asked(client):
+    project_id = _project(client)
+
+    from app.agent.models import AgentMessage, AgentSession
+    from app.db import SessionLocal
+
+    with SessionLocal() as session:
+        conversation = AgentSession(project_id=project_id, mode="explore")
+        session.add(conversation)
+        session.flush()
+        answer = AgentMessage(
+            session_id=conversation.id,
+            role="assistant",
+            body="Broadcasting stretches size-1 dimensions.\n\nA second paragraph.",
+            grounded=1,
+            source_refs=[{"marker": "S1", "chunk_id": 1, "resource_id": 1, "filename": "a.md"}],
+        )
+        session.add(answer)
+        session.commit()
+        session_id, message_id = conversation.id, answer.id
+
+    entry = _draft(client, project_id, session_id, message_id).json()["entry"]
+    assert entry["title"] == "Broadcasting stretches size-1 dimensions."
+    assert "A second paragraph." in entry["body"]
+
+
+def test_an_archived_project_cannot_promote_an_answer(client):
+    project_id = _project(client)
+    session_id, message_id = _session_with_answer(client, project_id)
+    assert client.post(f"/api/projects/{project_id}/archive").status_code in (200, 204)
+
+    response = _draft(client, project_id, session_id, message_id)
+    assert response.status_code == 409
+    assert response.json()["detail"]["error"] == "project_archived"
