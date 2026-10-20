@@ -806,3 +806,70 @@ def test_the_deadline_columns_reach_an_upgraded_database(databases):
         assert nullable is True
         assert default == "None"
         assert primary_key is False
+
+
+def test_a_p2_era_database_gains_the_two_practice_columns(tmp_path, monkeypatch):
+    """The ADDED_COLUMNS entries for variant_exercises, exercised where they matter.
+
+    The pinned base predates P2, so it has no variant_exercises table at all and
+    create_all builds one with every column already in it. That means the two entries
+    added for practice are no-ops in every other test in this file: the case they exist
+    for is an install that already ran P2, which has the table and lacks the columns.
+
+    Built by hand rather than by advancing the pin, because advancing the pin would stop
+    the older comparison measuring what it was written to measure.
+    """
+    from sqlalchemy import create_engine, inspect, text
+
+    from app import db as db_module
+
+    path = tmp_path / "p2.sqlite3"
+    engine = create_engine(f"sqlite:///{path}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE variant_exercises (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    project_id INTEGER NOT NULL,
+                    source_submission_id INTEGER,
+                    title VARCHAR(200) NOT NULL,
+                    prompt TEXT NOT NULL,
+                    starter_code TEXT,
+                    acceptance TEXT NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+                    created_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO variant_exercises (project_id, title, prompt, acceptance, created_at) "
+                "VALUES (1, 'Kept', 'An exercise written before P3', '', '2026-10-20 00:00:00')"
+            )
+        )
+
+    monkeypatch.setattr(db_module, "engine", engine)
+    db_module.init_db()
+
+    columns = {column["name"]: column for column in inspect(engine).get_columns("variant_exercises")}
+    assert "session_id" in columns
+    assert "source_question" in columns
+    assert columns["session_id"]["nullable"] is True
+    assert columns["source_question"]["nullable"] is True
+
+    with engine.connect() as connection:
+        row = connection.execute(
+            text("SELECT title, session_id, source_question FROM variant_exercises")
+        ).one()
+    # The existing row survives, and the new columns backfill to NULL, which is the value
+    # that means "this one came from a submission".
+    assert row[0] == "Kept"
+    assert row[1] is None
+    assert row[2] is None
+
+    # And a second boot adds nothing, because the inspector check is what keeps this
+    # idempotent.
+    db_module.init_db()
+    engine.dispose()

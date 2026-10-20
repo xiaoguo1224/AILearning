@@ -239,3 +239,35 @@ def test_the_usage_page_can_explain_the_practice_stage(client, practice_provider
     )
     labels = [group["label"] for group in client.get("/usage").json()["per_course"]]
     assert main.GROUP_LABELS[main.GROUP_PRACTICE] in labels
+
+
+def test_the_exercise_survives_a_reload_attached_to_its_message(client, practice_provider):
+    """The card on screen is not the only copy. A learner who reloads must find the
+    exercise again, attached to the message that produced it, or the only way back to it
+    is remembering that it exists."""
+    project_id = _project(client)
+    session_id = _session(client, project_id)
+    practice_provider(_practice_json())
+
+    created = client.post(
+        f"/api/sessions/{session_id}/practice", json={"body": "Why does broadcasting work?"}
+    ).json()
+    exercise_id = created["exercise"]["id"]
+    assert created["message"]["exercise"]["id"] == exercise_id
+
+    reloaded = client.get(f"/api/sessions/{session_id}").json()
+    assert len(reloaded["messages"]) == 1
+    message = reloaded["messages"][0]
+    assert message["exercise"]["id"] == exercise_id
+    assert message["exercise"]["prompt"] == created["exercise"]["prompt"]
+    assert message["exercise"]["status"] == "draft"
+
+
+def test_an_ordinary_answer_carries_no_exercise(client, practice_provider):
+    project_id = _project(client)
+    session_id = _session(client, project_id)
+    practice_provider(json.dumps({"answer": "Because it aligns trailing dims.", "citations": []}))
+
+    client.post(f"/api/sessions/{session_id}/messages", json={"body": "Why?"})
+    messages = client.get(f"/api/sessions/{session_id}").json()["messages"]
+    assert [message["exercise"] for message in messages] == [None, None]
