@@ -479,3 +479,122 @@ def test_an_archived_project_cannot_promote_an_answer(client):
     response = _draft(client, project_id, session_id, message_id)
     assert response.status_code == 409
     assert response.json()["detail"]["error"] == "project_archived"
+
+
+def _revisions(client, knowledge_id):
+    return client.get(f"/api/knowledge/{knowledge_id}/revisions").json()
+
+
+def _compare(client, knowledge_id, **params):
+    return client.get(f"/api/knowledge/{knowledge_id}/compare", params=params)
+
+
+def test_a_new_entry_starts_its_history_at_version_one(client):
+    project_id = _project(client)
+    created = _create(client, project_id, kind="definition").json()
+
+    body = _revisions(client, created["id"])
+    assert body["total"] == 1
+    assert body["current_version"] == 1
+    # Nothing was confirmed, so there is no approved version to compare against yet.
+    assert body["confirmed_version"] is None
+    assert [item["reason"] for item in body["items"]] == ["created"]
+    assert body["items"][0]["status"] == "pending_review"
+    assert body["items"][0]["body_chars"] == len(created["body"])
+
+
+def test_confirming_records_the_version_that_was_approved(client):
+    project_id = _project(client)
+    created = _create(client, project_id, kind="definition").json()
+    client.post(f"/api/knowledge/{created['id']}/confirm")
+
+    body = _revisions(client, created["id"])
+    assert body["total"] == 2
+    assert body["confirmed_version"] == 2
+    assert [(item["version"], item["status"], item["reason"]) for item in body["items"]] == [
+        (1, "pending_review", "created"),
+        (2, "confirmed", "confirmed"),
+    ]
+    # Confirming twice does not invent a third version: the act is idempotent.
+    client.post(f"/api/knowledge/{created['id']}/confirm")
+    assert _revisions(client, created["id"])["total"] == 2
+
+
+def test_an_edit_is_compared_against_the_version_that_was_approved(client):
+    project_id = _project(client)
+    created = _create(client, project_id, kind="definition", body="Line one.\nLine two.").json()
+    client.post(f"/api/knowledge/{created['id']}/confirm")
+    client.patch(f"/api/knowledge/{created['id']}", json={"body": "Line one.\nLine two, edited."})
+
+    compared = _compare(client, created["id"]).json()
+    assert compared["from_version"] == 2
+    assert compared["from_status"] == "confirmed"
+    assert compared["to_status"] == "pending_review"
+    assert compared["changed"] is True
+    assert compared["truncated"] is False
+    assert compared["lines"] == [
+        {"op": "equal", "text": "Line one."},
+        {"op": "delete", "text": "Line two."},
+        {"op": "insert", "text": "Line two, edited."},
+    ]
+
+
+def test_an_unchanged_entry_reports_no_change_and_elides_the_middle(client):
+    project_id = _project(client)
+    paragraphs = [f"Paragraph {index}." for index in range(12)]
+    created = _create(client, project_id, kind="definition", body="\n".join(paragraphs)).json()
+    client.post(f"/api/knowledge/{created['id']}/confirm")
+
+    untouched = _compare(client, created["id"]).json()
+    assert untouched["changed"] is False
+    assert [line["op"] for line in untouched["lines"]] == [
+        *["equal"] * 3,
+        "gap",
+        *["equal"] * 3,
+    ]
+
+    paragraphs[-1] = "Paragraph 11, corrected."
+    client.patch(f"/api/knowledge/{created['id']}", json={"body": "\n".join(paragraphs)})
+    changed = _compare(client, created["id"]).json()
+    ops = [line["op"] for line in changed["lines"]]
+    assert "delete" in ops and "insert" in ops
+    # The unchanged paragraphs in the middle are elided, not reprinted.
+    assert {"op": "gap", "text": "…"} in changed["lines"]
+    assert not any("Paragraph 3." in line["text"] for line in changed["lines"])
+
+
+def test_a_title_change_is_a_change_even_when_the_body_is_identical(client):
+    project_id = _project(client)
+    created = _create(client, project_id, kind="definition").json()
+    client.post(f"/api/knowledge/{created['id']}/confirm")
+    client.patch(f"/api/knowledge/{created['id']}", json={"title": "A sharper title"})
+
+    compared = _compare(client, created["id"]).json()
+    assert compared["changed"] is True
+    assert compared["from_title"] == created["title"]
+    assert compared["to_title"] == "A sharper title"
+    assert all(line["op"] == "equal" for line in compared["lines"])
+
+
+def test_a_version_that_does_not_exist_is_a_404(client):
+    project_id = _project(client)
+    created = _create(client, project_id).json()
+    assert client.get(f"/api/knowledge/{created['id']}/revisions/99").status_code == 404
+    missing = _compare(client, created["id"], from_version=99)
+    assert missing.status_code == 404
+    assert missing.json()["detail"]["error"] == "revision_not_found"
+
+
+def test_the_review_queue_is_only_core_kinds_waiting_for_a_person(client):
+    project_id = _project(client)
+    _create(client, project_id, title="A note nobody has to approve")
+    waiting = _create(client, project_id, title="A definition", kind="definition").json()
+    answered = _create(client, project_id, title="A standard answer", kind="standard_answer").json()
+    client.post(f"/api/knowledge/{answered['id']}/confirm")
+
+    queue = client.get(
+        f"/api/projects/{project_id}/knowledge",
+        params={"status": "pending_review", "core": "true"},
+    ).json()
+    assert [item["id"] for item in queue["items"]] == [waiting["id"]]
+    assert queue["total"] == 1
