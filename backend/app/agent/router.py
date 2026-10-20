@@ -2,7 +2,7 @@ import logging
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, selectinload
 
 from app.agent.models import AgentMessage, AgentSession
@@ -21,7 +21,7 @@ from app.agent.schemas import (
     SessionOut,
 )
 from app.llm import get_provider
-from app.metering import CostLimitExceeded, MeteredLLM
+from app.metering import CostLimitExceeded, MeteredLLM, cost_limit_detail
 from app.models import utcnow
 from app.projects.service import (
     get_project,
@@ -44,8 +44,9 @@ Db = Annotated[Session, Depends(project_session)]
 MUTATION = [Depends(local_mutation)]
 
 
-def _cost_limit() -> Exception:
-    return project_error(402, "cost_limit_exceeded", "LLM spend limit reached")
+def _cost_limit(exc: CostLimitExceeded) -> Exception:
+    # One body for every metered surface; metering.cost_limit_detail owns its shape.
+    return HTTPException(402, detail=cost_limit_detail(exc))
 
 
 def _session_or_404(session: Session, session_id: int) -> AgentSession:
@@ -103,12 +104,33 @@ def create_session(project_id: int, body: SessionCreate, session: Db):
     return _session_out(row)
 
 
+def _message_out(message: AgentMessage, exercises: dict[int, VariantExercise] | None = None) -> MessageOut:
+    """One message, with its exercise resolved when the caller looked them up.
+
+    Resolution happens here rather than as an ORM relationship because there is no
+    foreign key to join on — see VariantExercise.session_id — and because a reader that
+    did not ask for exercises should not pay for loading them.
+    """
+    out = MessageOut.model_validate(message)
+    if message.exercise_id is not None and exercises:
+        exercise = exercises.get(message.exercise_id)
+        if exercise is not None:
+            out.exercise = VariantOut.model_validate(exercise)
+    return out
+
+
+def _session_exercises(session: Session, session_id: int) -> dict[int, VariantExercise]:
+    rows = session.query(VariantExercise).filter(VariantExercise.session_id == session_id).all()
+    return {row.id: row for row in rows}
+
+
 @router.get("/sessions/{session_id}", response_model=SessionDetail)
 def read_session(session_id: int, session: Db):
     row = _session_or_404(session, session_id)
+    exercises = _session_exercises(session, session_id)
     return SessionDetail(
         **_session_out(row).model_dump(),
-        messages=[MessageOut.model_validate(message) for message in row.messages],
+        messages=[_message_out(message, exercises) for message in row.messages],
     )
 
 
@@ -156,7 +178,7 @@ def ask(session_id: int, body: MessageInput, session: Db):
     try:
         raw = MeteredLLM(provider, run_id).generate(EXPLORE_STAGE, EXPLORE_SYSTEM, prompt)
     except CostLimitExceeded as exc:
-        raise _cost_limit() from exc
+        raise _cost_limit(exc) from exc
     except Exception:
         logger.warning("agent_model_unavailable session_id=%s", session_id, exc_info=True)
         raise project_error(
@@ -213,8 +235,8 @@ def ask(session_id: int, body: MessageInput, session: Db):
         bool(refs),
     )
     return AskResult(
-        user=MessageOut.model_validate(user_message),
-        assistant=MessageOut.model_validate(assistant_message),
+        user=_message_out(user_message),
+        assistant=_message_out(assistant_message),
     )
 
 
@@ -261,7 +283,7 @@ def create_practice(session_id: int, body: PracticeInput, session: Db):
     try:
         draft = draft_practice(provider, sources, question, run_id)
     except CostLimitExceeded as exc:
-        raise _cost_limit() from exc
+        raise _cost_limit(exc) from exc
     except Exception:
         logger.warning("practice_model_unavailable session_id=%s", session_id, exc_info=True)
         raise project_error(
@@ -291,16 +313,6 @@ def create_practice(session_id: int, body: PracticeInput, session: Db):
 
     writable_project(session, project_id)
     row = _session_or_404(session, session_id)
-    message = AgentMessage(
-        session_id=row.id,
-        role="assistant",
-        body=draft.explanation,
-        beyond=draft.beyond or None,
-        source_refs=refs,
-        grounded=1 if refs else 0,
-        model=provider.model,
-        run_id=run_id,
-    )
     exercise = VariantExercise(
         project_id=project_id,
         session_id=row.id,
@@ -311,7 +323,20 @@ def create_practice(session_id: int, body: PracticeInput, session: Db):
         acceptance=draft.acceptance,
         status="draft",
     )
-    session.add_all([message, exercise])
+    session.add(exercise)
+    session.flush()
+    message = AgentMessage(
+        session_id=row.id,
+        role="assistant",
+        body=draft.explanation,
+        beyond=draft.beyond or None,
+        source_refs=refs,
+        exercise_id=exercise.id,
+        grounded=1 if refs else 0,
+        model=provider.model,
+        run_id=run_id,
+    )
+    session.add(message)
     row.updated_at = utcnow()
     session.commit()
     session.refresh(message)
@@ -324,6 +349,6 @@ def create_practice(session_id: int, body: PracticeInput, session: Db):
         len(refs),
     )
     return PracticeResult(
-        message=MessageOut.model_validate(message),
+        message=_message_out(message, {exercise.id: exercise}),
         exercise=VariantOut.model_validate(exercise),
     )

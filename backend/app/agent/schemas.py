@@ -39,6 +39,10 @@ class MessageOut(BaseModel):
     grounded: bool = False
     model: str = ""
     created_at: datetime
+    # Attached on read, not stored: the row keeps only `exercise_id`, and the reader
+    # resolves it. A message that produced practice must show that practice again after
+    # a reload, or the exercise is only reachable by remembering it exists.
+    exercise: VariantOut | None = None
 
     @field_serializer("created_at")
     def utc_timestamp(self, value: datetime) -> str:

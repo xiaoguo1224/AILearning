@@ -70,6 +70,10 @@ class AgentMessage(Base):
     check_question: Mapped[str | None] = mapped_column(Text, nullable=True)
     # [{"marker": "S1", "chunk_id": 12, "resource_id": 3, "filename": "...", "locator": "p.2"}]
     source_refs: Mapped[list] = mapped_column(JSON, default=list)
+    # The exercise this message produced, when it produced one. A plain integer rather
+    # than a ForeignKey for the same migration reason as VariantExercise.session_id, and
+    # for one more: the exercise outlives the conversation, so nothing may cascade here.
+    exercise_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     grounded: Mapped[int] = mapped_column(Integer, server_default=text("0"), default=0)
     model: Mapped[str] = mapped_column(String(100), server_default=text("''"), default="")
     run_id: Mapped[str] = mapped_column(String(64), server_default=text("''"), default="")

@@ -130,6 +130,10 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # same reason; see the VariantExercise docstring.
     ("variant_exercises", "session_id", "INTEGER"),
     ("variant_exercises", "source_question", "TEXT"),
+    # The message that produced an exercise. Same two reasons as the pair above: no
+    # REFERENCES clause because SQLite cannot add one, and nothing cascades because the
+    # exercise outlives the conversation it was drafted in.
+    ("agent_messages", "exercise_id", "INTEGER"),
 )
 
 
