@@ -953,3 +953,127 @@ export interface ResourceSearchResult {
   locator: string;
   snippet: string;
 }
+
+/**
+ * Where one finding's evidence comes from. The distinction is the feature, not a tag:
+ * `confirmed_static` is what the source text alone proves, `user_reported` is what a
+ * log the learner supplied claims happened, `inferred` links the two, and
+ * `needs_local_check` is something only the learner's own environment can settle.
+ */
+export type EvidenceType = "confirmed_static" | "user_reported" | "inferred" | "needs_local_check";
+export type FindingSeverity = "error" | "warning" | "info";
+
+export interface Finding {
+  file: string;
+  line_start: number;
+  line_end: number;
+  category: string;
+  severity: FindingSeverity;
+  evidence_type: EvidenceType;
+  description: string;
+  suggestion: string;
+}
+
+export type SubmissionStatus = "submitted" | "reviewed";
+
+/** How much model involvement one review had. `skipped` means static analysis only. */
+export type LlmStatus = "skipped" | "used" | "unavailable";
+
+/**
+ * One review as it arrives on a submission. Deliberately carries only the first hint:
+ * levels two and three are fetched one at a time through POST /reviews/{id}/hints, so a
+ * response cannot hand the learner the whole ladder without them asking for it.
+ */
+export interface CodeReviewSummary {
+  id: number;
+  submission_id: number;
+  summary: string;
+  findings: Finding[];
+  hint_level_1: string | null;
+  /** How far up the ladder the learner has already climbed, from 0 to 3. */
+  hints_revealed: number;
+  llm_status: LlmStatus;
+  model: string;
+  created_at: string;
+}
+
+export interface ReviewHint {
+  level: 1 | 2 | 3;
+  text: string;
+  /** The highest rung now unlocked on this review, so the page can restore the ladder. */
+  revealed: number;
+}
+
+/** Model-written, and labelled as such wherever it is shown. */
+export type ReferenceSolutionLabel = "ai_generated_unverified";
+
+export interface ReferenceSolution {
+  reference_solution: string;
+  label: ReferenceSolutionLabel;
+  revealed_at: string;
+}
+
+export type SubmissionArtifactKind = "code" | "log" | "config" | "output";
+
+export interface SubmissionArtifactDetail {
+  id: number;
+  filename: string;
+  kind: SubmissionArtifactKind;
+  /** Null when the stored text could not be read back, which is not the same as empty. */
+  content: string | null;
+  sha256: string;
+  size_bytes: number;
+  /** True when the stored copy was cut short; the preview is everything that was kept. */
+  truncated: boolean;
+  created_at: string;
+}
+
+/** The list row: enough to choose a version without fetching its artifacts. */
+export interface SubmissionSummary {
+  id: number;
+  project_id: number;
+  exercise_id: string | null;
+  version: number;
+  status: SubmissionStatus;
+  user_note: string | null;
+  created_at: string;
+  artifact_count: number;
+  latest_review: { id: number; summary: string; finding_count: number } | null;
+}
+
+export interface SubmissionList {
+  items: SubmissionSummary[];
+  total: number;
+}
+
+export interface SubmissionDetail {
+  id: number;
+  project_id: number;
+  exercise_id: string | null;
+  version: number;
+  status: SubmissionStatus;
+  user_note: string | null;
+  created_at: string;
+  artifacts: SubmissionArtifactDetail[];
+  reviews: CodeReviewSummary[];
+  /** What the server noticed about credentials in the uploaded text, never quoting them. */
+  privacy_warnings: string[];
+}
+
+export interface CreateSubmissionPayload {
+  exercise_id?: string;
+  user_note?: string;
+  code_filename: string;
+  /** One of code or log is required; the server refuses a submission with neither. */
+  code_content?: string;
+  log_filename?: string;
+  log_content?: string;
+}
+
+/** The browser-side form of an upload; api.uploadSubmission turns it into multipart. */
+export interface UploadSubmissionInput {
+  codeFile?: File | null;
+  logFile?: File | null;
+  exerciseId?: string;
+  userNote?: string;
+}

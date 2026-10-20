@@ -514,7 +514,17 @@ def test_upgrade_adds_the_tutor_and_explicit_project_tables(databases):
     )
     assert NEW_TABLE in databases.upgraded
     # New independent P1 tables; keep the exact whitelist so accidental schema growth fails.
-    assert set(databases.upgraded) - set(databases.base) == {NEW_TABLE, "projects", "project_courses"}
+    assert set(databases.upgraded) - set(databases.base) == {
+        NEW_TABLE,
+        "projects",
+        "project_courses",
+        "resources",
+        "project_resources",
+        "resource_chunks",
+        "submissions",
+        "submission_artifacts",
+        "code_reviews",
+    }
     assert not set(databases.base) - set(databases.upgraded), "create_all cannot drop a table"
 
 

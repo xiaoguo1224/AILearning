@@ -21,9 +21,16 @@ import type {
   ProjectInput,
   ProjectList,
   ProjectStatus,
+  ReferenceSolution,
   ResourceSummary,
   ResourceDetail,
   ResourceSearchResult,
+  ReviewHint,
+  SubmissionDetail,
+  SubmissionList,
+  CreateSubmissionPayload,
+  CodeReviewSummary,
+  UploadSubmissionInput,
   RemediationConflict,
   RemediationNote,
   ReviewAnswerResult,
@@ -132,6 +139,31 @@ function messageFromValidationDetail(detail: unknown[]): string | null {
   return null;
 }
 
+/** Turn a non-2xx response into the ApiError every caller already knows. */
+async function errorFromResponse(
+  res: Response,
+  costLimitConsequence?: string,
+  locale?: Locale,
+): Promise<ApiError> {
+  let message = res.statusText || `Request failed with status ${res.status}`;
+  let code: string | undefined;
+  try {
+    const body = await res.json();
+    const detail = body?.detail;
+    if (typeof detail === "string") {
+      message = detail;
+    } else if (Array.isArray(detail)) {
+      message = messageFromValidationDetail(detail) ?? message;
+    } else if (detail && typeof detail === "object") {
+      if (typeof detail.error === "string") code = detail.error;
+      message = messageFromObjectDetail(detail as ObjectDetail, costLimitConsequence, locale) ?? message;
+    }
+  } catch {
+    // Non-JSON error body - keep the statusText fallback.
+  }
+  return new ApiError(res.status, createTranslator(locale ?? browserLocale())(message), code);
+}
+
 async function request<T>(
   path: string,
   init?: RequestInit,
@@ -139,26 +171,14 @@ async function request<T>(
   locale?: Locale,
 ): Promise<T> {
   const res = await localizedFetch(`${BASE_URL}${path}`, init, locale);
-  if (!res.ok) {
-    let message = res.statusText || `Request failed with status ${res.status}`;
-    let code: string | undefined;
-    try {
-      const body = await res.json();
-      const detail = body?.detail;
-      if (typeof detail === "string") {
-        message = detail;
-      } else if (Array.isArray(detail)) {
-        message = messageFromValidationDetail(detail) ?? message;
-      } else if (detail && typeof detail === "object") {
-        if (typeof detail.error === "string") code = detail.error;
-        message = messageFromObjectDetail(detail as ObjectDetail, costLimitConsequence, locale) ?? message;
-      }
-    } catch {
-      // Non-JSON error body - keep the statusText fallback.
-    }
-    throw new ApiError(res.status, createTranslator(locale ?? browserLocale())(message), code);
-  }
+  if (!res.ok) throw await errorFromResponse(res, costLimitConsequence, locale);
   return res.json() as Promise<T>;
+}
+
+/** A request whose success carries no body, such as a 204 DELETE. */
+async function requestNoContent(path: string, init?: RequestInit, locale?: Locale): Promise<void> {
+  const res = await localizedFetch(`${BASE_URL}${path}`, init, locale);
+  if (!res.ok) throw await errorFromResponse(res, undefined, locale);
 }
 
 function get<T>(path: string, locale?: Locale): Promise<T> {
@@ -785,4 +805,107 @@ export async function uploadProjectResource(projectId: number, file: File): Prom
     throw new ApiError(res.status, msg);
   }
   return res.json() as Promise<ResourceDetail>;
+}
+
+export interface ListSubmissionsOptions {
+  exerciseId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * One page of a project's submissions, newest first. Costs nothing.
+ *
+ * The list endpoint returns summaries rather than full details, so a row can be drawn
+ * without every artifact's text: a project with fifty versions should not ship fifty
+ * copies of the code to render an index.
+ */
+export function listProjectSubmissions(
+  projectId: number,
+  options: ListSubmissionsOptions = {},
+  locale?: Locale,
+): Promise<SubmissionList> {
+  const params = new URLSearchParams();
+  if (options.exerciseId) params.set("exercise_id", options.exerciseId);
+  params.set("limit", String(options.limit ?? 50));
+  params.set("offset", String(options.offset ?? 0));
+  return get(`/api/projects/${projectId}/submissions?${params.toString()}`, locale);
+}
+
+export function getSubmission(submissionId: number, locale?: Locale): Promise<SubmissionDetail> {
+  return get(`/api/submissions/${submissionId}`, locale);
+}
+
+/** Paste one version. The server stores it and analyses it; it never runs it. */
+export function createSubmission(projectId: number, body: CreateSubmissionPayload): Promise<SubmissionDetail> {
+  return postJson(`/api/projects/${projectId}/submissions`, body);
+}
+
+/**
+ * Upload one version as files. At least one of `codeFile` and `logFile` must be set;
+ * the server refuses an empty submission with a 422 whose detail carries a message.
+ *
+ * Mirrors uploadProjectResource's error handling rather than `request`'s: a 422 here is
+ * about one file the learner chose, so its `detail.message` is the sentence to show.
+ */
+export async function uploadSubmission(
+  projectId: number,
+  input: UploadSubmissionInput,
+): Promise<SubmissionDetail> {
+  const form = new FormData();
+  if (input.codeFile) form.append("code_file", input.codeFile);
+  if (input.logFile) form.append("log_file", input.logFile);
+  if (input.exerciseId?.trim()) form.append("exercise_id", input.exerciseId.trim());
+  if (input.userNote?.trim()) form.append("user_note", input.userNote.trim());
+
+  const res = await localizedFetch(`${BASE_URL}/api/projects/${projectId}/submissions/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    let message = `Upload failed (${res.status})`;
+    let code: string | undefined;
+    try {
+      const data = await res.json();
+      if (typeof data?.detail?.message === "string") message = data.detail.message;
+      if (typeof data?.detail?.error === "string") code = data.detail.error;
+    } catch {
+      // Non-JSON error body - the status has to carry the meaning on its own.
+    }
+    throw new ApiError(res.status, message, code);
+  }
+  return res.json() as Promise<SubmissionDetail>;
+}
+
+/**
+ * Analyse one submission and record the review. `useLlm` asks for the model-assisted
+ * pass, which may spend provider quota and may come back `unavailable`; the static pass
+ * is free and always available. Neither runs the learner's code.
+ */
+export function triggerCodeReview(submissionId: number, useLlm = false): Promise<CodeReviewSummary> {
+  return request(`/api/submissions/${submissionId}/review?use_llm=${useLlm ? "true" : "false"}`, {
+    method: "POST",
+  });
+}
+
+export function listSubmissionReviews(submissionId: number, locale?: Locale): Promise<CodeReviewSummary[]> {
+  return get(`/api/submissions/${submissionId}/reviews`, locale);
+}
+
+/** Unlock one rung of the hint ladder. A level the review does not have is a 422. */
+export function revealReviewHint(reviewId: number, level: 1 | 2 | 3): Promise<ReviewHint> {
+  return postJson(`/api/reviews/${reviewId}/hints`, { level });
+}
+
+/**
+ * Ask for the reference solution. Deliberately a separate, confirmed action: the
+ * response is model output, labelled `ai_generated_unverified`, not an answer key.
+ */
+export function revealReviewSolution(reviewId: number): Promise<ReferenceSolution> {
+  return request(`/api/reviews/${reviewId}/solution`, { method: "POST" });
+}
+
+/** Delete one version, its artifacts and its reviews. Irreversible; confirm first. */
+export function deleteSubmission(submissionId: number): Promise<void> {
+  return requestNoContent(`/api/submissions/${submissionId}`, { method: "DELETE" });
 }
