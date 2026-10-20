@@ -447,7 +447,11 @@ def test_every_added_column_is_one_the_models_still_declare():
     rule that nothing enforces is a rule the next person discovers by breaking it.
     """
     from app import models  # noqa: F401  (register the mapped classes with Base.metadata)
+    from app.agent import models as agent_models  # noqa: F401
     from app.db import Base
+    from app.projects import models as project_models  # noqa: F401
+    from app.resources import models as resource_models  # noqa: F401
+    from app.submissions import models as submission_models  # noqa: F401
 
     for table, column, _ in ADDED_COLUMNS:
         assert table in Base.metadata.tables, (

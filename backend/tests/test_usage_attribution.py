@@ -19,6 +19,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app import fsrs, generation, main, models, remediation, review, tutor
+from app.agent import practice as agent_practice
 from app.agent import router as agent_router
 from app.concepts import normalize_concept
 from app.db import Base, SessionLocal
@@ -500,6 +501,7 @@ def test_only_generation_stages_are_covered_by_the_failed_run_sentence():
     # P3's free exploration: a conversation, which is a third thing again, so it gets a
     # third sentence rather than borrowing the review's "pass" framing.
     assert main._unattributed_group(agent_router.EXPLORE_STAGE) == main.GROUP_EXPLORE
+    assert main._unattributed_group(agent_practice.PRACTICE_STAGE) == main.GROUP_PRACTICE
 
 
 class _ReviewStageProvider:
@@ -537,6 +539,28 @@ class _VariantStageProvider:
                     "prompt": "Do the same thing with different numbers.",
                     "starter_code": None,
                     "acceptance": "It runs locally.",
+                }
+            ),
+            input_tokens=5,
+            output_tokens=5,
+        )
+
+
+class _PracticeStageProvider:
+    name = "fake"
+    model = "practice-stage-model"
+    is_paid = False
+
+    def generate(self, system: str, prompt: str, max_tokens: int = 64000):
+        return LLMResult(
+            text=json.dumps(
+                {
+                    "explanation": "Broadcasting aligns trailing dimensions.",
+                    "beyond": None,
+                    "title": "Try it",
+                    "prompt": "Add a bias vector to a batch.",
+                    "starter_code": None,
+                    "acceptance": "The shapes match.",
                 }
             ),
             input_tokens=5,
@@ -611,6 +635,14 @@ def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monke
         ).status_code
         == 201
     )
+    # P3-04's practice set, same router, same patch point.
+    monkeypatch.setattr(agent_router, "get_provider", lambda: _PracticeStageProvider())
+    assert (
+        client.post(
+            f"/api/sessions/{session_id}/practice", json={"body": "How does broadcasting align?"}
+        ).status_code
+        == 201
+    )
 
     session = SessionLocal()
     try:
@@ -624,6 +656,7 @@ def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monke
         llm_review.REVIEW_STAGE,
         llm_variant.VARIANT_STAGE,
         agent_router.EXPLORE_STAGE,
+        agent_practice.PRACTICE_STAGE,
     }
     assert explained <= recorded, "the scenario above should exercise every known stage"
     assert recorded <= explained, f"stage with no /usage copy: {sorted(recorded - explained)}"
