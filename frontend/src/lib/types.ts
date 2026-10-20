@@ -1100,3 +1100,85 @@ export interface UploadSubmissionInput {
   variantId?: number;
   userNote?: string;
 }
+
+/**
+ * Where one citation points: the file and the position inside it.
+ *
+ * `marker` is the label the model wrote in the reply ("S1") and is only stable within
+ * that one reply, so it must never be used as a key outside the message it came from.
+ * `locator` is the chunker's own position string ("p.2"), and it can be empty for
+ * sources with no pagination, which is why the badge falls back to the filename alone
+ * rather than printing a dangling separator.
+ */
+export interface ExploreSourceRef {
+  marker: string;
+  chunk_id: number;
+  resource_id: number;
+  filename: string;
+  locator: string;
+}
+
+/**
+ * One row of a free-exploration conversation. Both roles share this shape, because the
+ * learner's question and the reply are one column on the server.
+ *
+ * `body` is what the project's material supports. `beyond` is the model's general
+ * knowledge, capped by the server, and MUST be rendered as its own block under its own
+ * heading: the split lives in this schema, so a renderer that inlines it is what erases
+ * the guarantee. `grounded` is the server's answer to "did this reply cite anything",
+ * sent rather than derived from `source_refs.length` so the two can never disagree.
+ */
+export interface ExploreMessage {
+  id: number;
+  role: "user" | "assistant";
+  /** Markdown on a reply, the learner's own text on a question. Render via LessonMarkdown. */
+  body: string;
+  beyond: string | null;
+  check_question: string | null;
+  source_refs: ExploreSourceRef[];
+  grounded: boolean;
+  /** Which model answered. Empty on a learner row, which no model wrote. */
+  model: string;
+  created_at: string;
+}
+
+/**
+ * A conversation under one project, in the list shape.
+ *
+ * `title` is null until the first question is answered, at which point the server takes
+ * it from that question. So a null title means "nothing asked yet" and not "a session
+ * the learner forgot to name".
+ */
+export interface ExploreSession {
+  id: number;
+  project_id: number;
+  mode: "explore";
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+}
+
+export interface ExploreSessionList {
+  items: ExploreSession[];
+  total: number;
+}
+
+export interface ExploreSessionDetail extends ExploreSession {
+  messages: ExploreMessage[];
+}
+
+/**
+ * The two rows one question wrote, not the conversation. The client already holds the
+ * transcript and appends these, so no third copy of it comes back to disagree.
+ */
+export interface ExploreAskResult {
+  user: ExploreMessage;
+  assistant: ExploreMessage;
+}
+
+/** `mode` is required here even though the server defaults it, for the reason TutorMode is. */
+export interface CreateSessionPayload {
+  mode: "explore";
+  title?: string | null;
+}

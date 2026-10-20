@@ -34,10 +34,17 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     <PageHeader className="break-words [&>div]:min-w-0 [&_p]:whitespace-pre-wrap" title={project?.name ?? t("Project")} description={project?.goal} actions={project && <Badge>{t(project.status === "active" ? "Active" : "Archived")}</Badge>} />
     {error ? <ErrorState message={error} /> : project && <ProjectWorkspace key={project.id} project={project} courses={courses} coursesError={coursesError} />}
     {project && <ProjectResourcesManager projectId={project.id} isArchived={project.status === 'archived'} />}
-    {project && <section className="space-y-2 rounded-surface border border-line p-6">
-      <h2 className="text-title">{t("Code review")}</h2>
-      <p className="text-small text-ink-muted">{t("Upload code and logs from your own machine for static review.")}</p>
-      <Link href={`/projects/${project.id}/submissions`} className="text-small text-accent underline">{t("Open code review")}</Link>
-    </section>}
+    {project && <div className="grid gap-4 sm:grid-cols-2">
+      <section className="space-y-2 rounded-surface border border-line p-6">
+        <h2 className="text-title">{t("Code review")}</h2>
+        <p className="text-small text-ink-muted">{t("Upload code and logs from your own machine for static review.")}</p>
+        <Link href={`/projects/${project.id}/submissions`} className="text-small text-accent underline">{t("Open code review")}</Link>
+      </section>
+      <section className="space-y-2 rounded-surface border border-line p-6">
+        <h2 className="text-title">{t("Free exploration")}</h2>
+        <p className="text-small text-ink-muted">{t("Ask questions against this project's own material.")}</p>
+        <Link href={`/projects/${project.id}/explore`} className="text-small text-accent underline">{t("Open free exploration")}</Link>
+      </section>
+    </div>}
   </main>;
 }

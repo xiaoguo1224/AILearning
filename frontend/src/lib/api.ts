@@ -32,6 +32,11 @@ import type {
   CreateSubmissionPayload,
   CodeReviewSummary,
   UploadSubmissionInput,
+  CreateSessionPayload,
+  ExploreAskResult,
+  ExploreSession,
+  ExploreSessionDetail,
+  ExploreSessionList,
   RemediationConflict,
   RemediationNote,
   ReviewAnswerResult,
@@ -113,6 +118,10 @@ const COST_LIMIT_CONSEQUENCE = {
   // the cap is tested before the model is called, and a turn that fails writes neither
   // row, the learner's own message included. So the transcript is exactly as it was.
   tutor: "No message was recorded, and this attempt spent nothing.",
+  // Same two reasons again: the explore endpoint commits both rows only after the reply
+  // has parsed, and the cap is checked before the provider call, so a refused question
+  // leaves the session untouched.
+  explore: "No message was recorded, and this attempt spent nothing.",
 } as const;
 
 /** Returns null when the detail carries nothing useful, so the caller keeps its statusText fallback. */
@@ -918,4 +927,78 @@ export function createVariant(submissionId: number): Promise<VariantDraft> {
 /** Delete one version, its artifacts and its reviews. Irreversible; confirm first. */
 export function deleteSubmission(submissionId: number): Promise<void> {
   return requestNoContent(`/api/submissions/${submissionId}`, { method: "DELETE" });
+}
+
+export interface ListSessionsOptions {
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * One page of a project's free-exploration sessions, most recently touched first.
+ * Costs nothing.
+ *
+ * The list endpoint returns summaries with a message count rather than transcripts, so
+ * an index of fifty sessions does not ship fifty conversations to render a list.
+ */
+export function listProjectSessions(
+  projectId: number,
+  options: ListSessionsOptions = {},
+  locale?: Locale,
+): Promise<ExploreSessionList> {
+  const params = new URLSearchParams();
+  params.set("limit", String(options.limit ?? 50));
+  params.set("offset", String(options.offset ?? 0));
+  return get(`/api/projects/${projectId}/sessions?${params.toString()}`, locale);
+}
+
+/**
+ * Start an empty session. Nothing is asked and nothing is spent.
+ *
+ * `mode` is sent explicitly rather than omitted. The server defaults it, but this client
+ * only ever creates exploration sessions, and a call site that has not said so is worth
+ * a compile error rather than a silent default.
+ *
+ * A 409 `project_archived` means the project is read-only and no session was written.
+ */
+export function createProjectSession(
+  projectId: number,
+  body: CreateSessionPayload = { mode: "explore" },
+): Promise<ExploreSession> {
+  return postJson(`/api/projects/${projectId}/sessions`, body);
+}
+
+/** One session with its whole transcript, oldest first. 404 when the id is unknown. */
+export function getExploreSession(sessionId: number, locale?: Locale): Promise<ExploreSessionDetail> {
+  return get(`/api/sessions/${sessionId}`, locale);
+}
+
+/** Delete one session and every message in it. Irreversible; confirm first. */
+export function deleteExploreSession(sessionId: number): Promise<void> {
+  return requestNoContent(`/api/sessions/${sessionId}`, { method: "DELETE" });
+}
+
+/**
+ * Ask one question against this project's own material. One metered model call, two rows.
+ *
+ * THE FIELD IS `body`, not `message`, which is the one place this endpoint and the
+ * tutor's disagree. Sending the wrong one is a generic 422 rather than a sentence about
+ * the question, so it is worth naming here.
+ *
+ * NOTHING IS WRITTEN when this fails, on every failing path: both rows are committed
+ * together, and only after the reply has parsed. So a caller may keep the learner's
+ * typed text and let them send it again, and a 502 `agent_unavailable` is a retry rather
+ * than a lost question. That is the reason the component branches on the code instead of
+ * on the message: the server's 502 sentence is the one place the fact is stated, and the
+ * screen has to say it too.
+ *
+ * Other failures throw ApiError: 404 unknown session, 409 project archived, 422 empty
+ * message, 402 spend cap, 502 model unavailable or off-schema.
+ */
+export function askExploreQuestion(sessionId: number, body: string): Promise<ExploreAskResult> {
+  return postJson(
+    `/api/sessions/${sessionId}/messages`,
+    { body },
+    COST_LIMIT_CONSEQUENCE.explore,
+  );
 }

@@ -16,6 +16,8 @@ import type {
   AnswerResult,
   AttemptState,
   CoursePlan,
+  ExploreMessage,
+  ExploreSourceRef,
   QuizItem,
   QuizProgress,
   TutorConversation,
@@ -109,6 +111,55 @@ export function turnOutcome(reply: TutorRow, question = "What grows stability?")
     guided: GUIDED,
   };
   return { kind: "turn", turn };
+}
+
+/**
+ * One question in a free-exploration conversation.
+ *
+ * The two roles share one wire shape, so this is an ordinary ExploreMessage rather than
+ * a narrowed variant: the only field that differs is `body`, and every register field
+ * is genuinely absent on a learner row.
+ */
+export function exploreQuestion(body: string, id = 1): ExploreMessage {
+  return {
+    id,
+    role: "user",
+    body,
+    beyond: null,
+    check_question: null,
+    source_refs: [],
+    grounded: false,
+    model: "",
+    created_at: "2026-10-01T12:00:00Z",
+  };
+}
+
+/**
+ * One assistant row in a free-exploration conversation.
+ *
+ * `grounded` is derived from whether refs were passed, rather than fixed, because that
+ * is exactly how the server sets it: a fixture where the two disagree would describe a
+ * payload the backend can never send.
+ */
+export function exploreReply(fields: {
+  id?: number;
+  body: string;
+  beyond?: string | null;
+  check?: string | null;
+  refs?: ExploreSourceRef[];
+}): ExploreMessage {
+  const refs = fields.refs ?? [];
+  return {
+    id: fields.id ?? 2,
+    role: "assistant",
+    body: fields.body,
+    beyond: fields.beyond ?? null,
+    check_question: fields.check ?? null,
+    source_refs: refs,
+    grounded: refs.length > 0,
+    model: "explore-model",
+    created_at: "2026-10-01T12:00:05Z",
+  };
 }
 
 /**
