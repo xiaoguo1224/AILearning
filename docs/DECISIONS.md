@@ -80,6 +80,13 @@
 
 ## 新决策模板
 
+## ADR-015 — 用户指定的 Gemini 兼容网关
+- 日期：2026-10-20
+- 状态：Accepted（用户授权使用已有 .env 验证）
+- 决策：新增基于已有 httpx 的 Chat Completions adapter，支持 gemini/openai；读取 LLM_*，保留旧 STUDYFORGE_* 优先级，未知 provider 明确拒绝。
+- 理由：根配置使用 Gemini 网关，原上游 adapter 无法读取。协议参考 Google 官方 OpenAI compatibility 文档：<https://ai.google.dev/gemini-api/docs/openai>。
+- 影响：TLS 验证、不跟随重定向、不回显响应或密钥；拒绝截断/空答案，保留失败 token 使用；仍走 MeteredLLM。未知模型费用采用已有 fallback 并标记 approximate，不当作真实账单。
+
 ## ADR-013 — 本机开发与按风险验证
 - 日期：2026-10-20
 - 状态：Accepted（用户明确要求）

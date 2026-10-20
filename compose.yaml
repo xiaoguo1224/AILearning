@@ -4,6 +4,9 @@ services:
     build: ./backend
     environment:
       STUDYFORGE_LLM_PROVIDER: ${STUDYFORGE_LLM_PROVIDER:-fake}
+      LLM_MODEL: ${LLM_MODEL:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
       STUDYFORGE_DB: /data/studyforge.sqlite3
       STUDYFORGE_CORS_ORIGINS: http://localhost:3000
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}

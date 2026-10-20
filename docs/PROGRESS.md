@@ -38,6 +38,14 @@
 
 ## 追加记录模板
 
+### 2026-10-20 — P0-07 Gemini 网关与真实教学
+- P0-06 提交 `6897038`。本项提交：本记录所在提交（`git log --grep="P0-07"`）。
+- 增加 OpenAI-compatible httpx adapter（不新增 SDK），get_provider 支持 gemini/openai，加载根 .env、环境映射与示例，控制配置错误响应。密钥始终未打印或写入受跟踪文件。
+- 最小 adapter/Fake 验证：`pytest tests/test_openai_compatible.py tests/test_fake_provider.py -q` **54 passed**；覆盖协议、配置、计数、坏响应、HTTP/超时/拒绝/截断、脱敏、预算和失败计量。后续本机全量 **1175 passed, 2 skipped** 与 ruff 通过已在 P0-05 记录，不再重复整套。
+- 真实网关首轮超时；无凭据宿主/容器探测均收到 HTTP 401，重试真实短请求得到 OK。随后本机真实 `/tutor/messages` **HTTP 200**，模型 `gemini-3.8-flash`，1328 input / 236 output tokens。
+- 真实回答正确说明 `(3,4)` 与 `w[:,0]` 的 `(3,)` 在末轴 4/3 不兼容；建议 `w[:,0:1]` 保持 `(3,1)` 或 `x*w`，明确“静态推导，未实际执行任何代码”。仅使用明确命名的 QA 教学材料，不涉及真实上传程序执行。
+- 该调用 fallback 估算 **$0.0125**（approximate，非网关账单）；这是一次真实模型样例验收，不能据此宣称整个 Agent 教学可靠率。真实记录保留在本机忽略数据库。
+
 ### 2026-10-20 — P0-06 基线、备份与恢复
 - P0-05 提交 `43d1ef9`。本项提交：本记录所在提交（`git log --grep="P0-06"`）。
 - `docs/OPERATIONS.md` 定义一致快照、恢复前保留故障副本、integrity_check 与数据计数核对，明确未来资料与知识正文一同备份。

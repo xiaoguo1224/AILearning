@@ -68,4 +68,6 @@ node node_modules/next/dist/bin/next dev --hostname 127.0.0.1
 
 ## 许可证与上游
 
+现有根 `.env` 的 `LLM_PROVIDER=gemini`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY` 可直接用于 OpenAI 兼容网关；后端自动加载，密钥只用于后端请求。显式 `STUDYFORGE_LLM_PROVIDER` 优先（测试可设 `fake`）；不要用 backend/.env 中默认的 anthropic 覆盖想使用的网关。网关须启用 HTTPS，已有环境变量优先于 backend/.env，后者优先于根 .env。默认不自动降级到其他供应商，连接失败返回受控错误。
+
 基于 StudyForge（基点 `d6fc957`），保留 [MIT LICENSE](LICENSE) 及 Akhil Vallala 的版权声明。Git `origin` 为本项目，`upstream` 为 StudyForge；开发提交默认不自动推送。

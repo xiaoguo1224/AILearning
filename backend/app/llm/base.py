@@ -24,9 +24,9 @@ class LLMCallError(RuntimeError):
 
 
 class LLMProvider(Protocol):
-    name: str  # "anthropic" | "ollama" | "fake"
+    name: str  # anthropic, ollama, fake, gemini, openai
     model: str
-    is_paid: bool  # True only for the anthropic provider
+    is_paid: bool  # Hosted providers participate in cost estimates and budget caps.
 
     def generate(self, system: str, prompt: str, max_tokens: int = 64000) -> LLMResult:
         """Return the model's text response (plus token usage if reported) for a single

@@ -495,8 +495,8 @@ def _run_generation(session: Session, chunks: list[str], owners: list[str]) -> d
     """Run the metered generation pipeline, save the course, backfill the run's
     llm_calls rows with the new course id, and return the generate-endpoint response."""
     run_id = uuid.uuid4().hex
-    meter = MeteredLLM(get_provider(), run_id)
     try:
+        meter = MeteredLLM(get_provider(), run_id)
         course = generation.generate_course(meter, chunks, owners)
     except CostLimitExceeded as exc:
         raise _cost_limit_exceeded(exc) from exc
@@ -1849,7 +1849,10 @@ def post_tutor_message(body: TutorQuestion, session: Session = Depends(get_sessi
     if counts.concept_used >= tutor.CONCEPT_TURNS_PER_DAY:
         raise _tutor_conflict("concept_turn_limit", CONCEPT_TURN_LIMIT_MESSAGE, counts)
 
-    provider = get_provider()
+    try:
+        provider = get_provider()
+    except LLMCallError:
+        raise HTTPException(502, "Check the model provider configuration.") from None
     run_id = uuid.uuid4().hex
     # Which course this call is charged to, decided here at call time and from the
     # UNTRIMMED matches: sole_course_id is answering which courses teach the concept, and
