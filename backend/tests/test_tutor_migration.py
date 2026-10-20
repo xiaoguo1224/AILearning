@@ -531,6 +531,9 @@ def test_upgrade_adds_the_tutor_and_explicit_project_tables(databases):
         "variant_exercises",
         "agent_sessions",
         "agent_messages",
+        "knowledge_entries",
+        "project_knowledge",
+        "knowledge_relations",
     }
     assert not set(databases.base) - set(databases.upgraded), "create_all cannot drop a table"
 
