@@ -1,0 +1,35 @@
+name: ailearning
+services:
+  backend:
+    build: ./backend
+    environment:
+      STUDYFORGE_LLM_PROVIDER: ${STUDYFORGE_LLM_PROVIDER:-fake}
+      STUDYFORGE_DB: /data/studyforge.sqlite3
+      STUDYFORGE_CORS_ORIGINS: http://localhost:3000
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1}
+      OLLAMA_NUM_CTX: ${OLLAMA_NUM_CTX:-8192}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - .:/workspace
+      - learning-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/courses', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  frontend:
+    build: ./frontend
+    environment:
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+      API_INTERNAL_URL: http://backend:8000
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+volumes:
+  learning-data:

@@ -21,6 +21,12 @@ dist/
 # Databases
 *.sqlite3
 *.db
+*.sqlite3-*
+*.db-*
+/data/
+/.artifacts/
+/*-build.log
+/*-baseline.log
 
 # Agent worktrees
 .claude/worktrees/

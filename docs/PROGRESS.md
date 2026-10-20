@@ -38,6 +38,15 @@
 
 ## 追加记录模板
 
+### 2026-10-20 — P0-03 后端容器基线
+- P0-02 提交 `3b7705e`。本项提交：本记录所在提交（`git log --grep="P0-03"`）。
+- 新增 Compose、后端/前端 Dockerfile 与构建忽略规则；基础镜像固定摘要，后端 `uv.lock` 固定 48 个包，容器 `uv sync --frozen --extra dev` 成功。后端镜像 Python 3.12.15；SQLite 使用独立命名卷，端口仅映射本机。
+- `docker compose run --rm --no-deps -e STUDYFORGE_LLM_PROVIDER=fake backend pytest -q`：**1146 passed, 2 skipped, 2 warnings，68.27 秒**。日志 `pytest-baseline.log` 为被 Git 忽略的本地证据。
+- `docker compose run --rm --no-deps backend pytest tests/test_tutor_migration.py -q -rs`：**23 passed, 2 skipped**。两处为按历史 pin 有意跳过不适用断言，历史 Git 对象和迁移比较均已执行；不是环境缺失。
+- 容器 `ruff check app tests` 在临时副本中通过；复制 app/tests/evals/pyproject 后规范化 Windows bind mount 的文件权限，避免 Windows 文件全部显示可执行而引发 EXE002；不修改 lint 规则。上游 `evals/run_eval.py` 另有 5 项 E402 bootstrap 基线，未借本次修改关闭检查。
+- 网络实际问题：首次镜像下载缓慢，pip 下载 uv 发生读取超时；延长 pip 超时并分离安装层后构建成功。宿主 `python -m pytest -q` 无 pytest，已如实记录，最终验收使用容器。
+- 仅测试本项目开发代码，从未执行用户上传程序；未调用真实模型。用户已补充授权使用根 `.env` 测试真实 Agent，后续单独适配 LLM_* 配置并记录结果。
+
 ### 2026-10-20 — P0-02 上游文档合并
 - 前项提交：P0-01 `4989e74`。本项提交：本记录所在提交（`git log --grep="P0-02"`）。
 - 将 `d6fc957` 的 README/ARCHITECTURE 字节原文保存在 `docs/upstream/`；当前 README 恢复安装、配置、测试、许可证入口，ARCHITECTURE 合并真实 API、计量、删除、FSRS/Tutor 与迁移语义。
