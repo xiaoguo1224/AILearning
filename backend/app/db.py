@@ -174,12 +174,16 @@ def _add_missing_columns() -> None:
 def init_db() -> None:
     from app import models  # noqa: F401  (register models with Base)
     from app.projects import models as project_models  # noqa: F401
+    from app.resources import models as resource_models  # noqa: F401
+    from app.resources.service import init_fts
 
     Base.metadata.create_all(engine)
     # AFTER create_all, and the order is load-bearing. create_all is what brings a brand
     # new table into existence; only then is it meaningful to ask an existing one which
     # columns it is missing.
     _add_missing_columns()
+    with SessionLocal() as session:
+        init_fts(session)
 
 
 def get_session():

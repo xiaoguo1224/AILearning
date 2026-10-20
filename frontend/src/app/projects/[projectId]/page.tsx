@@ -1,3 +1,4 @@
+import { ProjectResourcesManager } from "@/components/ProjectResourcesManager";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
@@ -32,5 +33,6 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     <Link href="/projects" className="text-accent underline">{t("All projects")}</Link>
     <PageHeader className="break-words [&>div]:min-w-0 [&_p]:whitespace-pre-wrap" title={project?.name ?? t("Project")} description={project?.goal} actions={project && <Badge>{t(project.status === "active" ? "Active" : "Archived")}</Badge>} />
     {error ? <ErrorState message={error} /> : project && <ProjectWorkspace key={project.id} project={project} courses={courses} coursesError={coursesError} />}
+    {project && <ProjectResourcesManager projectId={project.id} isArchived={project.status === 'archived'} />}
   </main>;
 }

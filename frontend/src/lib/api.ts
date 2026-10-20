@@ -21,6 +21,9 @@ import type {
   ProjectInput,
   ProjectList,
   ProjectStatus,
+  ResourceSummary,
+  ResourceDetail,
+  ResourceSearchResult,
   RemediationConflict,
   RemediationNote,
   ReviewAnswerResult,
@@ -746,4 +749,40 @@ export function getUsage(limit?: number, locale?: Locale): Promise<UsageSummary>
 
 export function acknowledgeCostAlert(): Promise<AlertState> {
   return request("/usage/alert/ack", { method: "POST" });
+}
+
+export function listProjectResources(projectId: number, locale?: Locale): Promise<ResourceSummary[]> {
+  return get(`/api/projects/${projectId}/resources`, locale);
+}
+export function getResource(resourceId: number, locale?: Locale): Promise<ResourceDetail> {
+  return get(`/api/resources/${resourceId}`, locale);
+}
+export function searchProjectResources(projectId: number, query: string, locale?: Locale): Promise<ResourceSearchResult[]> {
+  return get(`/api/projects/${projectId}/resources/search?q=${encodeURIComponent(query)}`, locale);
+}
+export function addUrlResource(projectId: number, url: string, title?: string): Promise<ResourceDetail> {
+  return postJson(`/api/projects/${projectId}/resources/url`, { url, title });
+}
+export function addTextResource(projectId: number, title: string, content: string, kind: "markdown" | "text" = "markdown"): Promise<ResourceDetail> {
+  return postJson(`/api/projects/${projectId}/resources/text`, { title, content, kind });
+}
+export function deleteProjectResource(projectId: number, resourceId: number): Promise<{ status: string; deleted_permanently: boolean }> {
+  return request(`/api/projects/${projectId}/resources/${resourceId}`, { method: "DELETE" });
+}
+export async function uploadProjectResource(projectId: number, file: File): Promise<ResourceDetail> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await localizedFetch(`${BASE_URL}/api/projects/${projectId}/resources/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    let msg = `Upload failed (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data?.detail?.message) msg = data.detail.message;
+    } catch {}
+    throw new ApiError(res.status, msg);
+  }
+  return res.json() as Promise<ResourceDetail>;
 }

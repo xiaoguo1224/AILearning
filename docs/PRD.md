@@ -34,7 +34,7 @@
 ### 3.3 课程工作台 `/projects/:id/learn/:lessonId`
 
 - 左侧课程导航，中间：数学原理、形状说明、代码示例、练习与上传；右侧项目 AI 导师。
-- 首个课程：56 天 PyTorch → Attention → 视觉 Token → 多模态 → Radar → VLM 路线。
+- 课程体系：结构化 PyTorch → Attention → 视觉 Token → 多模态 → Radar → VLM 知识树，依前置知识自适应推进，无固定天数限制。
 - 固定的核心章节、公式、参考解法和验收条件需经过确认；AI 可补充解释和练习。
 
 ### 3.4 自由学习 `/projects/:id/explore`
@@ -124,4 +124,4 @@
 
 ## 9. 里程碑
 
-M0 上游测试跑通；M1 Project/Resource；M2 上传和静态评审闭环；M3 自由学习；M4 知识沉淀与跨项目建议；M5 56 天课程逐步覆盖、整体回归。详细任务见 `TASKS.md`。
+M0 上游测试跑通；M1 Project/Resource；M2 上传和静态评审闭环；M3 自由学习；M4 知识沉淀与跨项目建议；M5 体系化课程逐步覆盖、纯知识驱动与自适应教学闭环整体回归。详细任务见 `TASKS.md`。

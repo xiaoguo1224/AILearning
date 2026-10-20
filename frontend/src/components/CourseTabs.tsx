@@ -58,14 +58,7 @@ export function CourseTabs({ courseId, active }: { courseId: number; active: Cou
           >
             {t("Concept map")}</Link>
         </li>
-        <li>
-          <Link
-            href={`/courses/${courseId}/plan`}
-            aria-current={active === "plan" ? "page" : undefined}
-            className={`${TAB_CLASS} block ${active === "plan" ? ACTIVE_CLASS : INACTIVE_CLASS}`}
-          >
-            {t("Plan")}</Link>
-        </li>
+
         <li>
           <span
             aria-disabled="true"

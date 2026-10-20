@@ -19,15 +19,15 @@
 
 - [x] P1-01 新建 Project 及 ProjectCourse 模型、迁移、API 与测试。
 - [x] P1-02 新建 Project 页面与导航；保留现有 Course 功能。
-- [-] P1-03 Resource / ResourceChunk / ProjectResource 持久化，支持 PDF、DOCX、Markdown、URL 基础路径。
-- [ ] P1-04 SQLite 全文检索与来源定位；实现资源再次打开、删除前引用检查。
-- [ ] P1-05 测试跨项目共享课程与归档项目不删除学习历史。
+- [x] P1-03 Resource / ResourceChunk / ProjectResource 持久化，支持 PDF、DOCX、Markdown、URL 基础路径。
+- [x] P1-04 SQLite 全文检索与来源定位；实现资源再次打开、删除前引用检查。
+- [x] P1-05 测试跨项目共享课程与归档项目不删除学习历史。
 
 **完成定义：** 能创建两个项目并分别关联课程和 PDF，原始资料再次进入后可读取/引用。
 
 ## P2 — 本地提交、日志和 AI 评审
 
-- [ ] P2-01 设计 Submission/Artifact/CodeReview 数据模型与安全上传接口。
+- [-] P2-01 设计 Submission/Artifact/CodeReview 数据模型与安全上传接口。
 - [ ] P2-02 用户在网页手动上传 `.py` 和 `.log`，支持粘贴、历史版本与预览。
 - [ ] P2-03 添加基础 Python AST 静态检查与限制；**禁止任何用户代码执行**。
 - [ ] P2-04 扩展 LLM 静态评审提示策略、结构化证据类型与代码审查 UI。
@@ -60,7 +60,7 @@
 
 ## P5 — 课程与质量整合
 
-- [ ] P5-01 为 56 天课程构建课程结构、教材章节和示例映射；优先上线前 7 天。
+- [ ] P5-01 构建结构化课程知识树与教材章节映射，支持依赖自适应进阶（无固定天数限制）。
 - [ ] P5-02 审核核心公式、示例与参考解法；标记 AI 扩展。
 - [ ] P5-03 整体端到端验证三条用户流程。
 - [ ] P5-04 执行全量 pytest、Vitest、构建和手工回归。

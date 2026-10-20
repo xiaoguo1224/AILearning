@@ -925,3 +925,31 @@ export interface SourceFailure {
   error: string;
   message: string;
 }
+
+export type ResourceKind = "pdf" | "docx" | "markdown" | "text" | "url";
+export interface ResourceSummary {
+  id: number;
+  filename: string;
+  kind: ResourceKind;
+  sha256?: string | null;
+  source_url?: string | null;
+  parse_status: "pending" | "completed" | "failed";
+  created_at: string;
+}
+export interface ResourceChunk {
+  id: number;
+  ordinal: number;
+  locator: string;
+  text: string;
+}
+export interface ResourceDetail extends ResourceSummary {
+  chunks: ResourceChunk[];
+}
+export interface ResourceSearchResult {
+  chunk_id: number;
+  resource_id: number;
+  filename: string;
+  kind: string;
+  locator: string;
+  snippet: string;
+}
