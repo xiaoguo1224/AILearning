@@ -214,10 +214,13 @@ class _ReviewProvider:
 
 @pytest.fixture
 def review_provider(monkeypatch):
-    from app.submissions import llm_review
+    """Install one stub answer for both model-assisted surfaces."""
+    from app.submissions import llm_review, llm_variant
 
     def install(text: str):
-        monkeypatch.setattr(llm_review, "get_provider", lambda: _ReviewProvider(text))
+        provider = lambda: _ReviewProvider(text)
+        monkeypatch.setattr(llm_review, "get_provider", provider)
+        monkeypatch.setattr(llm_variant, "get_provider", provider)
 
     return install
 
@@ -302,3 +305,79 @@ def test_log_without_a_static_cause_states_uncertainty_instead_of_guessing(clien
     assert "runtime_shape_mismatch" in categories
     assert "no provable hazard" in review["summary"].lower()
     assert "your log reports" in review["summary"].lower()
+
+
+def _variant_json() -> str:
+    import json
+
+    return json.dumps(
+        {
+            "title": "Keep the column axis",
+            "prompt": (
+                "Multiply a (5, 3) batch by one column of a (3, 2) weight matrix. "
+                "The result must stay (5, 1)."
+            ),
+            "starter_code": (
+                "x = torch.randn(5, 3)\nweights = torch.randn(3, 2)\nw_col = weights[:, 0]\n"
+            ),
+            "acceptance": "out.shape == (5, 1), and no scalar index removes an axis.",
+        }
+    )
+
+
+
+def test_variant_draft_is_saved_as_draft_and_can_be_linked_to_a_resubmission(
+    client, review_provider
+):
+    review_provider(_variant_json())
+    project_id = _project(client)
+    submission = _submit(client, project_id).json()
+
+    created = client.post(f"/api/submissions/{submission['id']}/variant")
+    assert created.status_code == 201
+    variant = created.json()
+    assert variant["status"] == "draft"
+    assert variant["source_submission_id"] == submission["id"]
+    assert "column" in variant["title"].lower()
+
+    listed = client.get(f"/api/projects/{project_id}/variants").json()
+    assert listed["total"] == 1
+    assert listed["items"][0]["id"] == variant["id"]
+
+    follow_up = _submit(
+        client,
+        project_id,
+        code="import torch\nw = torch.randn(3, 2)\nprint(w[:, 0:1].shape)\n",
+        log=None,
+        variant_id=variant["id"],
+    )
+    assert follow_up.status_code == 201
+    assert follow_up.json()["variant_id"] == variant["id"]
+    assert follow_up.json()["version"] == 2
+
+
+def test_variant_generation_refuses_unusable_model_output(client, review_provider):
+    review_provider("no json here")
+    project_id = _project(client)
+    submission = _submit(client, project_id).json()
+    response = client.post(f"/api/submissions/{submission['id']}/variant")
+    assert response.status_code == 502
+    assert response.json()["detail"]["error"] == "variant_unavailable"
+
+
+def test_variant_from_another_project_is_refused(client, review_provider):
+    review_provider(_variant_json())
+    first = _project(client, "First")
+    second = _project(client, "Second")
+    submission = _submit(client, first).json()
+    variant = client.post(f"/api/submissions/{submission['id']}/variant").json()
+
+    response = _submit(
+        client,
+        second,
+        code="print(1)\n",
+        log=None,
+        variant_id=variant["id"],
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["error"] == "variant_not_found"

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.projects.models import Project
 from app.projects.service import project_error
-from app.submissions.models import Submission, SubmissionArtifact
+from app.submissions.models import Submission, SubmissionArtifact, VariantExercise
 
 MAX_CODE_BYTES = 512 * 1024
 MAX_LOG_BYTES = 2 * 1024 * 1024
@@ -145,6 +145,20 @@ def _normalize_exercise(exercise_id: str | None) -> str | None:
     return trimmed
 
 
+def _validated_variant(
+    session: Session, project_id: int, variant_id: int | None
+) -> int | None:
+    """Refuse a variant that belongs to another project rather than silently dropping it."""
+    if variant_id is None:
+        return None
+    variant = session.get(VariantExercise, variant_id)
+    if variant is None or variant.project_id != project_id:
+        raise project_error(
+            422, "variant_not_found", "That variant draft does not belong to this project."
+        )
+    return variant.id
+
+
 def build_submission(
     session: Session,
     project: Project,
@@ -152,6 +166,7 @@ def build_submission(
     exercise_id: str | None,
     user_note: str | None,
     artifacts: list[tuple[str, str, str]],
+    variant_id: int | None = None,
 ) -> Submission:
     """Persist one submission version.
 
@@ -181,6 +196,7 @@ def build_submission(
         exercise_id=exercise,
         version=version,
         user_note=note,
+        variant_id=_validated_variant(session, project.id, variant_id),
         status="submitted",
     )
     session.add(submission)

@@ -94,6 +94,7 @@ class SubmissionSummaryOut(BaseModel):
     version: int
     status: str
     user_note: str | None = None
+    variant_id: int | None = None
     created_at: datetime
     artifact_count: int = 0
     latest_review: LatestReviewOut | None = None
@@ -115,6 +116,7 @@ class SubmissionDetail(BaseModel):
     exercise_id: str | None = None
     version: int
     user_note: str | None = None
+    variant_id: int | None = None
     status: str
     created_at: datetime
     artifacts: list[ArtifactOut] = Field(default_factory=list)
@@ -126,9 +128,32 @@ class SubmissionDetail(BaseModel):
         return iso_utc(value)
 
 
+class VariantOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    project_id: int
+    source_submission_id: int | None = None
+    title: str
+    prompt: str
+    starter_code: str | None = None
+    acceptance: str
+    status: str
+    created_at: datetime
+
+    @field_serializer("created_at")
+    def utc_timestamp(self, value: datetime) -> str:
+        return iso_utc(value)
+
+
+class VariantList(BaseModel):
+    items: list[VariantOut]
+    total: int
+
+
 class CreateSubmissionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     exercise_id: str | None = None
+    variant_id: int | None = Field(default=None, ge=1, le=2_147_483_647)
     user_note: str | None = None
     code_filename: str = "solution.py"
     code_content: str | None = None

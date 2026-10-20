@@ -40,6 +40,10 @@ class Submission(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     user_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="submitted")  # submitted, reviewed
+    # A variant draft this submission practises, when the learner accepted one. Stored
+    # without a foreign key because SQLite cannot add the constraint to an existing
+    # table, and both rows are written inside the transaction that validates the pair.
+    variant_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     project: Mapped[Project] = relationship(
@@ -115,3 +119,28 @@ class CodeReview(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     submission: Mapped[Submission] = relationship(back_populates="reviews")
+
+
+class VariantExercise(Base):
+    """A draft exercise derived from one submission's findings.
+
+    It is a draft on purpose: model-written practice is useful immediately, but it is
+    not a reviewed curriculum item, so nothing here is ever presented as confirmed
+    course material.
+    """
+
+    __tablename__ = "variant_exercises"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    source_submission_id: Mapped[int | None] = mapped_column(
+        ForeignKey("submissions.id"), nullable=True, index=True
+    )
+    title: Mapped[str] = mapped_column(String(200))
+    prompt: Mapped[str] = mapped_column(Text)
+    starter_code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    acceptance: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(
+        String(20), server_default=text("'draft'"), default="draft"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

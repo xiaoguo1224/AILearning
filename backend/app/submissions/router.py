@@ -14,7 +14,8 @@ from app.projects.service import (
     writable_project,
 )
 from app.submissions.llm_review import build_context, merge_findings, review_with_model
-from app.submissions.models import CodeReview, Submission
+from app.submissions.llm_variant import draft_variant
+from app.submissions.models import CodeReview, Submission, VariantExercise
 from app.submissions.schemas import (
     ArtifactOut,
     CodeReviewOut,
@@ -26,6 +27,8 @@ from app.submissions.schemas import (
     SubmissionDetail,
     SubmissionList,
     SubmissionSummaryOut,
+    VariantList,
+    VariantOut,
 )
 from app.submissions.service import (
     build_submission,
@@ -60,6 +63,18 @@ def _submission_or_404(session: Session, submission_id: int) -> Submission:
     return submission
 
 
+MAX_SQLITE_INTEGER = 2_147_483_647
+
+
+def _form_variant_id(raw: str) -> int | None:
+    value = (raw or "").strip()
+    if not value:
+        return None
+    if not value.isdigit() or not 0 < int(value) <= MAX_SQLITE_INTEGER:
+        raise project_error(422, "invalid_variant", "variant_id must be a positive integer.")
+    return int(value)
+
+
 def _review_or_404(session: Session, review_id: int) -> CodeReview:
     review = session.get(CodeReview, review_id)
     if review is None:
@@ -87,6 +102,7 @@ def _detail(session: Session, submission: Submission) -> SubmissionDetail:
         exercise_id=submission.exercise_id,
         version=submission.version,
         user_note=submission.user_note,
+        variant_id=submission.variant_id,
         status=submission.status,
         created_at=submission.created_at,
         artifacts=artifacts,
@@ -104,6 +120,7 @@ def _summary(submission: Submission) -> SubmissionSummaryOut:
         version=submission.version,
         status=submission.status,
         user_note=submission.user_note,
+        variant_id=submission.variant_id,
         created_at=submission.created_at,
         artifact_count=len(submission.artifacts),
         latest_review=(
@@ -163,6 +180,7 @@ def create_text_submission(project_id: int, body: CreateSubmissionInput, session
         exercise_id=body.exercise_id,
         user_note=body.user_note,
         artifacts=artifacts,
+        variant_id=body.variant_id,
     )
     session.commit()
     session.refresh(submission)
@@ -188,6 +206,7 @@ async def upload_submission(
     log_file: UploadFile | None = File(None),
     exercise_id: str = "",
     user_note: str = "",
+    variant_id: str = "",
 ):
     project = writable_project(session, project_id)
     artifacts: list[tuple[str, str, str]] = []
@@ -201,6 +220,7 @@ async def upload_submission(
         exercise_id=exercise_id or None,
         user_note=user_note or None,
         artifacts=artifacts,
+        variant_id=_form_variant_id(variant_id),
     )
     session.commit()
     session.refresh(submission)
@@ -460,3 +480,66 @@ def reveal_solution(review_id: int, session: Db):
         label="ai_generated_unverified",
         revealed_at=review.solution_revealed_at,
     )
+
+
+@router.get("/projects/{project_id}/variants", response_model=VariantList)
+def list_variants(
+    project_id: int,
+    session: Db,
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0, le=MAX_SQLITE_INTEGER),
+):
+    get_project(session, project_id)
+    query = session.query(VariantExercise).filter(VariantExercise.project_id == project_id)
+    total = query.count()
+    rows = query.order_by(VariantExercise.id.desc()).offset(offset).limit(limit).all()
+    return VariantList(items=[VariantOut.model_validate(row) for row in rows], total=total)
+
+
+@router.post(
+    "/submissions/{submission_id}/variant",
+    response_model=VariantOut,
+    status_code=201,
+    dependencies=MUTATION,
+)
+def create_variant(submission_id: int, session: Db):
+    """Draft a variant of this submission's exercise. Requires a model; no static fallback."""
+    submission = _submission_or_404(session, submission_id)
+    project_id = submission.project_id
+    if get_project(session, project_id).status == "archived":
+        raise project_error(409, "project_archived", "Archived projects are read-only.")
+
+    _, _, findings = _static_review(submission)
+    context = build_context(submission)
+    # Release the read transaction before the metered call writes its own row.
+    session.rollback()
+    try:
+        draft = draft_variant(context, findings)
+    except CostLimitExceeded as exc:
+        raise _cost_limit(exc) from exc
+    except Exception:
+        logger.warning("variant_model_unavailable submission_id=%s", submission_id, exc_info=True)
+        draft = None
+
+    if draft is None:
+        raise project_error(
+            502,
+            "variant_unavailable",
+            "The model did not return a usable variant. Try again, or write your own next variation.",
+        )
+
+    writable_project(session, project_id)
+    variant = VariantExercise(
+        project_id=project_id,
+        source_submission_id=submission_id,
+        title=draft.title,
+        prompt=draft.prompt,
+        starter_code=draft.starter_code,
+        acceptance=draft.acceptance,
+        status="draft",
+    )
+    session.add(variant)
+    session.commit()
+    session.refresh(variant)
+    logger.info("variant_created submission_id=%s variant_id=%s", submission_id, variant.id)
+    return variant
