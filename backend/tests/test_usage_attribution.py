@@ -19,6 +19,7 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app import fsrs, generation, main, models, remediation, review, tutor
+from app.agent import router as agent_router
 from app.concepts import normalize_concept
 from app.db import Base, SessionLocal
 from app.llm.base import LLMCallError, LLMResult
@@ -496,6 +497,9 @@ def test_only_generation_stages_are_covered_by_the_failed_run_sentence():
     # review is never described as a failed generation run.
     assert main._unattributed_group(llm_review.REVIEW_STAGE) == main.GROUP_CODE_REVIEW
     assert main._unattributed_group(llm_variant.VARIANT_STAGE) == main.GROUP_VARIANT
+    # P3's free exploration: a conversation, which is a third thing again, so it gets a
+    # third sentence rather than borrowing the review's "pass" framing.
+    assert main._unattributed_group(agent_router.EXPLORE_STAGE) == main.GROUP_EXPLORE
 
 
 class _ReviewStageProvider:
@@ -540,6 +544,26 @@ class _VariantStageProvider:
         )
 
 
+class _ExploreStageProvider:
+    name = "fake"
+    model = "explore-stage-model"
+    is_paid = False
+
+    def generate(self, system: str, prompt: str, max_tokens: int = 64000):
+        return LLMResult(
+            text=json.dumps(
+                {
+                    "answer": "Broadcasting aligns the trailing dimensions.",
+                    "citations": [],
+                    "beyond": "The project material does not cover this.",
+                    "check": None,
+                }
+            ),
+            input_tokens=5,
+            output_tokens=5,
+        )
+
+
 def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monkeypatch):
     """The constant above can be honoured and still be wrong about what gets written.
 
@@ -575,6 +599,19 @@ def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monke
     )
     assert client.post(f"/api/submissions/{submission['id']}/variant").status_code == 201
 
+    # P3's free exploration, patched where its router looks the provider up.
+    monkeypatch.setattr(agent_router, "get_provider", lambda: _ExploreStageProvider())
+    session_id = client.post(
+        f"/api/projects/{project['id']}/sessions", json={"mode": "explore"}
+    ).json()["id"]
+    assert (
+        client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"body": "How does broadcasting align shapes?"},
+        ).status_code
+        == 201
+    )
+
     session = SessionLocal()
     try:
         recorded = {stage for (stage,) in session.query(models.LlmCall.stage).distinct()}
@@ -586,6 +623,7 @@ def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monke
         tutor.TUTOR_STAGE,
         llm_review.REVIEW_STAGE,
         llm_variant.VARIANT_STAGE,
+        agent_router.EXPLORE_STAGE,
     }
     assert explained <= recorded, "the scenario above should exercise every known stage"
     assert recorded <= explained, f"stage with no /usage copy: {sorted(recorded - explained)}"
