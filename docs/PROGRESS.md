@@ -38,6 +38,15 @@
 
 ## 追加记录模板
 
+### 2026-10-20 — P0-04 前端测试与生产构建
+- P0-03 提交 `fd1f978`。本项提交：本记录所在提交（`git log --grep="P0-04"`）。
+- 修复上游 package-lock 缺失 `@emnapi/core/runtime` 引起的 `npm ci` EUSAGE；未改变 package.json 中的依赖范围。首次 npm 下载 network aborted，增加安装层缓存和下载重试后 `npm ci` 成功。
+- 原始前端 `npm test`：**15 files / 124 tests passed**；原始 `npm run build` 成功（Next.js 16.3.3，全部既有路由）。字体获取成功，无需改字体。
+- 增加仅服务端 `API_INTERNAL_URL`，浏览器仍用 NEXT_PUBLIC_API_URL，解决容器内 SSR 的 localhost 无法到达后端；两个地址隔离回归测试通过。
+- 重建 frontend 镜像，Dockerfile 实际执行 `npm run build && npm exec tsc -- --noEmit` 成功；容器 `npm test`：**16 files / 126 tests passed**，`npm run lint` 和单独 `npm exec tsc -- --noEmit` 均退出 0。
+- 依照 frontend/AGENTS 读取已安装 Next.js 的 environment-variables 指南，内部地址不写入 next.config 的公开 env 配置。镜像默认启动生产 `next start`。
+- 一次镜像导出返回 EOF，核查镜像已完整存在；后续重建和测试正常。测试/构建日志为本地忽略文件。下一项是实际浏览器验收，尚不将 API 启动等同于使用流程通过。
+
 ### 2026-10-20 — P0-03 后端容器基线
 - P0-02 提交 `3b7705e`。本项提交：本记录所在提交（`git log --grep="P0-03"`）。
 - 新增 Compose、后端/前端 Dockerfile 与构建忽略规则；基础镜像固定摘要，后端 `uv.lock` 固定 48 个包，容器 `uv sync --frozen --extra dev` 成功。后端镜像 Python 3.12.15；SQLite 使用独立命名卷，端口仅映射本机。

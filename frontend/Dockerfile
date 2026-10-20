@@ -4,4 +4,5 @@ COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm npm ci --fetch-retries=4 --fetch-timeout=180000
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
-CMD ["npm", "run", "dev", "--", "--hostname", "0.0.0.0"]
+RUN npm run build && npm exec tsc -- --noEmit
+CMD ["npm", "run", "start", "--", "--hostname", "0.0.0.0"]
