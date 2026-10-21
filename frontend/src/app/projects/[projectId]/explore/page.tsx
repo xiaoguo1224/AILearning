@@ -37,14 +37,15 @@ export default async function ProjectExplorePage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ session?: string }>;
+  searchParams: Promise<{ session?: string; draft?: string }>;
 }) {
   const t = await getTranslator();
   const { projectId } = await params;
   const id = Number(projectId);
   if (!/^\d+$/.test(projectId) || !Number.isSafeInteger(id) || id <= 0) notFound();
 
-  const requested = Number((await searchParams).session);
+  const query = await searchParams;
+  const requested = Number(query.session);
   const sessionId = Number.isSafeInteger(requested) && requested > 0 ? requested : undefined;
 
   let project: ProjectDetail | undefined;
@@ -134,6 +135,7 @@ export default async function ProjectExplorePage({
                 {/* Keyed on the id so switching sessions remounts the transcript rather
                     than reusing the previous one's state. */}
                 <ExploreChat
+                  initialQuestion={query.draft?.slice(0, 2000)}
                   key={detail.id}
                   sessionId={detail.id}
                   projectId={id}

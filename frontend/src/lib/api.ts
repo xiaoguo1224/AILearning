@@ -53,6 +53,7 @@ import type {
   DiagnosisCause,
   LearningSuggestion,
   SuggestionList,
+  ProjectCurriculum,
   ReviewRatingResult,
   ReviewToday,
   SourceFailure,
@@ -89,6 +90,10 @@ export function dismissDiagnosis(errorId: number): Promise<{ id: number }> {
 
 export function listSuggestions(projectId: number, offset = 0, locale?: Locale): Promise<SuggestionList> {
   return get(`/api/projects/${projectId}/suggestions?offset=${offset}`, locale);
+}
+
+export function getProjectCurriculum(projectId: number, locale?: Locale): Promise<ProjectCurriculum> {
+  return get(`/api/projects/${projectId}/curriculum`, locale);
 }
 export function createSuggestion(projectId: number, sourceErrorId: number, targetProjectId: number): Promise<LearningSuggestion> {
   return request(`/api/projects/${projectId}/suggestions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source_error_id: sourceErrorId, target_project_id: targetProjectId }) });

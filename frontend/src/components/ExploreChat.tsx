@@ -260,6 +260,7 @@ export function ExploreChat({
   projectId,
   initialMessages,
   readOnly,
+  initialQuestion,
 }: {
   sessionId: number;
   /** Only used to build the submission link, which is project-scoped. */
@@ -268,11 +269,12 @@ export function ExploreChat({
   initialMessages: ExploreMessage[];
   /** An archived project is read-only: the transcript still reads, the box does not. */
   readOnly: boolean;
+  initialQuestion?: string;
 }) {
   const { t } = useI18n();
   const router = useRouter();
   const [messages, setMessages] = useState<ExploreMessage[]>(initialMessages);
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(initialMessages.length === 0 ? initialQuestion ?? "" : "");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [practicing, setPracticing] = useState(false);

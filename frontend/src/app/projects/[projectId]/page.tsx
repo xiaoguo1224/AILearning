@@ -35,6 +35,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     {error ? <ErrorState message={error} /> : project && <ProjectWorkspace key={project.id} project={project} courses={courses} coursesError={coursesError} />}
     {project && <ProjectResourcesManager projectId={project.id} isArchived={project.status === 'archived'} />}
     {project && <div className="grid gap-4 sm:grid-cols-2">
+      <section className="space-y-2 rounded-surface border border-line p-6"><h2 className="text-title">{t("Course knowledge tree")}</h2><Link className="text-accent underline" href={`/projects/${project.id}/learn`}>{t("Open course knowledge tree")}</Link></section>
       <section className="space-y-2 rounded-surface border border-line p-6">
         <h2 className="text-title">{t("Code review")}</h2>
         <p className="text-small text-ink-muted">{t("Upload code and logs from your own machine for static review.")}</p>

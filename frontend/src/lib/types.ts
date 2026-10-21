@@ -691,6 +691,22 @@ export interface LearningSuggestion {
 }
 export interface SuggestionList { items: LearningSuggestion[]; total: number }
 
+export interface CurriculumReading { title: string; url: string }
+export interface CurriculumPoint {
+  key: string; label: string; lesson_ids: number[]; knowledge_ids: number[];
+  status: "unassessed" | "learning" | "needs_review" | "ready_for_advanced";
+  evidence_count: number; distinct_items: number;
+  prerequisites: { key: string; label: string; ready: boolean; in_project: boolean; reading: CurriculumReading | null }[];
+  reading: CurriculumReading | null; extension: boolean;
+  recommendation: "review" | "prerequisite" | "foundation" | "consolidation" | "advanced" | "integrated";
+}
+export interface ProjectCurriculum {
+  project_id: number;
+  courses: { id: number; title: string; modules: { id: number; title: string; lessons: { id: number; title: string; completed: boolean; concept_keys: string[] }[] }[] }[];
+  points: CurriculumPoint[];
+  pathway: { id: string; title: string; prerequisites: string[]; reading: CurriculumReading | null }[];
+}
+
 export interface ReviewAnswerResult {
   correct: boolean;
   /** The reference answer, shown beside the learner's own for them to judge. */

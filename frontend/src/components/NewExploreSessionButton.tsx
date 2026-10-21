@@ -18,7 +18,7 @@ import { ApiError, createProjectSession } from "@/lib/api";
  * The caller renders this only for an active project. An archived one answers 409
  * `project_archived`, which is shown in the server's own words if it happens anyway.
  */
-export function NewExploreSessionButton({ projectId }: { projectId: number }) {
+export function NewExploreSessionButton({ projectId, draft, label }: { projectId: number; draft?: string; label?: string }) {
   const { t } = useI18n();
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -30,7 +30,7 @@ export function NewExploreSessionButton({ projectId }: { projectId: number }) {
     try {
       const session = await createProjectSession(projectId);
       // A new id, so this is a real navigation and the server renders the new session.
-      router.push(`/projects/${projectId}/explore?session=${session.id}`);
+      router.push(`/projects/${projectId}/explore?session=${session.id}${draft ? `&draft=${encodeURIComponent(draft.slice(0, 2000))}` : ""}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("Could not start a session."));
     } finally {
@@ -41,7 +41,7 @@ export function NewExploreSessionButton({ projectId }: { projectId: number }) {
   return (
     <div className="flex flex-wrap items-center gap-3">
       <Button type="button" onClick={() => void start()} disabled={pending}>
-        {pending ? t("Starting…") : t("New session")}
+        {pending ? t("Starting…") : label ?? t("New session")}
       </Button>
       {error && <span className="text-small text-danger">{error}</span>}
     </div>
