@@ -117,16 +117,33 @@ def parse_items(raw: str, requests: list[tuple[str, int]]) -> list[dict]:
     return items
 
 
-def build_variant_prompt(item) -> str:
+def build_variant_prompt(item, attempts: list | None = None) -> str:
     """One variant of an existing quiz item: same kind and knowledge point,
-    different surface form, so repeating the old answer does not solve it."""
+    different surface form, so repeating the old answer does not solve it.
+
+    When the learner has attempted the item, their answer history is included
+    so the variant targets the actual misunderstanding: it should probe the
+    same misconception, not just rephrase the surface.
+    """
     spec = _KIND_SPECS[item.kind]
+    history = ""
+    if attempts:
+        lines = []
+        for a in attempts[-5:]:  # Most recent five touches.
+            mark = "✓" if a.get("correct") else "✗"
+            lines.append(f"- 第{a.get('attempt_no')}次作答 {mark}：{a.get('submitted_answer') or '(空)'}")
+        history = (
+            "\n学习者在这道题上的作答情况（供出题参考，针对其薄弱点出变式）：\n"
+            + "\n".join(lines)
+            + "\n"
+        )
     return (
         "你是编程课程的出题老师。根据下面这道题，出一道变式题："
         "考察同一个知识点、同一种题型，但换场景、换数字、换表述，"
         "背下原题答案的人做不对变式题。\n\n"
         f"原题（{item.kind}）：{item.question}\n"
         f"原题答案（只作参考，不要照抄）：{item.answer}\n"
+        f"{history}"
         f"题型要求：{item.kind}（{spec}）\n\n"
         "只返回 JSON 数组，不要解释，恰好 1 道题：\n"
         '[{"question": str, "kind": "' + item.kind + '", '

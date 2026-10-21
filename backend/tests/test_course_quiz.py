@@ -28,7 +28,7 @@ def test_quiz_bank_aggregates_without_answers(client, monkeypatch):
     for module in bank["modules"]:
         for lesson in module["lessons"]:
             for item in lesson["items"]:
-                assert set(item) == {"id", "question", "kind", "options", "concept", "attempt_state"}
+                assert set(item) == {"id", "question", "kind", "options", "concept", "attempt_state", "solution"}
                 assert "answer" not in item, "answers must not leak through the bank"
     counted = sum(
         len(lesson["items"]) for module in bank["modules"] for lesson in module["lessons"]

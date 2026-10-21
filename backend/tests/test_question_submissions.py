@@ -93,6 +93,41 @@ def test_question_submission_accepts_log_and_upload(client):
     assert kinds == ["code", "log"]
 
 
+def test_question_solution_generated_on_demand(client, monkeypatch):
+    from app import models
+    from app.course_quiz import router as quiz_router
+    from app.llm.base import LLMResult
+
+    item_id = _seed_code_question()
+
+    class SolutionProvider:
+        name = "fake"
+        model = "stub"
+        is_paid = False
+
+        def generate(self, system, prompt, max_tokens=4000):
+            assert "step-by-step" in system
+            assert "Write a function" in prompt
+            return LLMResult(text="## 解法\n\n1. 定义函数\n2. 返回和")
+
+    import app.llm as llm_module
+
+    monkeypatch.setattr(llm_module, "get_provider", lambda: SolutionProvider())
+    # First call generates.
+    response = client.post(f"/api/quiz/{item_id}/solution")
+    assert response.status_code == 200, response.text
+    assert "解法" in response.json()["solution"]
+    # Second call returns the stored copy without calling the model.
+    monkeypatch.setattr(
+        llm_module, "get_provider", lambda: (_ for _ in ()).throw(AssertionError("should not call"))
+    )
+    response = client.post(f"/api/quiz/{item_id}/solution")
+    assert response.status_code == 200
+    assert "解法" in response.json()["solution"]
+
+    assert client.post("/api/quiz/999999/solution").status_code == 404
+
+
 def test_question_review_runs_without_project(client):
     item_id = _seed_code_question()
     submission_id = client.post(

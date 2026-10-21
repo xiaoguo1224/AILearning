@@ -4,7 +4,7 @@
  * history switches between versions.
  */
 import { fireEvent, render, screen, waitFor } from "./render";
-import { describe, expect, test, vi } from "vitest";
+import { assert, describe, expect, test, vi } from "vitest";
 
 import { CodeQuestionDetail } from "@/components/CodeQuestionDetail";
 import {
@@ -97,8 +97,11 @@ describe("CodeQuestionDetail", () => {
     fireEvent.click(screen.getByRole("tab", { name: "History" }));
     await waitFor(() => expect(screen.getByText("v2")).toBeTruthy());
 
-    // Newest is selected by default; switch to v1.
-    fireEvent.click(screen.getByRole("button", { name: /v1/ }));
+    // Newest is selected by default; click the v1 row to switch.
+    const rows = screen.getAllByRole("row");
+    const v1Row = rows.find((r) => r.textContent?.includes("v1"));
+    assert(v1Row, "v1 row exists");
+    fireEvent.click(v1Row);
     await waitFor(() => expect(screen.getByTestId("review-21")).toBeTruthy());
   });
 });

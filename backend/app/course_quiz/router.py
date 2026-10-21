@@ -3,7 +3,7 @@
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Path
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session, selectinload
 from typing import Annotated
 
@@ -109,6 +109,167 @@ def quiz_item(item_id: int, session: Db):
     if not item:
         raise HTTPException(404, "Quiz item not found")
     return QuizBankItem.model_validate(item)
+
+
+@router.post("/quiz/{item_id}/solution")
+def generate_solution(
+    item_id: int, session: Db, refresh: bool = Query(default=False)
+):
+    """Generate the AI reference solution for one question, on demand.
+
+    The solution is written AFTER the question exists: the question, its kind
+    and the answer key go into the prompt, and the model writes a step-by-step
+    explanation. Stored on the quiz item; a repeat call returns the stored copy
+    unless refresh=true.
+    """
+    from app.llm.base import LLMCallError
+    from app.metering import CostLimitExceeded, MeteredLLM, cost_limit_detail
+
+    item = session.get(models.QuizItem, item_id)
+    if not item:
+        raise HTTPException(404, "Quiz item not found")
+    if item.solution and not refresh:
+        return {"item_id": item.id, "solution": item.solution}
+
+    prompt = (
+        f"Question kind: {item.kind}\n"
+        f"Question:\n{item.question}\n\n"
+        f"Correct answer:\n{item.answer or '(none)'}\n"
+    )
+    from app.llm import get_provider as _get_provider
+
+    meter = MeteredLLM(_get_provider(), uuid.uuid4().hex)
+    try:
+        raw: str = meter.generate(
+            "quiz_solution",
+            SOLUTION_SYSTEM,
+            prompt,
+            max_tokens=4000,
+        )
+    except CostLimitExceeded as exc:
+        raise HTTPException(402, detail=cost_limit_detail(exc)) from exc
+    except LLMCallError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    solution = (raw or "").strip()
+    if not solution:
+        raise HTTPException(502, "The model did not return a solution.")
+    item.solution = solution
+    session.commit()
+    return {"item_id": item.id, "solution": solution}
+
+
+SOLUTION_SYSTEM = """You are a teacher writing a reference solution for a quiz question.
+Given the question, its kind, and the correct answer, write a clear step-by-step
+solution that teaches the learner HOW to arrive at the answer. For code questions,
+include the key code with brief comments. Use markdown. Be concise but complete."""
+
+
+@router.post("/courses/{course_id}/quiz/generate/job")
+def generate_quiz_job(course_id: CourseId, body: QuizGenerateInput, session: Db):
+    """Start AI question generation as a background job.
+
+    Returns {job_id} immediately. On completion job.result.created holds the
+    new question ids. Poll GET /api/jobs/{id}. Navigating away does NOT cancel it.
+    """
+    from app.jobs.service import create_job, run_in_background
+
+    # Validate synchronously so bad input fails fast.
+    course = _course_or_404(session, course_id)
+    requests: list[tuple[str, int]] = []
+    for entry in body.items:
+        if entry.kind not in QUIZ_KINDS:
+            raise HTTPException(422, f"Unknown question kind {entry.kind!r}.")
+        if entry.count > 0:
+            requests.append((entry.kind, entry.count))
+    if not requests:
+        raise HTTPException(422, "Ask for at least one question.")
+    if sum(count for _, count in requests) > quizgen.MAX_TOTAL_ITEMS:
+        raise HTTPException(422, f"At most {quizgen.MAX_TOTAL_ITEMS} questions per call.")
+    lesson_id = body.lesson_id
+    if lesson_id is not None:
+        target = session.get(models.Lesson, lesson_id)
+        if not target:
+            raise HTTPException(404, "Lesson not found")
+
+    job = create_job(
+        session, "quiz_generate", ref_type="course", ref_id=course_id,
+    )
+    items_spec = [{"kind": k, "count": c} for k, c in requests]
+
+    def _run(job_id: str):
+        from app import models as _m
+        from app.db import SessionLocal
+        from app.jobs.models import Job as _Job
+        from app.jobs.service import complete_job, fail_job, update_progress
+        from app.llm import get_provider as _get_provider
+        from app.llm.base import LLMCallError
+        from app.metering import CostLimitExceeded, MeteredLLM, cost_limit_detail
+
+        update_progress(job_id, {"stage": "generating"})
+        with SessionLocal() as s:
+            c = s.get(_m.Course, course_id)
+            if lesson_id is not None:
+                tl = s.get(_m.Lesson, lesson_id)
+                material = tl.content or ""
+                lesson_title = tl.title
+                home_id = tl.id
+            else:
+                parts = []
+                for module in sorted(c.modules, key=lambda m: (m.position, m.id)):
+                    for lesson in sorted(module.lessons, key=lambda l: (l.position, l.id)):
+                        if lesson.content:
+                            parts.append(f"## {lesson.title}\n{lesson.content}")
+                material = "\n\n".join(parts)
+                lesson_title = None
+                home_id = None
+        if not material.strip():
+            fail_job(job_id, "There is no lesson text to write questions from.")
+            return
+        material = material[: quizgen.MAX_MATERIAL_CHARS]
+        prompt = quizgen.build_prompt(material, [(e["kind"], e["count"]) for e in items_spec], lesson_title)
+        try:
+            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, course_id=course_id)
+            raw = meter.generate(quizgen.QUIZGEN_STAGE, _quizgen_system(), prompt)
+        except CostLimitExceeded as exc:
+            fail_job(job_id, f"Cost limit exceeded: {cost_limit_detail(exc)}")
+            return
+        except LLMCallError as exc:
+            fail_job(job_id, str(exc))
+            return
+        parsed = quizgen.parse_items(raw, [(e["kind"], e["count"]) for e in items_spec])
+        if not parsed:
+            fail_job(job_id, "The model did not return usable questions.")
+            return
+        with SessionLocal() as s:
+            j = s.get(_Job, job_id)
+            if j and j.status == "cancelled":
+                return
+            c = s.get(_m.Course, course_id)
+            if home_id is None:
+                # First lesson of the course.
+                for module in sorted(c.modules, key=lambda m: (m.position, m.id)):
+                    lessons = sorted(module.lessons, key=lambda l: (l.position, l.id))
+                    if lessons:
+                        home_id = lessons[0].id
+                        break
+            created = []
+            for entry in parsed:
+                row = _m.QuizItem(
+                    lesson_id=home_id,
+                    question=entry["question"],
+                    kind=entry["kind"],
+                    options=entry["options"],
+                    answer=entry["answer"],
+                    concept=entry["concept"],
+                )
+                s.add(row)
+                s.flush()
+                created.append(row.id)
+            s.commit()
+        complete_job(job_id, {"course_id": course_id, "created": created})
+
+    run_in_background(job.id, _run)
+    return {"job_id": job.id}
 
 
 @router.post("/courses/{course_id}/quiz/generate", response_model=QuizGenerateResult, status_code=201)
@@ -222,7 +383,22 @@ def create_variant(course_id: CourseId, item_id: int, session: Db):
     if not lesson or lesson.module_id not in module_ids:
         raise HTTPException(422, "Question does not belong to this course.")
 
-    prompt = quizgen.build_variant_prompt(item)
+    # The learner's answer history shapes the variant: target the misconception.
+    attempts = (
+        session.query(models.Attempt)
+        .filter_by(quiz_item_id=item.id)
+        .order_by(models.Attempt.attempt_no)
+        .all()
+    )
+    attempt_dicts = [
+        {
+            "attempt_no": a.attempt_no,
+            "correct": a.correct,
+            "submitted_answer": (a.submitted_answer or "")[:500],
+        }
+        for a in attempts
+    ]
+    prompt = quizgen.build_variant_prompt(item, attempt_dicts)
     run_id = uuid.uuid4().hex
     meter = MeteredLLM(get_provider(), run_id, course_id=course.id)
     try:

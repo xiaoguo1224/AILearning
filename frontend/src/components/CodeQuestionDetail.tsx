@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import {
   ApiError,
   createQuestionSubmission,
+  generateQuestionSolution,
   getSubmission,
   listQuestionSubmissions,
   uploadQuestionSubmission,
@@ -48,6 +49,9 @@ export function CodeQuestionDetail({
   const [selected, setSelected] = useState<SubmissionDetail | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [solution, setSolution] = useState<string | null>(item.solution ?? null);
+  const [solutionOpen, setSolutionOpen] = useState(false);
+  const [generatingSolution, setGeneratingSolution] = useState(false);
 
   async function refreshHistory(selectId: number | null) {
     try {
@@ -68,6 +72,18 @@ export function CodeQuestionDetail({
       // History is a convenience; the question still renders.
     } finally {
       setLoadingHistory(false);
+    }
+  }
+
+  async function loadSolution(refresh = false) {
+    setGeneratingSolution(true);
+    try {
+      const result = await generateQuestionSolution(item.id, refresh);
+      setSolution(result.solution);
+    } catch {
+      // Keep the previous solution (or none) on failure.
+    } finally {
+      setGeneratingSolution(false);
     }
   }
 
@@ -164,8 +180,55 @@ export function CodeQuestionDetail({
       </div>
 
       {tab === "question" && (
-        <section className="rounded-surface border border-line p-6">
-          <QuizMarkdown content={item.question} />
+        <section className="space-y-4">
+          <div className="rounded-surface border border-line p-6">
+            <QuizMarkdown content={item.question} />
+          </div>
+          <div className="rounded-surface border border-line p-4">
+            <button
+              type="button"
+              onClick={() => {
+                const next = !solutionOpen;
+                setSolutionOpen(next);
+                if (next && !solution && !generatingSolution) void loadSolution();
+              }}
+              aria-expanded={solutionOpen}
+              className="flex w-full items-center justify-between gap-2 text-left"
+            >
+              <span className="text-small font-medium">
+                <span aria-hidden className="mr-1 text-ink-muted">
+                  {solutionOpen ? "▾" : "▸"}
+                </span>
+                {t("Reference solution")}
+              </span>
+              {solution && (
+                <span className="text-micro text-ink-muted">{t("AI-generated")}</span>
+              )}
+            </button>
+            {solutionOpen && (
+              <div className="mt-3">
+                {generatingSolution && !solution ? (
+                  <p className="text-small text-ink-muted">{t("Generating solution…")}</p>
+                ) : solution ? (
+                  <>
+                    <QuizMarkdown content={solution} />
+                    <div className="mt-3 flex justify-end">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={generatingSolution}
+                        onClick={() => void loadSolution(true)}
+                      >
+                        {t("Regenerate")}
+                      </Button>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-small text-ink-muted">{t("No solution yet.")}</p>
+                )}
+              </div>
+            )}
+          </div>
         </section>
       )}
 
@@ -306,32 +369,55 @@ export function CodeQuestionDetail({
           ) : history.length === 0 ? (
             <p className="text-small text-ink-muted">{t("No submissions yet.")}</p>
           ) : (
-            <ul className="divide-y divide-line rounded-surface border border-line">
-              {history.map((entry) => (
-                <li key={entry.id}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      void selectSubmission(entry.id);
-                      setTab("review");
-                    }}
-                    className={`flex w-full items-center justify-between gap-3 p-3 text-left text-small transition-colors hover:bg-surface-sunken ${
-                      entry.id === selectedId ? "bg-surface-sunken" : ""
-                    }`}
-                  >
-                    <span className="flex items-center gap-2">
-                      <Badge tone={entry.id === selectedId ? "success" : "neutral"}>
-                        {t("v{0}", entry.version)}
-                      </Badge>
-                      <span className="text-ink-muted">{entry.status}</span>
-                    </span>
-                    <span className="text-micro text-ink-muted">
-                      {new Date(entry.created_at).toLocaleString()}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <div className="max-h-96 overflow-y-auto rounded-surface border border-line">
+              <table className="w-full text-small">
+                <thead className="sticky top-0 bg-surface-sunken">
+                  <tr className="text-left text-micro uppercase tracking-wide text-ink-muted">
+                    <th className="px-3 py-2 font-medium">{t("Version")}</th>
+                    <th className="px-3 py-2 font-medium">{t("Status")}</th>
+                    <th className="px-3 py-2 font-medium">{t("Review result")}</th>
+                    <th className="px-3 py-2 font-medium">{t("Submitted at")}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {history.map((entry) => (
+                    <tr
+                      key={entry.id}
+                      onClick={() => {
+                        void selectSubmission(entry.id);
+                        setTab("review");
+                      }}
+                      className={`cursor-pointer transition-colors hover:bg-surface-sunken ${
+                        entry.id === selectedId ? "bg-surface-sunken" : ""
+                      }`}
+                    >
+                      <td className="px-3 py-2">
+                        <Badge tone={entry.id === selectedId ? "success" : "neutral"}>
+                          {t("v{0}", entry.version)}
+                        </Badge>
+                      </td>
+                      <td className="px-3 py-2 text-ink-muted">
+                        {t(entry.status === "reviewed" ? "Reviewed" : "Submitted")}
+                      </td>
+                      <td className="px-3 py-2 text-ink-muted">
+                        {entry.latest_review ? (
+                          entry.latest_review.finding_count === 0 ? (
+                            <span className="text-success">{t("No issues found")}</span>
+                          ) : (
+                            t("{0} issue(s)", entry.latest_review.finding_count)
+                          )
+                        ) : (
+                          <span className="text-ink-subtle">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-micro text-ink-muted">
+                        {new Date(entry.created_at).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </section>
       )}

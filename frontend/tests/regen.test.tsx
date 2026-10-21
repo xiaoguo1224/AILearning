@@ -1,6 +1,6 @@
 /**
- * Regeneration, split into lesson and course levels with per-lesson adopt/discard:
- * - RegenerateLessonButton: feedback -> draft preview (editable) -> adopt/discard.
+ * Regeneration via background jobs:
+ * - RegenerateLessonButton: feedback -> job -> draft preview (editable) -> adopt/discard.
  * - RegenDraftPreview: edit mode, adopt passes the edited draft, discard drops it.
  */
 import { fireEvent, render, screen, waitFor } from "./render";
@@ -8,17 +8,14 @@ import { describe, expect, test, vi } from "vitest";
 
 import { RegenDraftPreview } from "@/components/RegenDraftPreview";
 import { RegenerateLessonButton } from "@/components/RegenerateLessonButton";
-import { patchLesson, streamLessonRegeneration } from "@/lib/api";
+import { getJob, patchLesson, startLessonRegenJob } from "@/lib/api";
 
 vi.mock("@/lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
-  streamLessonRegeneration: vi.fn(),
+  startLessonRegenJob: vi.fn(),
+  getJob: vi.fn(),
   patchLesson: vi.fn(),
 }));
-
-async function* fakeStream(events: unknown[]) {
-  for (const event of events) yield event;
-}
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn() }),
@@ -31,20 +28,12 @@ describe("RegenDraftPreview", () => {
     const onAdopt = vi.fn();
     const onDiscard = vi.fn();
     render(
-      <RegenDraftPreview draft={DRAFT} adopting={false} onAdopt={onAdopt} onDiscard={onDiscard} />,
+      <RegenDraftPreview draft={DRAFT} onAdopt={onAdopt} onDiscard={onDiscard} adopting={false} />,
     );
-    // Preview first.
-    expect(screen.getAllByText("注意力").length).toBeGreaterThan(0);
-    // Edit the content, then adopt.
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    const contentBox = screen.getByLabelText("Content") as HTMLTextAreaElement;
-    fireEvent.change(contentBox, { target: { value: "# 注意力\n\n改过的内容。" } });
+    fireEvent.change(screen.getByDisplayValue("注意力"), { target: { value: "注意力机制" } });
     fireEvent.click(screen.getByRole("button", { name: "Adopt" }));
-    expect(onAdopt).toHaveBeenCalledWith({
-      title: "注意力",
-      content: "# 注意力\n\n改过的内容。",
-      concepts: ["注意力"],
-    });
+    expect(onAdopt).toHaveBeenCalledWith({ ...DRAFT, title: "注意力机制" });
     expect(onDiscard).not.toHaveBeenCalled();
   });
 
@@ -52,7 +41,7 @@ describe("RegenDraftPreview", () => {
     const onAdopt = vi.fn();
     const onDiscard = vi.fn();
     render(
-      <RegenDraftPreview draft={DRAFT} adopting={false} onAdopt={onAdopt} onDiscard={onDiscard} />,
+      <RegenDraftPreview draft={DRAFT} onAdopt={onAdopt} onDiscard={onDiscard} adopting={false} />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
     expect(onDiscard).toHaveBeenCalled();
@@ -61,36 +50,39 @@ describe("RegenDraftPreview", () => {
 });
 
 describe("RegenerateLessonButton", () => {
-  test("streams a draft with progress, then adopting PATCHes the lesson", async () => {
-    vi.mocked(streamLessonRegeneration).mockImplementation(() =>
-      fakeStream([
-        { type: "regen_started", lesson_id: 5, title: "注意力" },
-        { type: "regen_draft", lesson_id: 5, draft: DRAFT },
-        { type: "regen_done" },
-      ]) as never,
-    );
+  test("starts a job, shows progress, then adopting PATCHes the lesson", async () => {
+    vi.mocked(startLessonRegenJob).mockResolvedValue({ job_id: "job-1" });
+    vi.mocked(getJob).mockResolvedValue({
+      id: "job-1",
+      type: "lesson_regenerate",
+      status: "completed",
+      progress: null,
+      result: { draft: DRAFT },
+      error: null,
+      ref_type: "lesson",
+      ref_id: 5,
+      created_at: "",
+      updated_at: "",
+    } as never);
     vi.mocked(patchLesson).mockResolvedValue({} as never);
     render(<RegenerateLessonButton lessonId={5} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
-    fireEvent.change(screen.getByPlaceholderText("e.g. too hard, add more examples"), {
+    fireEvent.change(screen.getByPlaceholderText("e.g. more examples, simpler language…"), {
       target: { value: "多举例子" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Generate" }));
-    expect(vi.mocked(streamLessonRegeneration)).toHaveBeenCalledWith(
-      5,
-      "多举例子",
-      expect.objectContaining({}),
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(vi.mocked(startLessonRegenJob)).toHaveBeenCalledWith(5, "多举例子");
 
-    // Progress shows while the draft streams in.
-    expect(screen.getByText("Rewriting the lesson…")).toBeTruthy();
-    await waitFor(() => expect(screen.getByText("Review the new draft")).toBeTruthy());
+    // Draft appears when the job completes.
+    await waitFor(() => expect(screen.getByText("Review the draft")).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Adopt" }));
-    await waitFor(() => expect(vi.mocked(patchLesson)).toHaveBeenCalledWith(5, {
-      title: "注意力",
-      content: "# 注意力\n\n新内容。",
-      concepts: ["注意力"],
-    }));
+    await waitFor(() =>
+      expect(vi.mocked(patchLesson)).toHaveBeenCalledWith(5, {
+        title: "注意力",
+        content: "# 注意力\n\n新内容。",
+        concepts: ["注意力"],
+      }),
+    );
   });
 });

@@ -48,6 +48,7 @@ from app.concepts import course_scope, lesson_scope, normalize_concept
 from app.content_reviews.router import router as content_reviews_router
 from app.course_content.router import router as course_content_router
 from app.course_quiz.router import router as course_quiz_router
+from app.jobs.router import router as jobs_router
 from app.costs import is_priced
 from app.curriculum.router import router as curriculum_router
 from app.db import SessionLocal, get_session, init_db
@@ -81,6 +82,7 @@ app.include_router(curriculum_router)
 app.include_router(content_reviews_router)
 app.include_router(course_content_router)
 app.include_router(course_quiz_router)
+app.include_router(jobs_router)
 
 _cors_origins = os.environ.get("STUDYFORGE_CORS_ORIGINS", "http://localhost:3000")
 app.add_middleware(
@@ -758,6 +760,144 @@ def _sse(event: str, payload: dict) -> str:
     return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
 
+@app.post("/courses/generate/job")
+def generate_job(body: GenerateRequest, session: Session = Depends(get_session)):
+    """Start course generation as a background job.
+
+    Returns {job_id} immediately. Progress streams into job.progress as the
+    outline lands and each lesson is authored: {"stage": "outline"|"lessons",
+    "done": n, "total": m, "outline": {...}}. On completion job.result holds
+    {"course_id": ...}. Poll GET /api/jobs/{id}. Navigating away does NOT
+    cancel it.
+    """
+    from app.jobs.service import create_job, run_in_background
+
+    specs = [
+        ingest.SourceSpec(
+            kind=source.kind,
+            ref=ingest.clean_ref(source.ref or "")
+            or (source.value if source.kind == "url" else f"source {index + 1}"),
+            value=source.value,
+        )
+        for index, source in enumerate(body.sources or [])
+    ]
+    chunks, owners = _ingest_or_refuse(specs, legacy=not body.used_canonical_field(), stage="url")
+
+    job = create_job(session, "course_generate")
+
+    def _run(job_id: str):
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        from app import generation as gen
+        from app.db import SessionLocal
+        from app.jobs.models import Job as _Job
+        from app.jobs.service import complete_job, fail_job, update_progress
+        from app.llm import get_provider as _get_provider
+        from app.llm.base import LLMCallError
+        from app.metering import CostLimitExceeded, MeteredLLM, cost_limit_detail
+
+        update_progress(job_id, {"stage": "outline", "done": 0, "total": 0})
+        run_id = uuid.uuid4().hex
+        meter = MeteredLLM(_get_provider(), run_id)
+        try:
+            outline = gen.generate_outline(meter, chunks, owners)
+        except CostLimitExceeded as exc:
+            fail_job(job_id, f"Cost limit exceeded: {cost_limit_detail(exc)}")
+            return
+        except Exception as exc:
+            fail_job(job_id, f"Generation failed: {exc}")
+            return
+
+        plan = [
+            {
+                "title": module.get("title", "Module"),
+                "lessons": [{"title": l.get("title", "Lesson")} for l in module.get("lessons", [])],
+            }
+            for module in outline.get("modules", [])
+        ]
+        course_title = outline.get("title", "Untitled course")
+        outline_payload = {
+            "title": course_title,
+            "description": outline.get("description", ""),
+            "modules": plan,
+        }
+
+        lesson_jobs: list[tuple[int, int, dict, list[int]]] = []
+        for mi, module in enumerate(outline.get("modules", [])):
+            for li, stub in enumerate(module.get("lessons", [])):
+                lesson_jobs.append((mi, li, stub, gen.lesson_segments(stub, len(chunks))))
+        total = len(lesson_jobs)
+        update_progress(
+            job_id, {"stage": "lessons", "done": 0, "total": total, "outline": outline_payload}
+        )
+
+        authored_lessons: dict[tuple[int, int], dict] = {}
+
+        def author(job_tuple: tuple[int, int, dict, list[int]]):
+            mi, li, stub, segments = job_tuple
+            authored, _ = gen.generate_lesson_with_retry(
+                meter, stub.get("title", "Lesson"), stub.get("summary", ""),
+                chunks, segments, owners,
+            )
+            return mi, li, {"title": stub.get("title", "Lesson"), "segments": segments, **authored}
+
+        done = 0
+        with ThreadPoolExecutor(max_workers=STREAM_LESSON_WORKERS) as pool:
+            futures = {pool.submit(author, jt): jt for jt in lesson_jobs}
+            for future in as_completed(futures):
+                with SessionLocal() as s:
+                    j = s.get(_Job, job_id)
+                    if j and j.status == "cancelled":
+                        pool.shutdown(wait=False, cancel_futures=True)
+                        return
+                mi, li, stub, _ = futures[future]
+                try:
+                    _, _, lesson = future.result()
+                    authored_lessons[(mi, li)] = lesson
+                except (ValueError, LLMCallError):
+                    pass  # drop-one-keep-the-rest, like the stream route
+                done += 1
+                update_progress(
+                    job_id,
+                    {"stage": "lessons", "done": done, "total": total, "outline": outline_payload},
+                )
+
+        # Save the course.
+        with SessionLocal() as s:
+            j = s.get(_Job, job_id)
+            if j and j.status == "cancelled":
+                return
+            from app import models as _m
+
+            course = _m.Course(title=course_title, description=outline.get("description", ""))
+            s.add(course)
+            s.flush()
+            for mi, module in enumerate(outline.get("modules", [])):
+                mod = _m.Module(course_id=course.id, title=module.get("title", "Module"), position=mi)
+                s.add(mod)
+                s.flush()
+                for li, stub in enumerate(module.get("lessons", [])):
+                    lesson = authored_lessons.get((mi, li))
+                    if not lesson:
+                        continue
+                    s.add(
+                        _m.Lesson(
+                            module_id=mod.id,
+                            course_id=course.id,
+                            title=lesson.get("title", stub.get("title", "Lesson")),
+                            content=lesson.get("content", ""),
+                            concepts=lesson.get("concepts", []),
+                            position=li,
+                        )
+                    )
+            s.commit()
+            course_id = course.id
+        complete_job(job_id, {"course_id": course_id})
+
+    run_in_background(job.id, _run)
+    return {"job_id": job.id}
+
+
 @app.post("/courses/generate/stream")
 def generate_stream(body: GenerateRequest, session: Session = Depends(get_session)):
     """Generate a course as a Server-Sent Events stream.
@@ -957,6 +1097,77 @@ class RegenerateRequest(BaseModel):
     feedback: str = Field(default="", max_length=2000)
 
 
+@app.post("/api/lessons/{lesson_id}/regenerate/job")
+def regenerate_lesson_job(
+    lesson_id: int, body: RegenerateRequest, session: Session = Depends(get_session)
+):
+    """Start a lesson regeneration as a background job.
+
+    Returns {job_id} immediately. The job streams no progress (one model call);
+    on completion the draft waits in job.result.draft. Poll GET /api/jobs/{id}.
+    Navigating away does NOT cancel it.
+    """
+    from app import models as _models
+    from app.jobs.service import create_job, run_in_background
+
+    lesson = session.get(_models.Lesson, lesson_id)
+    if not lesson:
+        raise HTTPException(404, "Lesson not found")
+    if not (lesson.content or "").strip():
+        raise HTTPException(422, "The lesson has no text to regenerate from.")
+
+    job = create_job(session, "lesson_regenerate", ref_type="lesson", ref_id=lesson_id)
+    feedback = body.feedback.strip()
+    title = lesson.title
+    text = lesson.content.strip()
+
+    def _run(job_id: str):
+        from app import generation as gen
+        from app.jobs.service import complete_job, fail_job, update_progress
+        from app.llm import get_provider as _get_provider
+        from app.metering import CostLimitExceeded, MeteredLLM, cost_limit_detail
+        from app.llm.base import LLMCallError
+
+        update_progress(job_id, {"stage": "generating", "title": title})
+        prompt_feedback = f"\nLearner feedback: {feedback}" if feedback else ""
+        try:
+            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex)
+            draft, _ = gen.generate_lesson_with_retry(
+                meter,
+                lesson_title=title,
+                lesson_summary=f"Regenerate this lesson.{prompt_feedback}",
+                chunks=[f"# {title}\n\n{text}"],
+            )
+        except CostLimitExceeded as exc:
+            fail_job(job_id, f"Cost limit exceeded: {cost_limit_detail(exc)}")
+            return
+        except (ValueError, LLMCallError) as exc:
+            fail_job(job_id, f"Lesson regeneration failed: {exc}")
+            return
+        # Check cancellation before writing the result.
+        from app.db import SessionLocal
+        from app.jobs.models import Job as _Job
+
+        with SessionLocal() as s:
+            j = s.get(_Job, job_id)
+            if j and j.status == "cancelled":
+                return
+        complete_job(
+            job_id,
+            {
+                "lesson_id": lesson_id,
+                "draft": {
+                    "title": title,
+                    "content": draft.get("content") or "",
+                    "concepts": draft.get("concepts") or [],
+                },
+            },
+        )
+
+    run_in_background(job.id, _run)
+    return {"job_id": job.id}
+
+
 @app.post("/api/lessons/{lesson_id}/regenerate/stream")
 def regenerate_lesson_stream(
     lesson_id: int, body: RegenerateRequest, session: Session = Depends(get_session)
@@ -1019,6 +1230,93 @@ def regenerate_lesson_stream(
         yield _sse("regen_done", {})
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.post("/api/courses/{course_id}/regenerate/job")
+def regenerate_course_job(
+    course_id: int, body: RegenerateRequest, session: Session = Depends(get_session)
+):
+    """Start a course regeneration as a background job.
+
+    Returns {job_id} immediately. Progress streams into job.progress.drafts as
+    each lesson's draft lands; on completion job.result.drafts holds all of
+    them. Poll GET /api/jobs/{id}. Navigating away does NOT cancel it.
+    """
+    from app import models as _models
+    from app.jobs.service import create_job, run_in_background
+
+    course = session.get(_models.Course, course_id)
+    if not course:
+        raise HTTPException(404, "Course not found")
+    lesson_ids = []
+    for module in sorted(course.modules, key=lambda m: (m.position, m.id)):
+        for lesson in sorted(module.lessons, key=lambda l: (l.position, l.id)):
+            if (lesson.content or "").strip():
+                lesson_ids.append(lesson.id)
+    if not lesson_ids:
+        raise HTTPException(422, "The course has no lesson text to regenerate from.")
+
+    job = create_job(session, "course_regenerate", ref_type="course", ref_id=course_id)
+    feedback = body.feedback.strip()
+
+    def _run(job_id: str):
+        from app import generation as gen
+        from app.db import SessionLocal
+        from app.jobs.models import Job as _Job
+        from app.jobs.service import complete_job, fail_job, update_progress
+        from app.llm import get_provider as _get_provider
+        from app.llm.base import LLMCallError
+        from app.metering import CostLimitExceeded, MeteredLLM, cost_limit_detail
+
+        from app import models as _m
+
+        drafts: list[dict] = []
+        with SessionLocal() as s:
+            lessons = [s.get(_m.Lesson, lid) for lid in lesson_ids]
+            titles = [(l.id, l.title, l.content.strip()) for l in lessons if l]
+        total = len(titles)
+        meter = MeteredLLM(_get_provider(), uuid.uuid4().hex)
+        prompt_feedback = f"\nLearner feedback: {feedback}" if feedback else ""
+        for index, (lid, title, text) in enumerate(titles):
+            with SessionLocal() as s:
+                j = s.get(_Job, job_id)
+                if j and j.status == "cancelled":
+                    return
+            update_progress(
+                job_id,
+                {"done": index, "total": total, "current": title, "drafts": drafts},
+            )
+            try:
+                draft, _ = gen.generate_lesson_with_retry(
+                    meter,
+                    lesson_title=title,
+                    lesson_summary=f"Regenerate this lesson.{prompt_feedback}",
+                    chunks=[f"# {title}\n\n{text}"],
+                )
+                drafts.append(
+                    {
+                        "lesson_id": lid,
+                        "title": title,
+                        "draft": {
+                            "title": title,
+                            "content": draft.get("content") or "",
+                            "concepts": draft.get("concepts") or [],
+                        },
+                    }
+                )
+            except CostLimitExceeded as exc:
+                fail_job(job_id, f"Cost limit exceeded: {cost_limit_detail(exc)}")
+                return
+            except (ValueError, LLMCallError) as exc:
+                drafts.append({"lesson_id": lid, "title": title, "error": str(exc)[:300]})
+            update_progress(
+                job_id,
+                {"done": index + 1, "total": total, "current": title, "drafts": drafts},
+            )
+        complete_job(job_id, {"course_id": course_id, "drafts": drafts})
+
+    run_in_background(job.id, _run)
+    return {"job_id": job.id}
 
 
 @app.post("/api/courses/{course_id}/regenerate/stream")

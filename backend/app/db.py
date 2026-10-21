@@ -142,6 +142,10 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # a project. Nullable with no default — NULL means "project-scoped, the older
     # origin". No REFERENCES clause, same SQLite reason as variant_exercises above.
     ("submissions", "quiz_item_id", "INTEGER"),
+    # AI-generated reference solution for a quiz question, written AFTER the
+    # question exists (on demand via POST /api/quiz/{item_id}/solution).
+    # Nullable: NULL means "not generated yet".
+    ("quiz_items", "solution", "TEXT"),
 )
 
 
@@ -262,6 +266,7 @@ def init_db() -> None:
     from app.resources import models as resource_models  # noqa: F401
     from app.resources.service import init_fts
     from app.submissions import models as submission_models  # noqa: F401
+    from app.jobs import models as job_models  # noqa: F401
     from app.suggestions import models as suggestion_models  # noqa: F401
 
     Base.metadata.create_all(engine)
@@ -270,6 +275,11 @@ def init_db() -> None:
     # columns it is missing.
     _add_missing_columns()
     _migrate_submissions_question_scope()
+    from app.jobs.service import mark_interrupted_jobs
+
+    interrupted = mark_interrupted_jobs()
+    if interrupted:
+        print(f"marked {interrupted} interrupted job(s) as failed")
     with SessionLocal() as session:
         init_fts(session)
 

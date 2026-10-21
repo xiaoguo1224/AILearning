@@ -126,7 +126,7 @@
   "Missed": "未掌握",
   "· due now": "· 当前待复习",
   "Explained another way": "换个方式理解",
-  "Hide": "收起",
+  "Hide": "隐藏",
   "An explanation of this concept is already being written. Waiting for it.": "该知识点的讲解正在生成，请稍候。",
   "Writing an explanation of this concept.": "正在为该知识点生成讲解。",
   "Recall probability not known yet": "暂不确定记忆保持概率",
@@ -916,5 +916,17 @@
   "Code file (.py or .zip)": "代码文件（.py 或 .zip）",
   "Log file (optional)": "日志文件（可选）",
   "Note (optional)": "备注（可选）",
-  "What did you try? What failed?": "你试了什么？哪里失败了？"
+  "What did you try? What failed?": "你试了什么？哪里失败了？",
+  "Version": "版本",
+  "Status": "状态",
+  "Review result": "评审结果",
+  "Submitted at": "提交时间",
+  "No issues found": "无问题",
+  "{0} issue(s)": "{0} 个问题",
+  "Generate reference solution": "生成参考解法",
+  "Generating solution…": "正在生成解法…",
+  "Show questions": "显示题目",
+  "Show Q&A": "显示问答",
+  "Hide questions": "隐藏题目",
+  "Hide Q&A": "隐藏问答"
 }

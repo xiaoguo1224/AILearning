@@ -25,6 +25,7 @@ class QuizBankItem(BaseModel):
     options: list[str] = []
     concept: str = ""
     attempt_state: dict = {}
+    solution: str | None = None
 
 
 class QuizBankLesson(BaseModel):

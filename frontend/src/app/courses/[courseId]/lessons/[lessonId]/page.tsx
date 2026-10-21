@@ -10,9 +10,7 @@ import { LessonMarkdown } from "@/components/LessonMarkdown";
 import { MarkCompleteButton } from "@/components/MarkCompleteButton";
 import { EditLessonButton } from "@/components/EditLessonButton";
 import { RegenerateLessonButton } from "@/components/RegenerateLessonButton";
-import { LessonToc } from "@/components/LessonToc";
-import { LessonQuizPanel } from "@/components/LessonQuizPanel";
-import { LessonQaSection } from "@/components/LessonQaSection";
+import { LessonLayout } from "@/components/LessonLayout";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, getLesson } from "@/lib/api";
@@ -98,7 +96,7 @@ export default async function LessonPage(
   if (lesson.course_id !== course) notFound();
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-12">
+    <main className="mx-auto w-full max-w-[1600px] flex-1 px-6 py-12">
       {backToCourseLink(courseId, t)}
 
       {/*
@@ -149,23 +147,16 @@ export default async function LessonPage(
         </ul>
       )}
 
-      <div className="mt-8 grid items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)_300px]">
-        <aside aria-label={t("Questions")} className="min-w-0 space-y-6 lg:sticky lg:top-6">
-          <LessonToc content={lesson.content} />
-          <LessonQuizPanel
-            courseId={course}
-            lessonId={lesson.id}
-            initialQuiz={lesson.quiz}
-            progress={lesson.quiz_progress}
-          />
-        </aside>
-        <div className="min-w-0">
-          <p className="mb-4 rounded-surface border border-line p-4 text-small text-ink-muted">{t("AI-generated explanations, formulas and examples require review before being treated as authoritative. Textbook extensions are not verified course facts.")}</p>
-          <LessonMarkdown content={lesson.content} title={lesson.title} />
-        </div>
-        <aside aria-label={t("Q&A")} className="min-w-0 space-y-6 lg:sticky lg:top-6">
-          <LessonQaSection lessonId={lesson.id} lessonTitle={lesson.title} />
-        </aside>
+      <div className="mt-8">
+        <LessonLayout
+          courseId={course}
+          lessonId={lesson.id}
+          lessonTitle={lesson.title}
+          content={lesson.content}
+          quiz={lesson.quiz}
+          quizProgress={lesson.quiz_progress}
+          disclaimer={t("AI-generated explanations, formulas and examples require review before being treated as authoritative. Textbook extensions are not verified course facts.")}
+        />
       </div>
     </main>
   );

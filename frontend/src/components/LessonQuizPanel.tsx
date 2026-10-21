@@ -5,7 +5,7 @@ import { useState } from "react";
 import { QuizSection } from "@/components/QuizSection";
 import { useI18n } from "@/components/LocaleProvider";
 import { Button } from "@/components/ui/Button";
-import { ApiError, generateQuizQuestions, type QuizBankItem, type QuizKindCount } from "@/lib/api";
+import { ApiError, createQuizVariant, getCourseQuiz, getJob, getQuizItem, startQuizGenerateJob, type QuizBankItem, type QuizBankLesson, type QuizKindCount } from "@/lib/api";
 import type { QuizItem, QuizProgress } from "@/lib/types";
 
 const KINDS = ["mcq", "short", "truefalse", "code"] as const;
@@ -16,6 +16,38 @@ const KIND_LABELS: Record<string, string> = {
   truefalse: "True/false",
   code: "Code",
 };
+
+function VariantButton({
+  courseId,
+  itemId,
+  onCreated,
+}: {
+  courseId: number;
+  itemId: number;
+  onCreated: (created: import("@/lib/api").QuizVariant) => void;
+}) {
+  const { t } = useI18n();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const created = await createQuizVariant(courseId, itemId);
+          onCreated(created);
+        } finally {
+          setBusy(false);
+        }
+      }}
+      title={t("Create a variant of this question")}
+      className="shrink-0 rounded-control border border-line px-2 py-1 text-small text-ink-muted transition-colors hover:text-accent disabled:opacity-50"
+    >
+      {busy ? t("Creating…") : t("Variant")}
+    </button>
+  );
+}
 
 function toQuizItem(item: QuizBankItem): QuizItem {
   return {
@@ -74,9 +106,24 @@ export function LessonQuizPanel({
     setBusy(true);
     setError(null);
     try {
-      const result = await generateQuizQuestions(courseId, items, lessonId);
-      setQuiz((prev) => [...prev, ...result.created.map(toQuizItem)]);
-      setDialogOpen(false);
+      const { job_id } = await startQuizGenerateJob(courseId, items, lessonId);
+      // Poll until the job finishes, then append the created questions.
+      for (let i = 0; i < 120; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const job = await getJob(job_id);
+        if (job.status === "completed") {
+          const created = (job.result?.created as number[] | undefined) ?? [];
+          // Fetch the new items to get their full shape.
+          const freshItems = await Promise.all(created.map((id) => getQuizItem(id)));
+          setQuiz((prev) => [...prev, ...freshItems.map(toQuizItem)]);
+          setDialogOpen(false);
+          break;
+        }
+        if (job.status === "failed" || job.status === "cancelled") {
+          setError(job.error || t("Generation failed."));
+          break;
+        }
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("Could not reach the server."));
     } finally {
@@ -114,8 +161,36 @@ export function LessonQuizPanel({
             {t("No questions for this lesson yet. Generate some with AI.")}
           </p>
         ) : (
-          <div className="mt-3">
-            <QuizSection quiz={quiz} progress={progress} courseId={courseId} />
+          <div className="mt-3 rounded-surface border border-line bg-surface p-4">
+            <QuizSection
+              quiz={quiz}
+              progress={progress}
+              courseId={courseId}
+              renderItemAction={(item) => (
+                <VariantButton
+                  courseId={courseId}
+                  itemId={item.id}
+                  onCreated={(created) =>
+                    setQuiz((prev) => [
+                      ...prev,
+                      {
+                        id: created.id,
+                        question: created.question,
+                        kind: created.kind as QuizItem["kind"],
+                        options: created.options,
+                        concept: created.concept,
+                        attempt_state: {
+                          attempts: 0,
+                          first_attempt_correct: null,
+                          ever_correct: false,
+                          latest_quiz_attempt: null,
+                        },
+                      },
+                    ])
+                  }
+                />
+              )}
+            />
           </div>
         ))}
 

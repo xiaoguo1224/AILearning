@@ -729,6 +729,75 @@ export interface QuizBankItem {
   options: string[];
   concept: string;
   attempt_state: QuizItem["attempt_state"];
+  solution: string | null;
+}
+
+export interface Job {
+  id: string;
+  type: string;
+  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  progress: {
+    stage?: string;
+    done?: number;
+    total?: number;
+    outline?: { title: string; modules: { title: string; lessons: { title: string }[] }[] };
+    drafts?: { lesson_id: number; title: string; draft?: unknown; error?: string }[];
+    current?: string;
+  } | null;
+  result: Record<string, unknown> | null;
+  error: string | null;
+  ref_type: string | null;
+  ref_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export function startCourseGenerateJob(sources: unknown[]): Promise<{ job_id: string }> {
+  return postJson("/courses/generate/job", { sources });
+}
+
+export function startCourseRegenJob(
+  courseId: number,
+  feedback: string,
+): Promise<{ job_id: string }> {
+  return postJson(`/api/courses/${courseId}/regenerate/job`, { feedback });
+}
+
+export function startLessonRegenJob(
+  lessonId: number,
+  feedback: string,
+): Promise<{ job_id: string }> {
+  return postJson(`/api/lessons/${lessonId}/regenerate/job`, { feedback });
+}
+
+export function startQuizGenerateJob(
+  courseId: number,
+  items: { kind: string; count: number }[],
+  lessonId?: number,
+): Promise<{ job_id: string }> {
+  return postJson(`/api/courses/${courseId}/quiz/generate/job`, {
+    items,
+    lesson_id: lessonId,
+  });
+}
+
+export function getJob(jobId: string): Promise<Job> {
+  return request(`/api/jobs/${jobId}`);
+}
+
+export function listJobs(status?: string): Promise<{ items: Job[]; total: number }> {
+  return request(`/api/jobs${status ? `?status=${status}` : ""}`);
+}
+
+export function cancelJob(jobId: string): Promise<Job> {
+  return postJson(`/api/jobs/${jobId}/cancel`, {});
+}
+
+export function generateQuestionSolution(
+  itemId: number,
+  refresh = false,
+): Promise<{ item_id: number; solution: string }> {
+  return postJson(`/api/quiz/${itemId}/solution${refresh ? "?refresh=true" : ""}`, {});
 }
 export interface QuizBankLesson {
   id: number;

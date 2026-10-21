@@ -13,13 +13,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Callout } from "@/components/ui/Callout";
 import { Card } from "@/components/ui/Card";
-import { GenerationProgress } from "@/components/GenerationProgress";
 import {
   ApiError,
   SourceGenerationError,
   generateFromSources,
   getGenerationLimits,
+  startCourseGenerateJob,
 } from "@/lib/api";
+import { JobCancelButton, JobProgressBar, useJob } from "@/components/JobProgress";
 import { formatBytes, formatUsd } from "@/lib/format";
 import type { Translator } from "@/lib/i18n";
 import type { GenerateResult, SourceFailure, SourceInput, SourceLimits } from "@/lib/types";
@@ -201,7 +202,8 @@ export function GenerateForm() {
   // Non-null while the streaming generation view owns the screen. PDFs still
   // go through the synchronous route, which is why this is only set when no
   // files were attached.
-  const [streaming, setStreaming] = useState<SourceInput[] | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const { job } = useJob(jobId);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -606,9 +608,19 @@ export function GenerateForm() {
 
     setElapsed(0);
     if (files.length === 0) {
-      // Text/URL-only: stream the generation so each finished lesson appears
-      // as it lands instead of after the whole course is done.
-      setStreaming(sources);
+      // Text/URL-only: start a background job. It keeps running even if the
+      // learner navigates away; the progress bar reconnects on return.
+      setSubmitting(true);
+      try {
+        const { job_id } = await startCourseGenerateJob(sources);
+        setJobId(job_id);
+      } catch (err) {
+        announceSummaryError(
+          err instanceof ApiError ? err.message : t("Could not reach the server."),
+        );
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
     setSubmitting(true);
@@ -633,17 +645,39 @@ export function GenerateForm() {
 
   return (
     <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-5">
-      {streaming ? (
-        <GenerationProgress
-          sources={streaming}
-          onSourceFailures={(failures) => {
-            applyFailures(failures);
-            announceSummaryError(
-              t("{0} marked below.", plural(failures.length, "source is", "sources are", t)),
-            );
-          }}
-          onCancel={() => setStreaming(null)}
-        />
+      {jobId && job ? (
+        <div className="space-y-4 rounded-surface border border-line p-6">
+          <h3 className="text-subtitle font-semibold">{t("Generating course…")}</h3>
+          <JobProgressBar job={job} />
+          {job.progress?.outline && (
+            <div className="text-small text-ink-muted">
+              <p className="font-medium text-ink">{job.progress.outline.title}</p>
+              <ul className="mt-2 space-y-1">
+                {job.progress.outline.modules.map((m, mi) => (
+                  <li key={mi}>
+                    {m.title} ({m.lessons.length})
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <div className="flex items-center gap-2">
+            {["pending", "running"].includes(job.status) && (
+              <JobCancelButton jobId={jobId} onCancelled={() => setJobId(null)} />
+            )}
+            {(() => {
+              const courseId = job.status === "completed" ? job.result?.course_id : null;
+              return courseId != null ? (
+                <Button onClick={() => router.push(`/courses/${String(courseId)}`)}>
+                  {t("Open course")}
+                </Button>
+              ) : null;
+            })()}
+          </div>
+          <p className="text-small text-ink-muted">
+            {t("You can leave this page — generation continues in the background.")}
+          </p>
+        </div>
       ) : (
       <>
       {!success && (

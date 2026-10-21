@@ -1,192 +1,126 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { useI18n } from "@/components/LocaleProvider";
 import { Button } from "@/components/ui/Button";
 import { RegenDraftPreview } from "@/components/RegenDraftPreview";
+import { JobCancelButton, JobProgressBar, useJob } from "@/components/JobProgress";
 import {
   ApiError,
   patchLesson,
-  streamLessonRegeneration,
+  startLessonRegenJob,
   type LessonDraft,
 } from "@/lib/api";
 
 /**
  * "Regenerate this lesson" on the lesson page.
  *
- * The draft streams back over SSE (regen_started → regen_draft → regen_done),
- * so the learner sees progress instead of a hung button: the dialog stays open
- * with a "rewriting" state until the draft lands. The draft previews editable,
- * and 采用 / 不采用 decides. Nothing is saved until 采用.
+ * Starts a background job (POST /api/lessons/{id}/regenerate/job) and polls
+ * for progress. The job keeps running if the learner navigates away; reopening
+ * the dialog reconnects to the live job. The draft previews editable, and
+ * 采用 / 不采用 decides. Nothing is saved until 采用.
  */
 export function RegenerateLessonButton({ lessonId }: { lessonId: number }) {
   const { t } = useI18n();
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [phase, setPhase] = useState<"idle" | "generating" | "draft">("idle");
-  const [draft, setDraft] = useState<LessonDraft | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const { job } = useJob(dialogOpen ? jobId : null);
   const [adopting, setAdopting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+
+  const draft: LessonDraft | null =
+    job?.status === "completed"
+      ? (job.result?.draft as LessonDraft | undefined) ?? null
+      : null;
 
   async function start() {
     setError(null);
-    setDraft(null);
-    setPhase("generating");
-    const controller = new AbortController();
-    abortRef.current = controller;
+    setJobId(null);
     try {
-      const stream = streamLessonRegeneration(lessonId, feedback, {
-        signal: controller.signal,
-      });
-      for await (const event of stream) {
-        if (event.type === "regen_draft") {
-          setDraft(event.draft);
-          setPhase("draft");
-        } else if (event.type === "error") {
-          setError(event.message || event.error);
-          setPhase("idle");
-        }
-        // regen_started: the dialog already shows "rewriting"; regen_done: nothing to do.
-      }
+      const { job_id } = await startLessonRegenJob(lessonId, feedback.trim());
+      setJobId(job_id);
     } catch (err) {
-      if (err instanceof ApiError) {
-        setError(err.message);
-        setPhase("idle");
-      }
-      // AbortError: the learner closed the dialog; stay quiet.
-    } finally {
-      abortRef.current = null;
+      setError(err instanceof ApiError ? err.message : t("Could not reach the server."));
     }
   }
 
   function close() {
-    abortRef.current?.abort();
     setDialogOpen(false);
-    setPhase("idle");
-    setDraft(null);
-    setError(null);
+    // The job keeps running in the background; reopening reconnects.
   }
-
-  async function adopt(edited: LessonDraft) {
-    setAdopting(true);
-    setError(null);
-    try {
-      await patchLesson(lessonId, {
-        title: edited.title,
-        content: edited.content,
-        concepts: edited.concepts,
-      });
-      close();
-      router.refresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("Could not reach the server."));
-    } finally {
-      setAdopting(false);
-    }
-  }
-
-  const generating = phase === "generating";
 
   return (
     <>
-      <Button
-        variant="secondary"
-        size="sm"
-        onClick={() => {
-          setFeedback("");
-          setError(null);
-          setDialogOpen(true);
-        }}
-      >
+      <Button variant="secondary" size="sm" onClick={() => setDialogOpen(true)}>
         {t("Regenerate")}
       </Button>
-
       {dialogOpen && (
         <div
           role="dialog"
           aria-modal="true"
           aria-label={t("Regenerate lesson")}
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => !generating && !adopting && close()}
+          onClick={close}
         >
           <div
-            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-surface bg-surface p-6 shadow-raise"
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-surface bg-surface p-6 shadow-raise"
             onClick={(e) => e.stopPropagation()}
           >
-            {phase === "idle" && (
+            {!jobId ? (
               <>
-                <h2 className="text-subtitle font-semibold">{t("Regenerate lesson")}</h2>
+                <h3 className="text-subtitle font-semibold">{t("Regenerate lesson")}</h3>
                 <p className="mt-1 text-small text-ink-muted">
-                  {t("The AI rewrites this lesson from its own content. Nothing is saved until you adopt the draft.")}
+                  {t("Tell the AI what to change, or leave blank to just rewrite.")}
                 </p>
-                {error && (
-                  <p role="alert" className="mt-3 text-small text-danger">
-                    {error}
-                  </p>
-                )}
-                <label className="mt-4 block text-small font-medium">
-                  {t("What should change? (optional)")}
-                  <textarea
-                    value={feedback}
-                    onChange={(e) => setFeedback(e.target.value)}
-                    rows={4}
-                    maxLength={2000}
-                    placeholder={t("e.g. too hard, add more examples")}
-                    className="mt-1 block w-full rounded-control border border-line bg-surface px-3 py-2 text-small"
-                  />
-                </label>
-                <div className="mt-5 flex justify-end gap-2">
-                  <Button variant="secondary" size="sm" onClick={close}>
+                {error && <p role="alert" className="mt-3 text-small text-danger">{error}</p>}
+                <textarea
+                  value={feedback}
+                  onChange={(e) => setFeedback(e.target.value)}
+                  rows={3}
+                  placeholder={t("e.g. more examples, simpler language…")}
+                  className="mt-3 block w-full rounded-control border border-line bg-transparent px-3 py-2 text-small"
+                />
+                <div className="mt-4 flex justify-end gap-2">
+                  <Button variant="secondary" onClick={close}>
                     {t("Cancel")}
                   </Button>
-                  <Button size="sm" onClick={() => void start()}>
-                    {t("Generate")}
-                  </Button>
+                  <Button onClick={() => void start()}>{t("Start")}</Button>
                 </div>
               </>
-            )}
-
-            {phase === "generating" && (
-              <div className="py-8 text-center">
-                <div
-                  aria-hidden
-                  className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-line border-t-accent"
-                />
-                <h2 className="mt-4 text-subtitle font-semibold">{t("Rewriting the lesson…")}</h2>
+            ) : job && draft ? (
+              <>
+                <h3 className="text-subtitle font-semibold">{t("Review the draft")}</h3>
                 <p className="mt-1 text-small text-ink-muted">
-                  {t("The AI is rewriting this lesson from its own content. This can take a minute.")}
+                  {t("Edit it, then adopt or discard. Nothing is saved until you adopt.")}
                 </p>
-                <div className="mt-5">
-                  <Button variant="secondary" size="sm" onClick={close}>
-                    {t("Cancel")}
+                {error && <p role="alert" className="mt-3 text-small text-danger">{error}</p>}
+                <div className="mt-4">
+                  <RegenDraftPreview draft={draft} onAdopt={(d) => void adoptWith(d)} onDiscard={close} adopting={adopting} />
+                </div>
+              </>
+            ) : (
+              <>
+                <h3 className="text-subtitle font-semibold">{t("Regenerating…")}</h3>
+                {job && <div className="mt-4"><JobProgressBar job={job} /></div>}
+                {error && <p role="alert" className="mt-3 text-small text-danger">{error}</p>}
+                {job?.status === "failed" && (
+                  <p className="mt-2 text-small text-danger">{job.error}</p>
+                )}
+                <div className="mt-4 flex justify-end gap-2">
+                  {jobId && ["pending", "running"].includes(job?.status ?? "") && (
+                    <JobCancelButton jobId={jobId} onCancelled={close} />
+                  )}
+                  <Button variant="secondary" onClick={close}>
+                    {t("Close")}
                   </Button>
                 </div>
-              </div>
-            )}
-
-            {phase === "draft" && draft && (
-              <>
-                <h2 className="text-subtitle font-semibold">{t("Review the new draft")}</h2>
-                <p className="mt-1 text-small text-ink-muted">
-                  {t("Edit it first if you like, then adopt or discard.")}
+                <p className="mt-2 text-small text-ink-muted">
+                  {t("You can close this dialog — the job continues in the background.")}
                 </p>
-                {error && (
-                  <p role="alert" className="mt-3 text-small text-danger">
-                    {error}
-                  </p>
-                )}
-                <div className="mt-4">
-                  <RegenDraftPreview
-                    draft={draft}
-                    adopting={adopting}
-                    onAdopt={(edited) => void adopt(edited)}
-                    onDiscard={close}
-                  />
-                </div>
               </>
             )}
           </div>
@@ -194,4 +128,22 @@ export function RegenerateLessonButton({ lessonId }: { lessonId: number }) {
       )}
     </>
   );
+
+  async function adoptWith(d: LessonDraft) {
+    setAdopting(true);
+    try {
+      await patchLesson(lessonId, {
+        title: d.title,
+        content: d.content,
+        concepts: d.concepts,
+      });
+      setDialogOpen(false);
+      setJobId(null);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("Could not reach the server."));
+    } finally {
+      setAdopting(false);
+    }
+  }
 }
