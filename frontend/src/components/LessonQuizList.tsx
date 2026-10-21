@@ -195,6 +195,20 @@ export function LessonQuizList({
   }
 
   return (
+    <div>
+      <div style={{ marginBottom: 16, textAlign: "right" }}>
+        <Button onClick={() => setShowDialog(true)}>
+          AI 出题
+        </Button>
+      </div>
+      {showDialog && (
+        <LessonQuizGenerateDialog
+          courseId={courseId}
+          lessonId={lessonId}
+          onClose={() => setShowDialog(false)}
+          onGenerated={(q) => setQuiz(q)}
+        />
+      )}
     <QuizSection
       quiz={quiz}
       progress={progress}
@@ -224,5 +238,6 @@ export function LessonQuizList({
         />
       )}
     />
+    </div>
   );
 }

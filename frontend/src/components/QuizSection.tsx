@@ -510,7 +510,7 @@ export function QuizSection({
                   )}
                 </div>
 
-                {!solved && (
+                {!solved && item.kind !== "code" && (
                   <Button
                     variant="secondary"
                     size="sm"
