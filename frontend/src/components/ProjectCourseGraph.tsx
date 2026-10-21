@@ -196,9 +196,18 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
     });
 
     // AI edges; fall back to teaching sequence if none.
+    // Deduplicate: same source+target+kind appears only once.
+    // A->B and B->A are different edges and both are kept.
     if (edges && edges.length > 0) {
+      const seen = new Set<string>();
+      const uniqueEdges = edges.filter((e) => {
+        const key = `${e.from_type}-${e.from_id}|${e.to_type}-${e.to_id}|${e.kind}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
       links.push(
-        ...edges
+        ...uniqueEdges
           .filter(
           (e) =>
             nodeIds.has(`${e.from_type}-${e.from_id}`) &&

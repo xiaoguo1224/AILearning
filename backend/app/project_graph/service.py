@@ -31,6 +31,8 @@ Rules:
 - Do NOT emit "contains", "chapter_sequence", or any lesson-level edges.
 - Every course (except the first to study) should have at least one incoming
   course_sequence or prerequisite edge, forming a coherent learning path.
+- Do NOT emit duplicate edges: the same (from, to, kind) triple must appear at
+  most once. A->B and B->A are different and both are allowed.
 - Do not invent ids. Use only the course ids given.
 - Reply with ONLY the JSON array, no other text.
 
