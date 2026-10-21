@@ -22,13 +22,14 @@ const VARIANT_MAP: Record<ButtonVariant, "primary" | "default" | "text" | "link"
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = "primary", size = "md", ...props },
+  { variant = "primary", size = "md", type = "button", ...props },
   ref,
 ) {
   return (
     <AntButton
       ref={ref as never}
       type={VARIANT_MAP[variant]}
+      htmlType={type}
       size={size === "sm" ? "small" : "middle"}
       danger={variant === "danger"}
       {...props as any}

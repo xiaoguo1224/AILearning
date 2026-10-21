@@ -12,3 +12,22 @@ afterEach(cleanup);
 vi.mock("next/headers", () => ({
   cookies: async () => ({ get: () => ({ value: "en" }) }),
 }));
+
+// Ant Design components need these browser APIs that jsdom doesn't provide.
+class MockResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+vi.stubGlobal("ResizeObserver", MockResizeObserver);
+
+vi.stubGlobal("matchMedia", (query: string) => ({
+  matches: false,
+  media: query,
+  onchange: null,
+  addListener: () => {},
+  removeListener: () => {},
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  dispatchEvent: () => false,
+}));

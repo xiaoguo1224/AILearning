@@ -11,11 +11,11 @@ export interface CalloutProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export const Callout = forwardRef<HTMLDivElement, CalloutProps>(function Callout(
-  { tone = "info", title, children, className, style, ...props },
+  { tone = "info", title, children, className, style, role, ...props },
   ref,
 ) {
   return (
-    <div ref={ref} className={className} style={style} {...props}>
+    <div ref={ref} className={className} style={style} role={role} {...props}>
       <Alert type={tone === "danger" ? "error" : tone} message={title} description={children} showIcon />
     </div>
   );
