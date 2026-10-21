@@ -132,48 +132,23 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
       const cid = `course-${course.id}`;
       nodeIds.add(cid);
       const cpos = positions[cid];
-      // Fallback layout when AI positions are unavailable: courses spread
-      // horizontally, each course's lessons in a grid below it.
+      // Only course nodes. Fallback: spread horizontally.
       let cx: number | undefined, cy: number | undefined;
       if (cpos) {
         cx = cpos.x * 20; cy = cpos.y * 20;
       } else if (!hasPositions) {
         cx = 150 + (courseCount > 1 ? (courseIdx * 900) / (courseCount - 1) : 450);
-        cy = 120;
+        cy = 300;
       }
       nodes.push({
         id: cid,
         name: course.title,
         value: course.id,
         category: courseIdx,
-        symbolSize: 56,
+        symbolSize: 64,
         itemStyle: { color: "#1fae54" },
         ...(cx !== undefined ? { x: cx, y: cy } : {}),
       });
-      let lessonIdx = 0;
-      for (const m of course.modules) {
-        for (const l of m.lessons) {
-          const lid = `lesson-${l.id}`;
-          nodeIds.add(lid);
-          const lpos = positions[lid];
-          let lx: number | undefined, ly: number | undefined;
-          if (lpos) {
-            lx = lpos.x * 20; ly = lpos.y * 20;
-          } else if (!hasPositions && cx !== undefined) {
-            lx = cx - 120 + (lessonIdx % 4) * 80;
-            ly = 220 + Math.floor(lessonIdx / 4) * 70;
-          }
-          nodes.push({
-            id: lid,
-            name: l.title,
-            value: l.id,
-            category: courseIdx,
-            symbolSize: 28,
-            ...(lx !== undefined ? { x: lx, y: ly } : {}),
-          });
-          lessonIdx++;
-        }
-      }
     });
 
     // AI edges; fall back to teaching sequence if none.

@@ -11,43 +11,34 @@ from app.project_graph.models import ProjectGraphEdge, ProjectGraphLayout
 
 EXTRACT_STAGE = "project_graph_extract"
 
-SYSTEM_PROMPT = """You are analyzing a learning project made of courses, each with chapters (lessons).
-Given the course and chapter titles (and short summaries when available), extract THREE
-kinds of relationships:
+SYSTEM_PROMPT = """You are analyzing a learning project made of courses.
+Given the course titles (and their chapter titles as context), extract ONLY
+course-level relationships:
 
-1. CONTAINMENT: every course contains its chapters. Emit one edge per chapter:
-   {"from_type": "course", "from_id": <course id>, "to_type": "lesson",
-    "to_id": <lesson id>, "kind": "contains",
-    "reason": "<course> 包含章节 <lesson>"}
-
-2. COURSE ORDER: the learning sequence between courses. Which course should be
+1. COURSE ORDER: the learning sequence between courses. Which course should be
    studied first, based on topic dependencies?
    {"from_type": "course", "from_id": <earlier>, "to_type": "course",
     "to_id": <later>, "kind": "course_sequence", "reason": "<why, Chinese>"}
 
-3. CHAPTER ORDER: the learning sequence between chapters (within a course and
-   across courses). Which chapter should come first?
-   {"from_type": "lesson", "from_id": <earlier>, "to_type": "lesson",
-    "to_id": <later>, "kind": "chapter_sequence", "reason": "<why, Chinese>"}
-
 Also allowed when the dependency is strong:
 - "prerequisite": `to` genuinely requires concepts from `from`. Be conservative.
+  Both ends must be courses.
 - "related": topical overlap worth reviewing together, order flexible.
+  Both ends must be courses.
 
 Rules:
-- Containment edges: emit ALL of them, one per chapter.
-- Sequence edges: every chapter (except the very first to study) should have at
-  least one incoming chapter_sequence or prerequisite edge, forming a coherent
-  learning path. Every course (except the first) should have an incoming
-  course_sequence or prerequisite edge.
-- Do not invent ids. Use only the ids given.
+- ONLY emit edges where both from_type and to_type are "course".
+- Do NOT emit "contains", "chapter_sequence", or any lesson-level edges.
+- Every course (except the first to study) should have at least one incoming
+  course_sequence or prerequisite edge, forming a coherent learning path.
+- Do not invent ids. Use only the course ids given.
 - Reply with ONLY the JSON array, no other text.
 
-After the edges, on a new line, reply with a second JSON object mapping each node
-to its suggested canvas position for a clear layout:
-{"positions": {"course-1": {"x": 100, "y": 200}, "lesson-5": {"x": 300, "y": 150}, ...}}
-Place earlier topics to the left, later topics to the right. Spread different
-courses vertically so their chapters do not overlap. Use a 1200x800 canvas.
+After the edges, on a new line, reply with a second JSON object mapping each
+course node to its suggested canvas position for a clear layout:
+{"positions": {"course-1": {"x": 100, "y": 200}, ...}}
+Place earlier courses to the left, later courses to the right. Use a 1200x800 canvas.
+The two JSON values are separated by a line containing only "---".
 The two JSON values are separated by a line containing only "---".
 """
 
