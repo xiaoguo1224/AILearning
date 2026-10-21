@@ -132,13 +132,14 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
       const cid = `course-${course.id}`;
       nodeIds.add(cid);
       const cpos = positions[cid];
-      // Only course nodes. Fallback: spread horizontally.
+      // Course positions from AI (course-level only). Chapters are laid out
+      // under their course.
       let cx: number | undefined, cy: number | undefined;
       if (cpos) {
         cx = cpos.x * 20; cy = cpos.y * 20;
       } else if (!hasPositions) {
         cx = 150 + (courseCount > 1 ? (courseIdx * 900) / (courseCount - 1) : 450);
-        cy = 300;
+        cy = 150;
       }
       nodes.push({
         id: cid,
@@ -149,6 +150,49 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
         itemStyle: { color: "#1fae54" },
         ...(cx !== undefined ? { x: cx, y: cy } : {}),
       });
+      // Chapter nodes: clustered tightly around their course.
+      let lessonIdx = 0;
+      for (const m of course.modules) {
+        for (const l of m.lessons) {
+          const lid = `lesson-${l.id}`;
+          nodeIds.add(lid);
+          let lx: number | undefined, ly: number | undefined;
+          if (cx !== undefined && cy !== undefined) {
+            // Tight grid: 4 per row, close to the course node.
+            const cols = 4;
+            const spacingX = 70;
+            const spacingY = 60;
+            const row = Math.floor(lessonIdx / cols);
+            const col = lessonIdx % cols;
+            lx = cx - ((cols - 1) * spacingX) / 2 + col * spacingX;
+            ly = cy + 70 + row * spacingY;
+          }
+          nodes.push({
+            id: lid,
+            name: l.title,
+            value: l.id,
+            category: courseIdx,
+            symbolSize: 28,
+            ...(lx !== undefined ? { x: lx, y: ly } : {}),
+          });
+          // Containment edge: course -> chapter.
+          links.push({
+            source: cid,
+            target: lid,
+            lineStyle: { color: "#d9d9d9", width: 1, type: "dashed" },
+          });
+          // Sequential edge between chapters in the same course.
+          if (lessonIdx > 0) {
+            const prevLid = `lesson-${course.modules.flatMap((mm) => mm.lessons)[lessonIdx - 1].id}`;
+            links.push({
+              source: prevLid,
+              target: lid,
+              lineStyle: { color: "#52c41a", width: 2 },
+            });
+          }
+          lessonIdx++;
+        }
+      }
     });
 
     // AI edges; fall back to teaching sequence if none.
