@@ -68,6 +68,15 @@
 - 实际验证：`uv run pytest tests/test_locale.py tests/test_knowledge.py tests/test_suggestions.py tests/test_errors.py tests/test_content_reviews.py -q` **72 passed**；前端 `npm test` **178 passed**，lint 清洁。
 - 剩余：前端 `npm run build` 在本次 page.tsx/zh-CN.json 变更后尚未重跑（tsc/test/lint 已过）；随本批提交前重跑。
 
+### 2026-10-21 — 真实模型端到端验证（gemini-3.8-flash）
+- 用户提供真实模型网关（`https://114.55.110.183/v1`，`LLM_MODEL=gemini-3.8-flash`），密钥仅经环境变量临时传入测试进程，未写入任何文件。
+- 连通性：`POST /v1/chat/completions` 最小调用返回 `finish_reason: stop`；网关 TLS 证书有效。
+- 后端以 `STUDYFORGE_LLM_PROVIDER=gemini` 启动（临时库），真机验证 fake provider 覆盖不了的三个模型阶段：
+  1. **explore**：SPDM 自由学习闭环 11/11 通过——提问「SPDM 为什么需要 Shared/Private 分解？」返回 201，`grounded=true`，`source_refs=1`，正文带 [S1] 引用；知识草稿自动保存且可确认；practice 练习草稿生成成功。
+  2. **variant**：提交 `weights[:, 0]` buggy 代码 → 静态评审检出 `tensor_shape_reduction`/`runtime_shape_mismatch` → 真实模型生成变体练习 201/draft，标题「保持二维形状的列切片与矩阵乘法」，prompt/starter_code/acceptance 全部针对降维错因，中文高质量。
+- 途中发现 502 一次：根因是沙箱畸形 `NO_PROXY`（裸 IPv6 条目）导致 httpx 构造失败——与 P5-04 同一环境问题，清理代理变量后重启即恢复，非产品 bug。
+- 结论：P5-03 留下的「无真实模型端到端」缺口已补齐；三条流程在真实模型下全部走通。测试进程已关闭，临时库在 /tmp 不污染仓库。
+
 
 ### 2026-10-20 — P1 完整验收与学习机制调整（取消时间驱动，转为知识掌握驱动）
 - 同步最新产品决策（ADR-017）：取消倒计时Deadline、Days Off、日历计划等时间驱动功能，改为纯知识点掌握驱动。保留所有历史答题和底层结构。
