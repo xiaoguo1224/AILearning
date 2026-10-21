@@ -2,147 +2,330 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Cell, Collapse, Field, Flex, Loading, NoticeBar, Radio, Slider, Space, Steps, Tag, Typography } from "react-vant";
+import { Button, Card, Input, Modal, Radio, Slider, Spin, Steps, Alert } from "antd";
 
-import { JobCancelButton, JobProgressBar, useJob } from "@/components/JobProgress";
-import { JobTrace } from "@/components/JobTrace";
-import { LessonMarkdown } from "@/components/LessonMarkdown";
-import { retryGeneration, reviewGeneration, startStagedGeneration } from "@/lib/api";
+import { useI18n } from "@/components/LocaleProvider";
+import {
+  ApiError,
+  generateCourseOutline,
+  reviseCourseOutline,
+  startCourseGenerateJob,
+  getJob,
+  getCourse,
+  type CourseOutline,
+} from "@/lib/api";
 
 type ReviewMode = "auto" | "outline" | "full";
+
 const MODE_OPTIONS = [
-  { value: "auto", title: "全自动审查", desc: "AI 自动检查提纲与章节并修订，无需逐步人工确认；内容仍需核实" },
-  { value: "outline", title: "提纲审查", desc: "先审阅提纲，可反复提出意见；确认后并行生成章节" },
-  { value: "full", title: "全量审查", desc: "提纲确认后并行生成章节，每章均可提出意见重新生成并确认" },
+  {
+    value: "auto" as ReviewMode,
+    title: "全自动",
+    desc: "AI 直接生成完整课程，无需人工审查",
+  },
+  {
+    value: "outline" as ReviewMode,
+    title: "提纲审查",
+    desc: "先生成提纲给你审阅确认，再生成内容",
+  },
+  {
+    value: "full" as ReviewMode,
+    title: "全量审查",
+    desc: "提纲审查 + 每个章节生成后都要审查确认",
+  },
 ];
 
-export function StagedGenerateWizard({ initialJobId, onClose }: { initialJobId?: string; onClose?: () => void }) {
+export function StagedGenerateWizard({ onClose }: { onClose?: () => void }) {
+  const { t } = useI18n();
   const router = useRouter();
+  const [step, setStep] = useState(0);
   const [topic, setTopic] = useState("");
   const [mode, setMode] = useState<ReviewMode>("outline");
-  const [difficulty, setDifficulty] = useState(1);
+  const [difficulty, setDifficulty] = useState(1); // 0=低, 1=中, 2=高
+  const [outline, setOutline] = useState<CourseOutline | null>(null);
   const [feedback, setFeedback] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [jobId, setJobId] = useState(initialJobId ?? null);
-  const [submittedRevision, setSubmittedRevision] = useState<number | null>(null);
-  const { job, error: pollError, refresh } = useJob(jobId);
-  const progress = job?.progress;
-  const reviewing = job?.status === "awaiting_review" && progress?.revision !== submittedRevision;
-  const outlineReview = progress?.stage === "outline_review";
-  const activeMode = progress?.mode ?? mode;
-  const courseId = job?.result?.course_id;
-  const step = job?.status === "completed" ? 3 : !jobId ? 0 :
-    progress?.stage === "outline" || outlineReview ? 1 : reviewing ? 3 : 2;
+  const [jobId, setJobId] = useState<string | null>(null);
 
-  async function start() {
-    if (busy || !topic.trim()) return;
-    setBusy(true); setError(null);
+  async function handleGenerateOutline() {
+    if (!topic.trim()) {
+      setError("请输入课程主题");
+      return;
+    }
+    setBusy(true);
+    setError(null);
     try {
-      const { job_id } = await startStagedGeneration(topic.trim(), mode, difficulty);
-      setJobId(job_id);
-      router.replace(`/courses/new?job=${encodeURIComponent(job_id)}`);
-    } catch (err) { setError(err instanceof Error ? err.message : "无法创建生成任务"); }
-    finally { setBusy(false); }
+      const { outline } = await generateCourseOutline(topic.trim(), undefined, undefined, difficulty);
+      setOutline(outline);
+      setStep(1);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "提纲生成失败");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  async function decide(action: "approve" | "revise") {
-    if (!job || !reviewing || busy || progress?.revision == null) return;
-    setBusy(true); setError(null);
+  async function handleReviseOutline() {
+    if (!outline || !feedback.trim()) {
+      setError("请填写修改意见");
+      return;
+    }
+    setBusy(true);
+    setError(null);
     try {
-      await reviewGeneration(job.id, action, progress.revision, feedback);
-      setSubmittedRevision(progress.revision); setFeedback("");
-      refresh();
-    } catch (err) { setError(err instanceof Error ? err.message : "审查提交失败"); }
-    finally { setBusy(false); }
+      const { outline: revised } = await reviseCourseOutline(outline, feedback.trim(), topic.trim());
+      setOutline(revised);
+      setFeedback("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "提纲修改失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleConfirmOutline() {
+    if (!outline) return;
+    setBusy(true);
+    setError(null);
+    try {
+      // Start course generation with the approved outline as context.
+      const { job_id } = await startCourseGenerateJob(
+        [{ type: "text", content: `课程提纲：\n${JSON.stringify(outline, null, 2)}` }],
+        difficulty,
+      );
+      setJobId(job_id);
+      setStep(2);
+      // Poll for completion.
+      for (let i = 0; i < 120; i++) {
+        const job = await getJob(job_id);
+        if (job.status === "completed") {
+          const courseId = (job.result as { course_id?: number })?.course_id;
+          if (courseId) {
+            if (mode === "full") {
+              setStep(3);
+            } else {
+              router.push(`/courses/${courseId}`);
+              onClose?.();
+            }
+          }
+          break;
+        }
+        if (job.status === "failed" || job.status === "cancelled") {
+          throw new Error(job.error || "课程生成失败");
+        }
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : "课程生成失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAutoGenerate() {
+    if (!topic.trim()) {
+      setError("请输入课程主题");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const { job_id } = await startCourseGenerateJob(
+        [{ type: "text", content: topic.trim() }],
+        difficulty,
+      );
+      setJobId(job_id);
+      setStep(2);
+      for (let i = 0; i < 120; i++) {
+        const job = await getJob(job_id);
+        if (job.status === "completed") {
+          const courseId = (job.result as { course_id?: number })?.course_id;
+          if (courseId) {
+            router.push(`/courses/${courseId}`);
+            onClose?.();
+          }
+          break;
+        }
+        if (job.status === "failed" || job.status === "cancelled") {
+          throw new Error(job.error || "课程生成失败");
+        }
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : err instanceof Error ? err.message : "课程生成失败");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
-    <Space direction="vertical" block gap={20}>
-      <Steps active={step}>
-        <Steps.Item>输入与模式</Steps.Item><Steps.Item>提纲审查</Steps.Item>
-        <Steps.Item>并行生成</Steps.Item><Steps.Item>章节审查</Steps.Item>
-      </Steps>
-      {(error || pollError) && <NoticeBar text={error || pollError} color="var(--danger)" scrollable={false} wrapable />}
-      {!jobId ? (
-        <Cell.Group title="创建课程" card>
-          <Field label="课程主题" type="textarea" value={topic} onChange={setTopic}
-            maxLength={20000} placeholder="例如：Python 数据分析入门" rows={3} disabled={busy} />
-          <Cell title="课程难度与内容量" value={["低 · 基础精简", "中 · 常规深度", "高 · 深入丰富"][difficulty]} />
-          <Cell><Slider min={0} max={2} step={1} value={difficulty} onChange={(value: number | [number, number]) => setDifficulty(Number(value))}
-            disabled={busy} button={<Tag type="primary">{["低", "中", "高"][difficulty]}</Tag>} /></Cell>
-          <Cell><Flex justify="between">{["低", "中", "高"].map((label, value) => <Flex.Item key={label}>
-            <Button size="small" type={difficulty === value ? "primary" : "default"} disabled={busy}
-              onClick={() => setDifficulty(value)} aria-pressed={difficulty === value}>{label}</Button>
-          </Flex.Item>)}</Flex></Cell>
-          <Cell title="审查模式" />
-          <Cell><Radio.Group value={mode} onChange={value => setMode(value as ReviewMode)} disabled={busy}>
-            <Space direction="vertical" gap={16}>{MODE_OPTIONS.map(opt => <Radio key={opt.value} name={opt.value}>
-              <Space direction="vertical"><Typography.Text strong>{opt.title}</Typography.Text>
-                <Typography.Text type="secondary">{opt.desc}</Typography.Text></Space>
-            </Radio>)}</Space>
-          </Radio.Group></Cell>
-          <Cell><Button type="primary" loading={busy} disabled={!topic.trim()} onClick={() => void start()} block>
-            {mode === "auto" ? "开始自动生成" : "生成提纲"}
-          </Button></Cell>
-        </Cell.Group>
-      ) : !job ? <Loading>正在恢复任务进度…</Loading> : (
-        <>
-          <Cell.Group title={progress?.topic || "课程生成任务"} card>
-            <Cell title={MODE_OPTIONS.find(o => o.value === activeMode)?.title} value={`难度${["低", "中", "高"][progress?.difficulty ?? 1]}`} />
-            <Cell><JobProgressBar job={job} /></Cell>
-            {progress?.current && <Cell title="当前章节" value={progress.current} />}
-            {progress?.generated != null && <Cell title={`已生成 ${progress.generated}/${progress.total} 章`} value={`已确认 ${progress.done ?? 0} 章`} />}
-            {["pending", "running"].includes(job.status) || (job.status === "awaiting_review" && !reviewing) ?
-              <NoticeBar text="正在处理。可离开此页面，稍后从 AI 任务页返回继续查看或审查。" scrollable={false} wrapable /> : null}
-            {reviewing && <NoticeBar text="等待你审阅。确认提纲后才生成内容；全量审查须确认所有章节后保存课程。" scrollable={false} wrapable />}
-            <Cell><Space wrap>
-              <Button size="small" onClick={() => router.push("/jobs")}>查看所有 AI 任务</Button>
-              {["pending", "running", "awaiting_review"].includes(job.status) && <JobCancelButton jobId={job.id} onCancelled={refresh} />}
-              {job.status === "failed" && job.type === "course_generate_staged" && <Button loading={busy} onClick={async () => {
-                setBusy(true); setError(null);
-                try { await retryGeneration(job.id); refresh(); }
-                catch (err) { setError(err instanceof Error ? err.message : "重试失败"); }
-                finally { setBusy(false); }
-              }}>重试未完成步骤</Button>}
-              {job.status === "completed" && typeof courseId === "number" && <Button type="primary" onClick={() => {
-                router.push(`/courses/${courseId}`); onClose?.();
-              }}>打开已生成课程</Button>}
-            </Space></Cell>
-          </Cell.Group>
-          {progress?.outline && <Cell.Group title="课程提纲" card>
-            <Cell title={progress.outline.title} />
-            {progress.outline.modules.map((module, mi) => <Cell.Group title={`${mi + 1}. ${module.title}`} key={mi}>
-              {module.lessons.map((lesson, li) => <Cell key={li} title={`${mi + 1}.${li + 1} ${lesson.title}`} />)}
-            </Cell.Group>)}
-          </Cell.Group>}
-          {reviewing && !outlineReview && progress?.draft && <Cell.Group title={`章节审查 · ${(progress.done ?? 0) + 1}/${progress.total}`} card>
-            <Cell title={progress.draft.title} />
-            <Cell><LessonMarkdown title={progress.draft.title} content={progress.draft.content} /></Cell>
-            <Cell title="本章练习与参考答案（AI 生成，未验证）" />
-            <Collapse>{progress.draft.quiz.map((item, i) => <Collapse.Item key={i} name={i} title={item.question}>
-              <Space direction="vertical" block>{item.options?.map((option, oi) => <Typography.Text key={oi}>{option}</Typography.Text>)}
-                <Typography.Text>参考答案：{item.answer}</Typography.Text></Space>
-            </Collapse.Item>)}</Collapse>
-          </Cell.Group>}
-          {reviewing && <Cell.Group title={outlineReview ? "提纲审阅意见" : "章节审阅意见"} card>
-            <Field label="修改意见" type="textarea" value={feedback} onChange={setFeedback} rows={3}
-              maxLength={8000} disabled={busy} placeholder="填写需要修改、补充或调整的内容" />
-            <Cell><Space wrap>
-              <Button loading={busy} disabled={!feedback.trim()} onClick={() => void decide("revise")}>按意见重新生成</Button>
-              <Button type="primary" loading={busy} onClick={() => void decide("approve")}>
-                {outlineReview ? "确认提纲，开始生成内容" : "确认本章，继续"}
-              </Button>
-            </Space></Cell>
-          </Cell.Group>}
-          {progress?.lessons && progress.lessons.length > 0 && <Cell.Group title="已确认章节" card>
-            <Collapse>{progress.lessons.map((lesson, i) => <Collapse.Item key={i} name={i} title={`${i + 1}. ${lesson.title}`}>
-              <LessonMarkdown title={lesson.title} content={lesson.content} />
-            </Collapse.Item>)}</Collapse>
-          </Cell.Group>}
-          <JobTrace job={job} />
-        </>
+    <div style={{ maxWidth: 800, margin: "0 auto", padding: "24px 0" }}>
+      <Steps
+        current={step}
+        style={{ marginBottom: 32 }}
+        items={[
+          { title: "输入与模式" },
+          { title: "提纲审查", disabled: mode === "auto" },
+          { title: "内容生成" },
+          { title: "章节审查", disabled: mode !== "full" },
+        ]}
+      />
+
+      {error && (
+        <Alert type="error" message={error} showIcon style={{ marginBottom: 16 }} closable onClose={() => setError(null)} />
       )}
-    </Space>
+
+      {step === 0 && (
+        <Card title="创建课程">
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontWeight: 500, marginBottom: 8 }}>课程主题</div>
+            <Input.TextArea
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
+              placeholder="例如：Python 数据分析入门"
+              rows={3}
+              disabled={busy}
+            />
+          </div>
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontWeight: 500, marginBottom: 12 }}>
+              课程难度
+              <span style={{ color: "var(--ink-muted)", fontWeight: 400, marginLeft: 8, fontSize: 13 }}>
+                {difficulty === 0 ? "低 - 入门级，内容精简" : difficulty === 1 ? "中 - 常规深度" : "高 - 深入详细，内容丰富"}
+              </span>
+            </div>
+            <Slider
+              min={0}
+              max={2}
+              step={1}
+              value={difficulty}
+              onChange={setDifficulty}
+              disabled={busy}
+              marks={{
+                0: "低",
+                1: "中",
+                2: "高",
+              }}
+              style={{ maxWidth: 400 }}
+            />
+          </div>
+          <div style={{ marginBottom: 24 }}>
+            <div style={{ fontWeight: 500, marginBottom: 12 }}>审查模式</div>
+            <Radio.Group
+              value={mode}
+              onChange={(e) => setMode(e.target.value)}
+              style={{ width: "100%" }}
+            >
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {MODE_OPTIONS.map((opt) => (
+                  <Radio key={opt.value} value={opt.value} disabled={busy}>
+                    <span style={{ fontWeight: 500 }}>{opt.title}</span>
+                    <span style={{ color: "var(--ink-muted)", marginLeft: 8, fontSize: 13 }}>
+                      {opt.desc}
+                    </span>
+                  </Radio>
+                ))}
+              </div>
+            </Radio.Group>
+          </div>
+          <Button
+            type="primary"
+            size="large"
+            loading={busy}
+            onClick={() => (mode === "auto" ? handleAutoGenerate() : handleGenerateOutline())}
+            block
+          >
+            {mode === "auto" ? "开始生成" : "生成提纲"}
+          </Button>
+        </Card>
+      )}
+
+      {step === 1 && outline && (
+        <Card
+          title="提纲审查"
+          extra={
+            <Button onClick={() => setStep(0)} disabled={busy}>
+              返回修改
+            </Button>
+          }
+        >
+          <div style={{ marginBottom: 16 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600 }}>{outline.title}</h3>
+            {outline.modules.map((mod, mi) => (
+              <div key={mi} style={{ marginTop: 12, paddingLeft: 16, borderLeft: "3px solid var(--accent)" }}>
+                <div style={{ fontWeight: 500 }}>
+                  {mi + 1}. {mod.title}
+                </div>
+                <ul style={{ margin: "8px 0 0", paddingLeft: 20, color: "var(--ink-muted)" }}>
+                  {mod.lessons.map((lesson, li) => (
+                    <li key={li} style={{ margin: "4px 0" }}>
+                      {lesson.title}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 24, paddingTop: 16, borderTop: "1px solid var(--line)" }}>
+            <div style={{ fontWeight: 500, marginBottom: 8 }}>修改意见</div>
+            <Input.TextArea
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              placeholder="例如：第二章太简单了，增加实战案例；第3课和第4课合并…"
+              rows={3}
+              disabled={busy}
+            />
+            <div style={{ display: "flex", gap: 12, marginTop: 12 }}>
+              <Button onClick={handleReviseOutline} loading={busy} disabled={!feedback.trim()}>
+                按意见修改
+              </Button>
+              <Button type="primary" onClick={handleConfirmOutline} loading={busy}>
+                确认提纲，开始生成内容
+              </Button>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {step === 2 && (
+        <Card title="正在生成课程内容">
+          <div style={{ textAlign: "center", padding: "40px 0" }}>
+            <Spin size="large" />
+            <div style={{ marginTop: 16, color: "var(--ink-muted)" }}>
+              AI 正在根据确认的提纲生成课程内容，请稍候…
+            </div>
+            <div style={{ marginTop: 8, fontSize: 13, color: "var(--ink-muted)" }}>
+              你可以离开此页面，生成会在后台继续
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {step === 3 && (
+        <Card title="章节审查">
+          <ChapterReview onComplete={() => onClose?.()} />
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function ChapterReview({ onComplete }: { onComplete: () => void }) {
+  const [lessons, setLessons] = useState<{ id: number; title: string }[]>([]);
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const [feedback, setFeedback] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  // TODO: Load lessons for review
+  return (
+    <div style={{ textAlign: "center", padding: "40px 0", color: "var(--ink-muted)" }}>
+      章节审查功能开发中…
+      <div style={{ marginTop: 16 }}>
+        <Button type="primary" onClick={onComplete}>
+          完成
+        </Button>
+      </div>
+    </div>
   );
 }

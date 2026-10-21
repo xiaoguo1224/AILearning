@@ -152,7 +152,6 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # question exists (on demand via POST /api/quiz/{item_id}/solution).
     # Nullable: NULL means "not generated yet".
     ("quiz_items", "solution", "TEXT"),
-    ("courses", "open_count", "INTEGER NOT NULL DEFAULT 0"),
 )
 
 

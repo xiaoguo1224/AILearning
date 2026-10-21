@@ -2,7 +2,6 @@ export interface CourseSummary {
   id: number;
   title: string;
   description: string;
-  open_count?: number;
 }
 
 export type ProjectMode = "course" | "research" | "practice";

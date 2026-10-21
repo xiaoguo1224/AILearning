@@ -24,19 +24,6 @@ CourseId = Annotated[int, Path(gt=0)]
 LessonId = Annotated[int, Path(gt=0)]
 
 
-@router.post("/courses/{course_id}/open")
-def record_course_open(course_id: CourseId, session: Db):
-    """Count an actual browser visit; GETs and route prefetches never write."""
-    changed = session.query(models.Course).filter_by(id=course_id).update(
-        {models.Course.open_count: models.Course.open_count + 1}
-    )
-    if not changed:
-        raise HTTPException(404, "Course not found")
-    session.commit()
-    logger.info("course_open course_id=%s", course_id)
-    return {"course_id": course_id, "open_count": session.get(models.Course, course_id).open_count}
-
-
 @router.post("/courses/import", response_model=ImportResult, status_code=201)
 def import_course(body: ImportRequest, session: Db):
     """Create a course straight from a folder of markdown files.

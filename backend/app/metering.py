@@ -8,8 +8,6 @@ against an optional hard spend cap before it runs.
 import logging
 import math
 import os
-import time
-import uuid
 
 from sqlalchemy import func
 
@@ -123,77 +121,51 @@ class MeteredLLM:
 
     def generate(self, stage: str, system: str, prompt: str, max_tokens: int = 64000) -> str:
         self._check_cap()
-        started = time.monotonic()
-        call_id = uuid.uuid4().hex
         if self.job_id:
-            self._trace_call(stage, prompt, call_id)
+            self._trace_call(stage, prompt)
         try:
             result = self.provider.generate(teaching_system(system), prompt, max_tokens)
         except LLMCallError as exc:
             self._record(stage, exc.input_tokens, exc.output_tokens)
             if self.job_id:
-                self._trace_error(stage, call_id)
-            raise
-        except Exception:
-            if self.job_id:
-                self._trace_error(stage, call_id)
+                self._trace_error(stage, str(exc))
             raise
         self._record(stage, result.input_tokens, result.output_tokens)
         if self.job_id:
-            self._trace_result(stage, result.text, time.monotonic() - started, call_id)
+            self._trace_result(stage, result.text)
         return result.text
 
-    def _trace_call(self, stage: str, prompt: str, call_id: str) -> None:
+    def _trace_call(self, stage: str, prompt: str) -> None:
         try:
             from app.jobs.service import append_trace
-
-            append_trace(
-                self.job_id,
-                {  # type: ignore[arg-type]
-                    "type": "tool_call",
-                    "tool": f"llm.{stage}",
-                    "call_id": call_id,
-                    "input": {
-                        "characters": len(prompt),
-                        "provider": self.provider.name,
-                        "model": self.provider.model,
-                        "run_id": self.run_id,
-                    },
-                },
-            )
+            append_trace(self.job_id, {  # type: ignore[arg-type]
+                "type": "tool_call",
+                "tool": f"llm.{stage}",
+                "input": {"prompt_preview": prompt[:500]},
+            })
         except Exception:
-            logger.exception("job_trace_failed job_id=%s stage=%s", self.job_id, stage)
+            pass
 
-    def _trace_result(self, stage: str, text: str, elapsed: float, call_id: str) -> None:
+    def _trace_result(self, stage: str, text: str) -> None:
         try:
             from app.jobs.service import append_trace
-
-            append_trace(
-                self.job_id,
-                {  # type: ignore[arg-type]
-                    "type": "tool_result",
-                    "tool": f"llm.{stage}",
-                    "call_id": call_id,
-                    "output": {"length": len(text), "elapsed_seconds": round(elapsed, 2)},
-                },
-            )
+            append_trace(self.job_id, {  # type: ignore[arg-type]
+                "type": "tool_result",
+                "tool": f"llm.{stage}",
+                "output": {"response_preview": text[:500], "length": len(text)},
+            })
         except Exception:
-            logger.exception("job_trace_failed job_id=%s stage=%s", self.job_id, stage)
+            pass
 
-    def _trace_error(self, stage: str, call_id: str) -> None:
+    def _trace_error(self, stage: str, error: str) -> None:
         try:
             from app.jobs.service import append_trace
-
-            append_trace(
-                self.job_id,
-                {  # type: ignore[arg-type]
-                    "type": "thinking",
-                    "call_id": call_id,
-                    "content": f"LLM 调用失败 ({stage})，请检查模型配置后重试。",
-                },
-            )
+            append_trace(self.job_id, {  # type: ignore[arg-type]
+                "type": "thinking",
+                "content": f"LLM 调用失败 ({stage}): {error[:200]}",
+            })
         except Exception:
-            logger.exception("job_trace_failed job_id=%s stage=%s", self.job_id, stage)
+            pass
 
     def _check_cap(self) -> None:
         if not self.provider.is_paid:

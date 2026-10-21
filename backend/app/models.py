@@ -29,7 +29,6 @@ class Course(Base):
     title: Mapped[str] = mapped_column(String(300))
     description: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
-    open_count: Mapped[int] = mapped_column(Integer, default=0, server_default=text("0"))
 
     # The exam, the interview, the day the material stops being optional. A string in
     # local YYYY-MM-DD, not a DateTime, for exactly the reason UnavailableDay.day gives

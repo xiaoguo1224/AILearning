@@ -229,7 +229,7 @@ export default async function ProjectKnowledgePage({
   const titles = new Map((list?.items ?? []).map((item) => [item.id, item.title]));
 
   return (
-    <div className="max-w-full space-y-8">
+    <div className="max-w-3xl space-y-8">
       <PageHeader
         title={t("Knowledge")}
         description={t("What this project has settled. Core entries are not treated as settled until you confirm them.")}

@@ -495,7 +495,7 @@ def _cost_limit_exceeded(exc: CostLimitExceeded) -> HTTPException:
     return HTTPException(402, detail=metering.cost_limit_detail(exc))
 
 
-def _save_course(session: Session, course: dict, *, commit: bool = True) -> models.Course:
+def _save_course(session: Session, course: dict) -> models.Course:
     row = models.Course(title=course["title"], description=course["description"])
     for m_pos, module in enumerate(course["modules"]):
         module_row = models.Module(title=module["title"], position=m_pos)
@@ -519,11 +519,8 @@ def _save_course(session: Session, course: dict, *, commit: bool = True) -> mode
             module_row.lessons.append(lesson_row)
         row.modules.append(module_row)
     session.add(row)
-    if commit:
-        session.commit()
-        session.refresh(row)
-    else:
-        session.flush()
+    session.commit()
+    session.refresh(row)
     return row
 
 
@@ -818,7 +815,7 @@ def generate_job(body: GenerateRequest, session: Session = Depends(get_session))
 
         update_progress(job_id, {"stage": "outline", "done": 0, "total": 0})
         run_id = uuid.uuid4().hex
-        meter = MeteredLLM(_get_provider(), run_id, job_id=job_id)
+        meter = MeteredLLM(_get_provider(), run_id)
         try:
             outline = gen.generate_outline(meter, chunks, owners)
         except CostLimitExceeded as exc:
@@ -1558,7 +1555,7 @@ def get_limits():
 @app.get("/courses")
 def list_courses(session: Session = Depends(get_session)):
     rows = session.query(models.Course).order_by(models.Course.created_at.desc()).all()
-    return [{"id": r.id, "title": r.title, "description": r.description, "open_count": r.open_count} for r in rows]
+    return [{"id": r.id, "title": r.title, "description": r.description} for r in rows]
 
 
 @app.get("/courses/{course_id}")

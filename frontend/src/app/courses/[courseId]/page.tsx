@@ -122,30 +122,41 @@ export default async function CoursePage(props: { params: Promise<{ courseId: st
           <div className="min-w-0 rounded-surface bg-surface p-6 shadow-raise sm:p-8">
             <CourseTabs courseId={course.id} active="lessons" />
             <div className="mt-6 flex flex-col gap-8">
-              {course.modules.map((module) => (
+              {course.modules.map((module, mi) => (
                 <section key={module.id}>
-                  <h2 className="text-subtitle">{module.title}</h2>
-                  <ul className="mt-2 divide-y divide-line">
-                    {module.lessons.map((lesson) => (
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-accent text-white text-small font-semibold">
+                      {mi + 1}
+                    </span>
+                    <h2 className="text-subtitle font-semibold">{module.title}</h2>
+                    <span className="text-micro text-ink-muted">
+                      {module.lessons.length} 课时
+                    </span>
+                  </div>
+                  <ul className="mt-3 flex flex-col gap-1">
+                    {module.lessons.map((lesson, li) => (
                       <li key={lesson.id}>
                         <Link
                           href={`/courses/${course.id}/lessons/${lesson.id}`}
-                          className="flex items-center gap-3 py-3 transition-colors duration-fast ease-standard hover:text-accent"
+                          className="group flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-fast ease-standard hover:bg-surface-sunken"
                         >
                           <span
                             aria-hidden
-                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-micro ${
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-micro transition-colors ${
                               lesson.completed
                                 ? "bg-success-fill text-success-on-fill"
-                                : "border border-line-hover"
+                                : "border border-line-strong group-hover:border-accent group-hover:text-accent"
                             }`}
                           >
-                            {lesson.completed ? "✓" : ""}
+                            {lesson.completed ? "✓" : <span className="text-micro text-ink-subtle">{li + 1}</span>}
                           </span>
-                          <span className={lesson.completed ? "text-ui text-ink-muted" : "text-ui"}>
+                          <span className={`flex-1 ${lesson.completed ? "text-ui text-ink-muted" : "text-ui"}`}>
                             {lesson.title}
                           </span>
                           {lesson.completed && <span className="sr-only">{t("(completed)")}</span>}
+                          <span aria-hidden className="text-ink-subtle opacity-0 transition-opacity group-hover:opacity-100">
+                            →
+                          </span>
                         </Link>
                       </li>
                     ))}

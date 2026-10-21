@@ -6,15 +6,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app import generation as gen
 from app.db import get_session as get_db
-from app.jobs import service as jobs
+from app import generation as gen
 from app.llm import get_provider
 from app.metering import MeteredLLM
-from app.staged_gen import service
-from app.staged_gen.schemas import GenerationInput, ReviewInput
 
-router = APIRouter(prefix="/api/courses", tags=["staged-generation"])
+router = APIRouter(prefix="/api/courses/outline", tags=["staged-generation"])
 
 
 class OutlineGenerateInput(BaseModel):
@@ -30,7 +27,7 @@ class OutlineReviseInput(BaseModel):
     topic: str | None = None
 
 
-@router.post("/outline/generate")
+@router.post("/generate")
 def generate_outline_endpoint(body: OutlineGenerateInput):
     """Generate a course outline for review. Does not create a course."""
     if not body.topic.strip() and not body.sources:
@@ -62,7 +59,7 @@ def generate_outline_endpoint(body: OutlineGenerateInput):
         raise HTTPException(500, f"Outline generation failed: {str(exc)[:200]}")
 
 
-@router.post("/outline/revise")
+@router.post("/revise")
 def revise_outline_endpoint(body: OutlineReviseInput):
     """Revise an outline based on user feedback."""
     if not body.feedback.strip():
@@ -74,31 +71,9 @@ def revise_outline_endpoint(body: OutlineReviseInput):
     if body.topic:
         chunks.append(f"Topic: {body.topic}")
     try:
-        outline = gen.generate_outline(meter, chunks, owners=["outline"], feedback=body.feedback)
+        outline = gen.generate_outline(
+            meter, chunks, owners=["outline"], feedback=body.feedback
+        )
         return {"outline": outline}
     except Exception as exc:
         raise HTTPException(500, f"Outline revision failed: {str(exc)[:200]}")
-
-
-@router.post("/generation/job", status_code=202)
-def start_generation(body: GenerationInput, db: Session = Depends(get_db)):
-    job = service.create(db, body)
-    return {"job_id": job.id}
-
-
-@router.post("/generation/{job_id}/review", status_code=202)
-def review_generation(job_id: str, body: ReviewInput, db: Session = Depends(get_db)):
-    service.review(db, job_id, body)
-    return {"job_id": job_id}
-
-
-@router.post("/generation/{job_id}/retry", status_code=202)
-def retry_generation(job_id: str, db: Session = Depends(get_db)):
-    job = service.locked_job(db, job_id)
-    if job.status != "failed":
-        raise HTTPException(409, "Only failed tasks can be retried.")
-    job.status, job.error = "pending", None
-    db.commit()
-    jobs.append_trace(job_id, {"type": "thinking", "content": "用户重试未完成的生成步骤。"})
-    jobs.run_in_background(job_id, service.run)
-    return {"job_id": job_id}
