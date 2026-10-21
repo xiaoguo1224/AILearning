@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ProjectWorkspace } from "@/components/ProjectWorkspace";
+import { CreateProjectButton } from "@/components/CreateProjectButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";

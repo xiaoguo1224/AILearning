@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { BackButton } from "@/components/BackButton";
 import { notFound } from "next/navigation";
 import { SubmissionReviewPanel } from "@/components/SubmissionReviewPanel";
@@ -152,7 +153,7 @@ export default async function SubmissionDetailPage({
                       ) : (
                         <Link
                           href={`/projects/${project}/submissions/${item.id}`}
-                          className="text-accent underline"
+                          style={{ color: "#1fae54" }}
                         >
                           {t("Open")}
                         </Link>

@@ -27,7 +27,7 @@ export function CreateProjectButton() {
     try {
       const project = await createProject({
         name: name.trim(),
-        goal: goal.trim() || undefined,
+        goal: goal.trim() || "",
         mode: mode as "course",
       });
       setOpen(false);
