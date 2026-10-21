@@ -2415,6 +2415,16 @@ def get_course_concepts(course_id: int, session: Session = Depends(get_session))
     now = review.now_utc()
     lessons = review.course_lessons(session, course)
     concepts = review.course_concepts(session, course, now, lessons=lessons)
+    # Attach AI-extracted importance for treemap visualization.
+    importance_map: dict[str, int] = {}
+    for lesson in lessons:
+        if lesson.concept_importance:
+            for name, imp in lesson.concept_importance.items():
+                key = normalize_concept(name)
+                if key not in importance_map:
+                    importance_map[key] = imp
+    for c in concepts:
+        c["importance"] = importance_map.get(c["concept_key"], 3)
     counts: dict[str, int] = defaultdict(int)
     for concept in concepts:
         counts[concept["bucket"]] += 1

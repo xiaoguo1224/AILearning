@@ -106,6 +106,9 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # sentinel that some later query has to remember to exclude.
     ("courses", "deadline", "VARCHAR(10)"),
     ("courses", "deadline_label", "VARCHAR(200)"),
+    # AI concept importance (1-5) for treemap visualization. JSON dict mapping
+    # concept name to importance. Nullable; NULL means not yet extracted.
+    ("lessons", "concept_importance", "JSON"),
     # Work-it-out mode: the one move a guided reply withheld. The worked example of the
     # shape study planning's own columns do not exercise, a NOT NULL column with a
     # constant default, and the matched pair above is exactly what it needs:

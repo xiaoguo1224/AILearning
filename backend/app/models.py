@@ -77,6 +77,7 @@ class Lesson(Base):
     position: Mapped[int] = mapped_column(Integer)
     content: Mapped[str] = mapped_column(Text, default="")  # markdown
     concepts: Mapped[list] = mapped_column(JSON, default=list)
+    concept_importance: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     module: Mapped[Module] = relationship(back_populates="lessons")

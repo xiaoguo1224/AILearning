@@ -24,10 +24,11 @@ SYSTEM_PROMPT = """你是课程知识点提炼助手。给定一节课的标题�
 """
 
 
-def extract_lesson_concepts(content: str, title: str) -> list[str]:
-    """Extract concept names from a lesson's content via LLM."""
+def extract_lesson_concepts(content: str, title: str) -> tuple[list[str], dict[str, int]]:
+    """Extract concept names and their importance (1-5) from a lesson's content via LLM.
+    Returns (concepts, {concept_name: importance})."""
     if not content or not content.strip():
-        return []
+        return [], {}
     run_id = uuid.uuid4().hex
     meter = MeteredLLM(get_provider(), run_id)
     prompt = f"课程标题：{title}\n\n课程内容：\n{content[:4000]}"
@@ -39,14 +40,26 @@ def extract_lesson_concepts(content: str, title: str) -> list[str]:
             text = text.rsplit("```", 1)[0]
         items = json.loads(text.strip())
         concepts = []
+        importance = {}
         for item in items:
             if isinstance(item, dict) and item.get("concept"):
-                concepts.append(str(item["concept"]).strip()[:50])
+                name = str(item["concept"]).strip()[:50]
+                if name:
+                    concepts.append(name)
+                    try:
+                        imp = int(item.get("importance", 3))
+                        importance[name] = max(1, min(5, imp))
+                    except (ValueError, TypeError):
+                        importance[name] = 3
             elif isinstance(item, str):
-                concepts.append(item.strip()[:50])
-        return [c for c in concepts if c][:20]
+                name = item.strip()[:50]
+                if name:
+                    concepts.append(name)
+                    importance[name] = 3
+        concepts = [c for c in concepts if c][:20]
+        return concepts, {k: v for k, v in importance.items() if k in concepts}
     except (json.JSONDecodeError, IndexError):
-        return []
+        return [], {}
 
 
 def extract_course_concepts(session: Session, course_id: int) -> dict[int, list[str]]:
@@ -57,9 +70,10 @@ def extract_course_concepts(session: Session, course_id: int) -> dict[int, list[
     result = {}
     for mod in course.modules:
         for lesson in mod.lessons:
-            concepts = extract_lesson_concepts(lesson.content or "", lesson.title)
+            concepts, importance = extract_lesson_concepts(lesson.content or "", lesson.title)
             if concepts:
                 lesson.concepts = concepts
+                lesson.concept_importance = importance
                 result[lesson.id] = concepts
     session.commit()
     return result
