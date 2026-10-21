@@ -149,12 +149,8 @@ export default async function LessonPage(
         </ul>
       )}
 
-      <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-w-0">
-          <p className="mb-4 rounded-surface border border-line p-4 text-small text-ink-muted">{t("AI-generated explanations, formulas and examples require review before being treated as authoritative. Textbook extensions are not verified course facts.")}</p>
-          <LessonMarkdown content={lesson.content} title={lesson.title} />
-        </div>
-        <aside className="space-y-8">
+      <div className="mt-8 grid items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
+        <aside aria-label={t("Questions")} className="space-y-6 lg:sticky lg:top-6">
           <LessonToc content={lesson.content} />
           <LessonQuizPanel
             courseId={course}
@@ -162,6 +158,12 @@ export default async function LessonPage(
             initialQuiz={lesson.quiz}
             progress={lesson.quiz_progress}
           />
+        </aside>
+        <div className="min-w-0">
+          <p className="mb-4 rounded-surface border border-line p-4 text-small text-ink-muted">{t("AI-generated explanations, formulas and examples require review before being treated as authoritative. Textbook extensions are not verified course facts.")}</p>
+          <LessonMarkdown content={lesson.content} title={lesson.title} />
+        </div>
+        <aside aria-label={t("Q&A")} className="space-y-6 lg:sticky lg:top-6">
           <LessonQaSection lessonId={lesson.id} lessonTitle={lesson.title} />
         </aside>
       </div>
