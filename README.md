@@ -32,6 +32,8 @@
 - [`docs/TASKS.md`](docs/TASKS.md)：可逐项执行的工程任务。
 - [`docs/DECISIONS.md`](docs/DECISIONS.md)：技术及产品决策记录。
 - [`docs/PROGRESS.md`](docs/PROGRESS.md)：真实进度与测试证据。
+- [`docs/OPERATIONS.md`](docs/OPERATIONS.md)：本机运行、备份与恢复。
+- [`docs/PRIVACY.md`](docs/PRIVACY.md)：数据位置、密钥、删除能力与隐私边界。
 
 ## Codex 开发入口
 

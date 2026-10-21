@@ -37,3 +37,53 @@ def teaching_system(system: str) -> str:
         "source quotations, code, identifiers and existing concept keys exactly. "
         "This language preference does not override evidence or safety rules."
     )
+
+
+# User-facing messages for the project-scoped flows (P4/P5 conflict and diagnostic
+# errors). The `error` code is the stable contract for the frontend and tests; the
+# message follows the request locale. Codes not listed here keep the message the
+# caller passed, unchanged.
+ERROR_MESSAGES: dict[str, tuple[str, str]] = {
+    # code: (zh-CN, en)
+    "knowledge_changed": (
+        "该条目已被更新，请重新加载并检查后再保存或确认。",
+        "This entry changed. Reload and review it before saving or confirming.",
+    ),
+    "project_archived": (
+        "项目已归档，只读。",
+        "Archived projects are read-only.",
+    ),
+    "suggestion_decided": (
+        "该建议已处理。",
+        "This suggestion has already been decided.",
+    ),
+    "diagnosis_closed": (
+        "该诊断已无需复查。",
+        "This diagnosis no longer needs review.",
+    ),
+    "same_project": (
+        "请选择另一个项目作为建议目标。",
+        "Choose a different project for this suggestion.",
+    ),
+    "unverified_source": (
+        "请使用证据专用接口来关联来源。",
+        "Use the evidence-specific endpoint to attach a source.",
+    ),
+    "not_a_diagnosis": (
+        "请选择一条有证据的错误或警告。",
+        "Choose an error or warning with evidence.",
+    ),
+    "concept_mismatch": (
+        "该概念与这条知识不匹配。",
+        "The concept does not match this knowledge entry.",
+    ),
+}
+
+
+def localize_error(code: str, fallback: str) -> str:
+    """Pick the user-facing error message for the current request locale."""
+    pair = ERROR_MESSAGES.get(code)
+    if pair is None:
+        return fallback
+    zh, en = pair
+    return en if teaching_locale.get() == "en" else zh

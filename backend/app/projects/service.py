@@ -8,6 +8,7 @@ from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, joinedload
 
 from app.db import get_session
+from app.locale import localize_error
 from app.models import utcnow
 from app.projects.models import Project, ProjectCourse
 from app.projects.schemas import LinkedCourse, ProjectDetail, ProjectOut
@@ -16,7 +17,9 @@ logger = logging.getLogger("studyforge.projects")
 
 
 def project_error(status: int, code: str, message: str) -> HTTPException:
-    return HTTPException(status, detail={"error": code, "message": message})
+    return HTTPException(
+        status, detail={"error": code, "message": localize_error(code, message)}
+    )
 
 
 def project_session(session: Session = Depends(get_session)):

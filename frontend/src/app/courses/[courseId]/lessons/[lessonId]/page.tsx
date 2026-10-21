@@ -33,7 +33,7 @@ function backToCourseLink(courseId: string, t: Translator) {
 }
 
 export default async function LessonPage(
-  props: PageProps<"/courses/[courseId]/lessons/[lessonId]">,
+  props: { params: Promise<{ courseId: string; lessonId: string }> },
 ) {
   const t = await getTranslator();
   const { courseId, lessonId } = await props.params;

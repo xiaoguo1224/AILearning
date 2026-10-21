@@ -22,7 +22,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: "StudyForge", description: t("Turn any material into a structured course with quizzes.") };
 }
 
-export default async function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const t = await getTranslator();
   return (
     <html

@@ -24,7 +24,7 @@ const BACK_TO_COURSES_LINK = (
     <LocalizedText text="&larr; All courses" /></Link>
 );
 
-export default async function CoursePage(props: PageProps<"/courses/[courseId]">) {
+export default async function CoursePage(props: { params: Promise<{ courseId: string }> }) {
   const t = await getTranslator();
   const { courseId } = await props.params;
   const id = Number(courseId);

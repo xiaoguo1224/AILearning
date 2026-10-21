@@ -111,9 +111,11 @@ async function findNextUp(courses: CourseSummary[], locale: import("@/lib/i18n")
 async function RetentionStat({ today }: { today: ReviewToday }) {
   const t = await getTranslator();
   if (today.retention === null) {
-    const note = `Not enough review history yet: ${today.sample_size} ${
-      today.sample_size === 1 ? "review counts" : "reviews count"
-    } so far. A percentage from a handful of reviews could only read 0, 50 or 100 and would swing day to day, so it is held back until there is enough.`;
+    const note = t(
+      "Not enough review history yet: {0} {1} so far. A percentage from a handful of reviews could only read 0, 50 or 100 and would swing day to day, so it is held back until there is enough.",
+      today.sample_size,
+      today.sample_size === 1 ? t("review") : t("reviews"),
+    );
     return <Stat value="–" label={t("Retained at review")} title={note} note={note} />;
   }
   return (
@@ -121,7 +123,10 @@ async function RetentionStat({ today }: { today: ReviewToday }) {
       value={`${Math.round(today.retention * 100)}%`}
       label={t("Retained at review")}
       emphasis
-      title={`Over the last 30 days, across ${today.sample_size} reviews of concepts that were genuinely due.`}
+      title={t(
+        "Over the last 30 days, across {0} reviews of concepts that were genuinely due.",
+        today.sample_size,
+      )}
     />
   );
 }

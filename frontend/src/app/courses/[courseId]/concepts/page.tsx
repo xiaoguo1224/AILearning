@@ -42,7 +42,7 @@ const BACK_TO_COURSES_LINK = (
 );
 
 export default async function CourseConceptsPage(
-  props: PageProps<"/courses/[courseId]/concepts">,
+  props: { params: Promise<{ courseId: string }> },
 ) {
   const t = await getTranslator();
   const { courseId } = await props.params;

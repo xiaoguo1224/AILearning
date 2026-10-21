@@ -4,7 +4,7 @@
 
 ## 当前状态
 
-- 当前里程碑：**P0~P4 与 P5-01 已验收；下一步 P5-02 核心内容审核，随后端到端与质量整合**。本节与最新追加记录优先于下方历史状态。
+- 当前里程碑：**P0~P5 全部完成，P5-06 已通过本地验收；待最终提交与远程推送**。本节与最新追加记录优先于下方历史状态。
 - 已确定：产品需求、单人本地运行边界、项目化、课程/自由学习、自动知识草稿与核心审核、跨项目确认。
 - 已准备：AGENTS、PRD、ARCHITECTURE、TASKS、DECISIONS、README 的目标文档草案。
 - 已有源码审查：通过 GitHub 阅读 StudyForge 目录、models、ingest、generation、tutor、remediation、db、部分 API 及依赖文件。
@@ -33,9 +33,40 @@
 
 ## 下次工作入口
 
-1. 核对当前状态和最新追加记录，保留用户既有文档删除；不要重新执行已通过的 P0 基线。
-2. 从 P5-02 继续：核查核心公式、示例与参考解法的审核入口/证据和 AI 扩展标记，不能把课程树的推荐状态当作内容已审核。
-3. 按 P5-02~06 完成内容审核、旧 Today/Review 时间驱动交互清理、三条用户流程及最终质量回归；不重复 P0~P4 已验收任务。
+1. P5-03~06 已完成，文档与功能提交收尾后向远程仓库推送。提交消息：P5-05/P5-06 文档与双语改动；若 push 被鉴权拦截，记为剩余外部阻塞而非已完成。
+2. 本轮确认无法实际验证的项目（保持诚实记录）：真实模型端到端（仅 stub/fake 契约测试）、Playwright 浏览器回归（仅 HTTP smoke）、`unsqueeze` 语义依据 PyTorch 官方文档而非本机执行。
+3. 若用户验收 P5，下一阶段从 DECISIONS/目标文档草案的后续里程碑（如有）重新评估。
+
+### 2026-10-21 — P5-03 验收：三条用户流程端到端验证
+- 功能提交：`90d3378`（与 P5-02 合并提交）。
+- 新增 `backend/tests/test_e2e_flows.py` 3 测试，均按既有 stub provider 风格：
+  1. PyTorch 学习闭环：创建项目 → 课程路径含广播 → 提交 buggy `weights[:, 0]` 代码+日志 → 静态评审 `tensor_shape_reduction` 为 `confirmed_static` → 三级提示 → 参考解法带 `ai_generated_unverified` 标签 → 变体草稿 → 重新提交修复版 `[:, 0:1]` 关联变体（version 2）→ 形状问题消失 → 错因来自评审证据 → 复习任务可列出。
+  2. SPDM 自由学习：文本资源上传 → 会话 → stub 探索回复带引用 [S1] → 已接地（source_refs ≥1）→ 知识草稿自动保存 → 练习草稿 → 确认。
+  3. 跨项目补课：项目 A 错因 → 建议待确认 → 目标项目零变更 → 接受 → 目标错因 +1 → 第二建议拒绝 → 目标仍零变更。
+- 实际验证（本机）：
+  1. `uv run pytest tests/test_e2e_flows.py -q` **3 passed**。调试中发现两个测试 bug（非产品 bug）：知识列表项无 body（改取 `GET /api/knowledge/{id}` 详情）、确认接口需 `expected_updated_at`（取详情的 `updated_at`；空/缺 body 返回 422），已修正。
+  2. 真 HTTP E2E（uvicorn 8123，临时库，`STUDYFORGE_LLM_PROVIDER=fake`）**24/24 通过**。关键发现：fake provider 只服务 outline/remediation/tutor/lesson 阶段，variant/explore/practice 模型阶段返回 502 且不伪造任何内容——ADR-018/019 行为真机验证。
+  3. `uv run ruff check app/submissions tests/test_e2e_flows.py` 通过。
+- 本轮不调用真实模型、不修改个人数据库、不执行上传程序、不推送远程；用户既有文件删除保持原状。
+
+### 2026-10-21 — P5-04 验收：全量回归与 tsc 修复
+- 功能提交：`ad47e97`（"fix: replace removed Next.js global PageProps/LayoutProps with explicit types"）。
+- 后端全量：首次 `uv run pytest -q` **29 failed / 1309 passed / 2 skipped**。根因已证实为环境非代码：沙箱代理环境变量含畸形裸 IPv6 `NO_PROXY` 条目，导致 `httpx.Client()` 构造本身抛 `InvalidURL: Invalid port ':1]'`，集中在 test_ingest.py / test_multi_source.py 的 URL 安全测试。用干净的 `no_proxy=localhost,127.0.0.1` 重跑：目标文件 118 通过，全量 **1338 passed / 2 skipped**（2 skip 为既有历史 pin）。`uv run ruff check app tests` 通过。
+- 前端：`npm test` **24 文件 / 178 通过**，`npm run lint` 清洁；但 `tsc --noEmit` 在 5 个未改动页面报 TS2304（Next 16.3.3 不再提供全局 `PageProps`/`LayoutProps` 类型）。显式写明 props 类型（`{ children: React.ReactNode }` / `{ params: Promise<{ courseId: string }> }`，含 lessonId 页）后 tsc exit 0，lint 清洁，`npm run build` 成功，所有路由在清单中（含全部 `/projects/[projectId]/*`）。
+- 手工回归：项目无 Playwright 且本机无浏览器，改用生产 `next start` (3123) + 后端真机 smoke：`/`、`/projects`、`/usage`、`/review`、`/projects/1` 全 HTTP 200，`<html lang="zh-CN">`。
+- 无个人数据库写入、无真实模型调用、无上传代码执行。
+
+### 2026-10-21 — P5-05 验收：隐私说明
+- 新增 `docs/PRIVACY.md`：数据仅存本地 SQLite（`STUDYFORGE_DB`，默认 `backend/studyforge.sqlite3`）与本地资源目录；密钥只经环境变量/被忽略的 `.env`；上传代码永不执行；模型调用只去用户配置的 provider，fake 永不联网；模型失败返回受控错误且不伪造。删除语义代码核实：`DELETE /api/submissions/{id}` 级联删除制品与评审（delete-orphan）；资源删除跨项目引用计数后才物理清理；项目归档只读，无硬删除接口。URL 抓取拒私有地址与内网重定向（SSRF 防护）。
+- README 导航追加 `docs/OPERATIONS.md` 与 `docs/PRIVACY.md` 链接。
+
+### 2026-10-21 — P5-06 验收：Today 双语与后端动态错误码本地化
+- 前端 `frontend/src/app/page.tsx` `RetentionStat`：两条硬编码英文说明走 `t(...)`（"Not enough review history yet: {0} {1} so far…" 与 "Over the last 30 days, across {0} reviews of concepts that were genuinely due."，单复数取 `t("review")`/`t("reviews")`）；`zh-CN.json` 新增 4 键（共 779 键），键↔调用点程序化校验，`tsc` 通过。
+- 后端 `app/locale.py` 新增 `ERROR_MESSAGES` 字典 + `localize_error(code, fallback)`，按请求语言 ContextVar（`teaching_locale`）返回中英；覆盖 8 个冲突/诊断错误码：`knowledge_changed`（409）、`project_archived`（409）、`suggestion_decided`（409）、`diagnosis_closed`（409）、`same_project`（422）、`unverified_source`（422）、`not_a_diagnosis`（422）、`concept_mismatch`（422）；未列出的 code 保持原消息不变。`app/projects/service.py::project_error` 接入（顶层 import，无循环，ruff 清洁）。测试只断言 error code 不断言文案，契约安全。
+- 真机验证（uvicorn 8124，临时库，fake provider）：对已决建议做反向 decision → 409 `suggestion_decided`，默认中文"该建议已处理。"，`Accept-Language: en` 下英文 "This suggestion has already been decided."；同项目建议 → 422 `same_project` 中英均正确。注意：重复同一 decision 幂等 200，仅反向 decision 才 409。
+- 异常态语言切换复核：扫描 P4/P5 项目页面（submissions/explore/knowledge/review-tasks/suggestions/learn/content-reviews），无 t(...) 外硬编码英文；knowledge 页经 `ApiError.message` 渲染后端错误，本地化文案正确展示。
+- 实际验证：`uv run pytest tests/test_locale.py tests/test_knowledge.py tests/test_suggestions.py tests/test_errors.py tests/test_content_reviews.py -q` **72 passed**；前端 `npm test` **178 passed**，lint 清洁。
+- 剩余：前端 `npm run build` 在本次 page.tsx/zh-CN.json 变更后尚未重跑（tsc/test/lint 已过）；随本批提交前重跑。
 
 
 ### 2026-10-20 — P1 完整验收与学习机制调整（取消时间驱动，转为知识掌握驱动）
@@ -183,6 +214,24 @@
 - 环境：Windows/PowerShell，Python 3.12.0、uv 0.10.9、Node 24.0.0、npm 11.3.0、Docker Engine 29.3.1、Compose 5.1.1。
 - Docker 最初未运行；以隐藏窗口启动已安装的 Docker Desktop 后 `docker info` 成功。仓库尚无 Compose 配置。
 - 验收：分支、HEAD、目录、工作区、远程均已实际核查；下一项 P0-02 文档合并，然后执行容器内测试。无应用功能在此步被标为通过。
+
+### 2026-10-21 — P5-02 验收：核心公式/示例/参考解法来源核对与 AI 扩展标记
+- 功能提交：本记录所在提交。P5-02 标记完成；审核机制（`content_reviews/`）见前一记录，本批完成基础核心内容的实际来源核对与验收记录。
+- 审核范围（系统确定性展示给用户的教学断言，非模型即时生成）：
+  1. `router.py::_hint_ladder` L2："Indexing with a scalar removes that axis: a (N, M) tensor becomes (N,)." —— **通过，原文事实**。D2L 中文版 2.1.4 索引和切片：`X[-1]` 在 (3,4) 矩阵上得到形状 (4,) 的向量（标量索引移除该轴），`X[1:3]` 得到 (2,4)（切片保留轴）。https://zh.d2l.ai/chapter_preliminaries/ndarray.html
+  2. `static_check.py::_shape_reduction_finding`："If this object is a 2-D PyTorch tensor, the selected result is a vector, not a column matrix"（`tensor[:, 0]`）—— **通过，原文事实**，同 D2L 2.1.4。
+  3. 提示 L3："For a column, apply .unsqueeze(1) to the selected vector, or use a slice" —— **通过，部分 AI 扩展**。切片保留轴见 D2L 2.1.4；`unsqueeze` 未在 D2L 2.1 出现，语义以 PyTorch 官方文档为准（"Returns a new tensor with a dimension of size one inserted at the specified position"，docs.pytorch.org）。代码注释已标记该条为 AI 扩展。
+  4. 参考解法：`w_col = weights[:, 0:1]`；"Equivalent column values: weights[:, 0].unsqueeze(1)"；"A matrix @ vector is also valid when a vector output is intended." —— **通过**。`[:, 0:1]` 保留轴见 D2L 2.1.4；matrix-vector 合法见 D2L 2.3.8（`torch.mv(A(5,4), x(4,))` → (5,)）；"This snippet was not executed by the server." 用户侧标注保留，代码注释补充来源标记。
+  5. "This does not repair incompatible matmul inner dimensions." / `llm_review.py` prompt 规则 7 —— **通过，原文事实**。D2L 2.3.9：A ∈ R^{n×k}, B ∈ R^{k×m}；"矩阵-矩阵乘法…不应与'Hadamard积'混淆"。https://zh.d2l.ai/chapter_preliminaries/linear-algebra.html
+  6. 提示 L2："Most PyTorch shape errors are one of: incompatible inner dimensions in matmul, a rank mismatch in broadcasting, or a device/dtype difference." —— **通过，标记为 AI 扩展（开发者教学启发式）**。三个分量各有教材依据（D2L 2.3.9 内维要求、D2L 2.1.3 沿长度为1的轴广播），但 "Most…are one of" 的归纳本身是启发式，非教材公式；代码注释已显式标记。
+- 教材白名单 URL 全部实际可达并内容核对：2.1 数据操作（含 §2.1.3 广播机制、§2.1.4 索引和切片）、2.3 线性代数（含 §2.3.8/2.3.9 矩阵-向量/矩阵-矩阵乘法）、2.5 自动微分、10.3 注意力评分函数、10.7 Transformer（HTTP 200）。视觉 Token/多模态/Radar/VLM 仍为扩展路径，无虚构章节映射。
+- 实际验证（本机，无 Docker）：
+  1. 改动前基线：`uv run pytest tests/test_content_reviews.py tests/test_curriculum.py tests/test_submissions.py -q` **27 passed**。
+  2. 注释标记后：`uv run pytest tests/test_submissions.py tests/test_content_reviews.py -q` **21 passed**；`uv run ruff check app/submissions/` 通过。仅加注释，无行为变更。
+  3. D2L 页面为公开文档站点的只读抓取，未抓取/保存受版权限制的全文到仓库；证据为章节号与原文引文。
+- 未发现与来源矛盾的断言，本轮无内容修正。课程推荐仍不等同内容审核的界限保持；后续 AI 生成的课程正文仍走 `content_reviews/` 逐版审核。
+- 限制：本机无 torch/numpy，`unsqueeze` 等价性未在本地执行验证（产品本就不执行代码）；语义断言以官方文档为准并已如实标注来源层级。
+- 下一步：P5-03 三条用户流程端到端验证。
 
 ```markdown
 ### YYYY-MM-DD HH:mm — Session N

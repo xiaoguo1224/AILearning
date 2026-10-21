@@ -573,7 +573,7 @@ function PlanScreen({ plan, daysOff, t }: { plan: CoursePlan; daysOff: DayOff[];
   );
 }
 
-export default async function CoursePlanPage(props: PageProps<"/courses/[courseId]/plan">) {
+export default async function CoursePlanPage(props: { params: Promise<{ courseId: string }> }) {
   const t = await getTranslator();
   const { courseId } = await props.params;
   const id = Number(courseId);

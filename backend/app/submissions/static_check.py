@@ -100,7 +100,12 @@ def analyze_python_code(filename: str, source_code: str) -> list[StaticFinding]:
 
 
 def _shape_reduction_finding(filename: str, node: ast.Subscript) -> StaticFinding | None:
-    """Flag `tensor[:, 0]`, which drops an axis where `tensor[:, 0:1]` would keep it."""
+    """Flag `tensor[:, 0]`, which drops an axis where `tensor[:, 0:1]` would keep it.
+
+    Provenance (P5-02 audit, 2026-10-21): scalar-index-removes-axis and
+    slice-keeps-axis follow D2L 2.1.4 索引和切片 (X[-1] -> (4,), X[1:3] -> (2,4)).
+    原文事实.
+    """
     if not isinstance(node.slice, ast.Tuple) or len(node.slice.elts) != 2:
         return None
     first, second = node.slice.elts
@@ -228,6 +233,8 @@ def correlate(
                 "your log, not a verified run."
             ),
             suggestion=(
+                # Provenance (P5-02 audit, 2026-10-21): matrix-vector validity per
+                # D2L 2.3.8; inner-dimension requirement per D2L 2.3.9. 原文事实.
                 "Check the intended output shape first. Matrix-vector matmul can be valid. "
                 "Keep the axis only if a column is required; this alone cannot fix "
                 "incompatible inner dimensions. Re-run locally and upload the output."

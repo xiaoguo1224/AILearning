@@ -61,11 +61,11 @@
 ## P5 — 课程与质量整合
 
 - [x] P5-01 构建结构化课程知识树与教材章节映射，支持依赖自适应进阶（无固定天数限制）。
-- [-] P5-02 审核核心公式、示例与参考解法；标记 AI 扩展。已完成课时/已揭示解法的版本绑定审核入口与失效保护，待基础核心内容的实际核对和验收记录。
-- [ ] P5-03 整体端到端验证三条用户流程。
-- [ ] P5-04 执行全量 pytest、Vitest、构建和手工回归。
-- [ ] P5-05 完成安装、使用、备份恢复和隐私说明。
-- [ ] P5-06 补齐少量 Today 记忆率说明和后端动态冲突/诊断消息的双语，复核异常态语言切换。
+- [x] P5-02 审核核心公式、示例与参考解法；标记 AI 扩展。课时/已揭示解法的版本绑定审核入口与失效保护已完成；2026-10-21 完成基础核心内容实际来源核对：广播/标量索引降轴/列轴保留/unsqueeze/matrix-vector/matrix-matmul 断言对照 D2L 中文版 2.1/2.3 原文与 PyTorch 官方文档逐条验证，5 个白名单章节 URL 全部可达并内容核对，AI 扩展（启发式归纳、unsqueeze 建议）在代码注释中显式标记。验收见 PROGRESS 最新记录。
+- [x] P5-03 整体端到端验证三条用户流程。2026-10-21 完成：`backend/tests/test_e2e_flows.py` 3/3 通过（PyTorch 学习闭环 / SPDM 自由学习 / 跨项目补课）；真 HTTP 24/24 通过（临时库 + fake provider）。假模型在 variant/explore/practice 阶段按设计返回 502 且不伪造内容（ADR-018/019 真机验证）。
+- [x] P5-04 执行全量 pytest、Vitest、构建和手工回归。2026-10-21 完成：后端全量 **1338 passed / 2 skipped**（清理畸形代理环境变量后；29 个初始失败证实为沙箱环境问题非代码问题）；前端 `npm test` 24 文件 / 178 通过，lint 清洁。修复 Next 16.3.3 移除全局 PageProps/LayoutProps 的 tsc 错误（提交 `ad47e97`），`npm run build` 成功。Playwright 缺席改用 HTTP smoke：`/`, `/projects`, `/usage`, `/review`, `/projects/1` 全 200，`<html lang="zh-CN">`。
+- [x] P5-05 完成安装、使用、备份恢复和隐私说明。2026-10-21 完成：README 安装/使用已完整；新建 `docs/PRIVACY.md`（本地 SQLite+资源目录、密钥仅 env/忽略的 .env、上传代码永不执行、模型调用只去用户配置的 provider 且 fake 永不联网、删除语义代码核实、URL 抓取拒私有地址与内网重定向）；README 导航追加 OPERATIONS/PRIVACY 链接。
+- [x] P5-06 补齐少量 Today 记忆率说明和后端动态冲突/诊断消息的双语，复核异常态语言切换。2026-10-21 完成：Today 页 RetentionStat 两条英文说明走 t(...)，zh-CN.json 新增 4 键（779 键，含 review/reviews 单复数）；`locale.py` 新增 ERROR_MESSAGES + `localize_error`（8 个冲突/诊断错误码，按请求语言返回），`projects/service.py::project_error` 接入；真机验证 409 `suggestion_decided`、422 `same_project` 中英切换正确；P4/P5 项目页面异常态扫描无 t(...) 外硬编码英文。后端目标测试 72 通过，前端 178 通过。
 
 **完成定义：** 单人可独立使用学习→提交→诊断→复测与论文自由学习两个闭环。
 

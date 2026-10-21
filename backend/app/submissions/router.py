@@ -292,6 +292,13 @@ def _hint_ladder(findings, has_log: bool) -> tuple[str, str, str, str | None]:
             None,
         )
     if has_reduction:
+        # Provenance (P5-02 audit, 2026-10-21):
+        # - scalar-index-removes-axis / slice-keeps-axis: D2L 2.1.4 索引和切片
+        #   (X[-1] -> (4,), X[1:3] -> (2,4)). 原文事实.
+        # - .unsqueeze(1) semantics: PyTorch official docs ("dimension of size one
+        #   inserted at the specified position"); not covered by D2L 2.1. AI 扩展.
+        # - "does not repair incompatible matmul inner dimensions": D2L 2.3.9
+        #   (A in R^{n x k}, B in R^{k x m}). 原文事实.
         return (
             "Inspect the indexing expressions that use a bare integer on the second axis.",
             (
@@ -304,6 +311,10 @@ def _hint_ladder(findings, has_log: bool) -> tuple[str, str, str, str | None]:
                 "apply .unsqueeze(1) to the selected vector, or use a slice for a non-negative "
                 "index. This does not repair incompatible matmul inner dimensions."
             ),
+            # Provenance (P5-02 audit, 2026-10-21): [:, 0:1] keeps the axis per
+            # D2L 2.1.4; matrix @ vector validity per D2L 2.3.8 (torch.mv);
+            # "equivalent column values" via .unsqueeze(1) per PyTorch docs.
+            # The snippet itself stays labelled as not server-executed.
             (
                 "# Conditional reference: weights must be a 2-D tensor and a column is intended.\n"
                 "# A matrix @ vector is also valid when a vector output is intended.\n"
@@ -314,6 +325,10 @@ def _hint_ladder(findings, has_log: bool) -> tuple[str, str, str, str | None]:
             ),
         )
     if has_runtime:
+        # Provenance (P5-02 audit, 2026-10-21): the three-way breakdown below is a
+        # developer-authored teaching heuristic (AI 扩展), not a textbook formula.
+        # Its components are textbook-backed: matmul inner-dimension requirement
+        # (D2L 2.3.9), broadcasting along length-1 axes (D2L 2.1.3).
         return (
             "Your log names the failing operation. Compare the shapes of its two inputs.",
             (
