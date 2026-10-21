@@ -116,6 +116,8 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # carries the same default, so upgraded == fresh and every row already in the table
     # backfills to '' rather than to NULL.
     ("tutor_messages", "ask", "TEXT NOT NULL DEFAULT ''"),
+    # Course open counter for "opened N times" stats. Nullable; NULL means never opened.
+    ("courses", "opened_count", "INTEGER"),
     # Job execution trace: thinking process and tool call chain as JSON.
     # Nullable; NULL means the job predates trace recording.
     ("jobs", "trace", "JSON"),

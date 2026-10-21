@@ -1762,3 +1762,8 @@ export function reviseCourseOutline(
 ): Promise<{ outline: CourseOutline }> {
   return postJson("/api/courses/outline/revise", { outline, feedback, topic });
 }
+
+/** Record that the user opened a course (for "opened N times" stats). */
+export function recordCourseOpen(courseId: number): Promise<{ opened_count: number }> {
+  return postJson(`/api/courses/${courseId}/open`, {});
+}

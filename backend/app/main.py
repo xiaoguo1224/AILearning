@@ -1248,6 +1248,17 @@ def regenerate_lesson_stream(
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+@app.post("/api/courses/{course_id}/open")
+def record_course_open(course_id: int, session: Session = Depends(get_session)):
+    """Record that the user opened a course. Returns the updated open count."""
+    course = session.get(_m.Course, course_id)
+    if not course:
+        raise HTTPException(404, "Course not found")
+    course.opened_count = (course.opened_count or 0) + 1
+    session.commit()
+    return {"opened_count": course.opened_count}
+
+
 @app.post("/api/courses/{course_id}/regenerate/job")
 def regenerate_course_job(
     course_id: int, body: RegenerateRequest, session: Session = Depends(get_session)
@@ -1555,7 +1566,10 @@ def get_limits():
 @app.get("/courses")
 def list_courses(session: Session = Depends(get_session)):
     rows = session.query(models.Course).order_by(models.Course.created_at.desc()).all()
-    return [{"id": r.id, "title": r.title, "description": r.description} for r in rows]
+    return [
+        {"id": r.id, "title": r.title, "description": r.description, "opened_count": r.opened_count}
+        for r in rows
+    ]
 
 
 @app.get("/courses/{course_id}")
