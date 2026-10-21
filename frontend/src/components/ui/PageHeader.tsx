@@ -19,7 +19,7 @@ export const PageHeader = forwardRef<HTMLDivElement, PageHeaderProps>(function P
   return (
     <div ref={ref} className={classes} {...props}>
       <div>
-        <h1 className="font-display text-display">{title}</h1>
+        <h1 className="text-display tracking-tight">{title}</h1>
         {description && <p className="mt-1.5 text-ui text-ink-muted">{description}</p>}
       </div>
       {actions && <div className="shrink-0">{actions}</div>}

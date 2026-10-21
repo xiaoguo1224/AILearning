@@ -30,48 +30,38 @@
    * only have handed downstream authors two undocumented synonyms.
    */
 
-  /* Surfaces. Warm paper, not stark white: the app is a reading and writing
-     tool, and a faint warmth reads as designed rather than default. Cards are
-     border-defined with a whisper of shadow; there is a sunken tone for
-     recessed strips, panels, and the sidebar. */
-  --sf-surface: #fbfaf7;
-  --sf-surface-sunken: #f4f1ea;
+  /* Surfaces. Apple-style: the app sits on light gray (#f5f5f7) and content
+     lives on white cards. --sf-app is the page background; --sf-surface is the
+     card surface; --sf-surface-sunken is the recessed tone (same as the app bg,
+     for insets inside white cards). */
+  --sf-app: #f5f5f7;
+  --sf-surface: #ffffff;
+  --sf-surface-sunken: #f5f5f7;
 
   /* Borders ("line", not "border": see the note above on Tailwind's own
      `border-*` utility prefix, which "border-line" reads better against than
-     "border-border" does). */
-  --sf-line: oklch(92% 0.004 286.32); /* zinc-200 */
-  --sf-line-strong: oklch(87.1% 0.006 286.286); /* zinc-300 */
-  --sf-line-hover: oklch(70.5% 0.015 286.067); /* zinc-400 */
+     "border-border" does). Apple hairlines. */
+  --sf-line: #d2d2d7;
+  --sf-line-strong: #c7c7cc;
+  --sf-line-hover: #aeaeb2;
 
-  /* Text ("ink"). */
-  --sf-ink: #171717;
-  --sf-ink-muted: oklch(44.2% 0.017 285.786); /* zinc-600 */
-  --sf-ink-subtle: oklch(55.2% 0.016 285.938); /* zinc-500 here, but NOT in dark:
-    see the override below, which lightens it to clear 4.5:1 on the dark page. What
-    holds in both modes is that it stays distinct from muted, unlike round 1's
-    --text-subtle. */
+  /* Text ("ink"). Apple's grays. */
+  --sf-ink: #1d1d1f;
+  --sf-ink-muted: #6e6e73;
+  --sf-ink-subtle: #86868b;
 
-  /* The one accent. Reserved for focus rings, inline text links, and the active
-     nav/tab indicator, never a large fill: emerald, amber and red already carry
-     meaning (correct/completed, cost alert, destructive/incorrect) and indigo must
-     stay clearly not one of those. Linear's signature indigo (#5E6AD2). */
-  --sf-accent: oklch(56% 0.15 277); /* Linear indigo */
+  /* The one accent: Apple blue. Reserved for focus rings, inline text links,
+     the active nav/tab indicator, and the primary button fill. */
+  --sf-accent: #0071e3;
   --sf-focus: var(--sf-accent);
 
-  /* Solid fills, for buttons and anything else that needs a saturated block of
-     colour rather than text-on-a-tint. Distinct from the status tones below by
-     design, not by accident: a button needs more saturation at rest than an
-     alert box's body text needs sitting on its own light tint. `fill` with no
-     tone prefix is the neutral one Button's primary variant uses; it is the
-     existing inverse-ink pairing (dark ink in light mode, light ink in dark
-     mode), not the accent, for the same reason the accent stays out of large
-     fills everywhere else. `fill-hover` is a genuine second colour, not a filter:
-     the motion policy below only ever animates colour, border-colour, opacity and
-     transform, so a solid button's hover state has to be a token, the same as
-     everything else it sits next to, rather than a `brightness()` filter transition. */
-  --sf-fill: oklch(21% 0.006 285.885); /* zinc-900 */
-  --sf-fill-hover: oklch(37% 0.013 285.805); /* zinc-700 */
+  /* Solid fills. The neutral `fill` is now Apple blue: Button's primary
+     variant is the blue pill, the same as every Apple platform. `fill-hover`
+     is a genuine second colour, not a filter: the motion policy below only
+     ever animates colour, border-colour, opacity and transform, so a solid
+     button's hover state has to be a token. */
+  --sf-fill: #0071e3;
+  --sf-fill-hover: #0077ed;
   --sf-on-fill: #ffffff;
 
   /* Status tones, at the emerald/amber/red family and step already used across
@@ -103,18 +93,15 @@
   --sf-danger-fill-hover: oklch(57.7% 0.245 27.325); /* red-600 */
   --sf-danger-on-fill: #ffffff;
 
-  /* Elevation. The app is entirely 1px borders with no shadows today, and that
-     stays the base: these two levels are additive, not a replacement. In dark
-     mode both resolve to `none` below, for the same reason the concept map's
-     scroll edge below inverts itself rather than darkening: a shadow needs a
-     lighter surface to fall onto, and darkening is invisible on a near-black
-     page. Dark elevation is expressed with --color-line-strong and
-     --color-surface-sunken instead, at the call site. */
-  --sf-shadow-raise: 0 1px 2px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.04);
+  /* Elevation. White cards on the gray app background carry a whisper of
+     shadow; in dark mode both resolve to `none` below and depth is expressed
+     with the card surface step instead. */
+  --sf-shadow-raise: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 12px rgb(0 0 0 / 0.05);
   --sf-shadow-overlay: 0 8px 24px rgb(0 0 0 / 0.12);
 }
 
 @theme inline {
+  --color-app: var(--sf-app);
   --color-surface: var(--sf-surface);
   --color-surface-sunken: var(--sf-surface-sunken);
 
@@ -156,10 +143,7 @@
   --shadow-raise: var(--sf-shadow-raise);
   --shadow-overlay: var(--sf-shadow-overlay);
 
-  --font-sans: var(--font-geist-sans), var(--font-noto-sans-sc), system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
-  /* Editorial serif for page titles and display headings. CJK falls through to
-     Noto Serif SC, then Songti; Latin falls back to Geist serif-less stack. */
-  --font-display: var(--font-noto-serif-sc), "Songti SC", "STSong", Georgia, serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", var(--font-noto-sans-sc), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
@@ -174,9 +158,9 @@
    * used, but text-transform has no companion theme variable, so callers add
    * `uppercase` alongside the `text-micro` class.
    */
-  --text-display: 1.875rem; /* 30px */
-  --text-display--line-height: 2.25rem; /* 36px */
-  --text-display--font-weight: 600;
+  --text-display: 2.125rem; /* 34px, Apple's large-title size */
+  --text-display--line-height: 2.5rem; /* 40px */
+  --text-display--font-weight: 700;
   --text-display--letter-spacing: -0.02em;
 
   --text-title: 1.25rem; /* 20px */
@@ -205,11 +189,9 @@
   --text-micro--font-weight: 500;
   --text-micro--letter-spacing: 0.04em;
 
-  /* Radius. Controls (buttons, inputs, chips with text) get the smaller step;
-     surfaces (cards, panels, alert boxes) get the larger one. Badges and status
-     dots stay on rounded-full, outside this scale. */
-  --radius-control: 8px;
-  --radius-surface: 12px;
+  /* Radius. Apple steps: 18px surfaces (cards, panels), 10px controls. */
+  --radius-control: 10px;
+  --radius-surface: 18px;
 
   /*
    * Motion. Only colour, border-colour, opacity and transform are ever animated.
@@ -277,27 +259,23 @@
     --concept-surface: #101011;
     --concept-scroll-edge: rgba(255, 255, 255, 0.16);
 
-    --sf-surface: #100f0d;
-    --sf-surface-sunken: #1c1a16;
+    --sf-app: #000000;
+    --sf-surface: #1c1c1e;
+    --sf-surface-sunken: #2c2c2e;
 
-    --sf-line: oklch(27.4% 0.006 286.033); /* zinc-800 */
-    --sf-line-strong: oklch(37% 0.013 285.805); /* zinc-700 */
-    --sf-line-hover: oklch(44.2% 0.017 285.786); /* zinc-600 */
+    --sf-line: #38383a;
+    --sf-line-strong: #48484a;
+    --sf-line-hover: #636366;
 
-    --sf-ink: #ededed;
-    --sf-ink-muted: oklch(70.5% 0.015 286.067); /* zinc-400 */
-    --sf-ink-subtle: oklch(61% 0.016 285.938); /* #82828d, measures 5.21:1 on the
-      #0a0a0a page (zinc-500 here measured only 4.10:1, under the 4.5 floor
-      text-small/text-micro need). Not a Tailwind palette step: no zinc step sits
-      between 400 and 500. Lightness sits 0.095 below --sf-ink-muted's 0.705, close
-      to light mode's 0.11 step between the same pair, so the muted-to-subtle step
-      stays consistent across both modes. */
+    --sf-ink: #f5f5f7;
+    --sf-ink-muted: #98989d;
+    --sf-ink-subtle: #6e6e73;
 
-    --sf-accent: oklch(72% 0.13 277); /* indigo-300-ish, lightened for the dark page */
+    --sf-accent: #0a84ff;
 
-    --sf-fill: oklch(96.7% 0.001 286.375); /* zinc-100 */
-    --sf-fill-hover: oklch(87.1% 0.006 286.286); /* zinc-300 */
-    --sf-on-fill: oklch(21% 0.006 285.885); /* zinc-900 */
+    --sf-fill: #0a84ff;
+    --sf-fill-hover: #409cff;
+    --sf-on-fill: #ffffff;
 
     --sf-success: oklch(76.5% 0.177 163.223); /* emerald-400 */
     --sf-success-surface: oklch(26.2% 0.051 172.552); /* emerald-950 */

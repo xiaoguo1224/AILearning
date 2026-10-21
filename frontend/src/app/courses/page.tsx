@@ -45,7 +45,7 @@ export const dynamic = "force-dynamic";
  * hand until a link-flavoured variant of that primitive exists.
  */
 const PRIMARY_LINK_CLASSES =
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control bg-fill " +
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full bg-fill " +
   "px-4 py-2 text-ui font-medium text-on-fill transition-colors duration-fast ease-standard " +
   "hover:bg-fill-hover";
 

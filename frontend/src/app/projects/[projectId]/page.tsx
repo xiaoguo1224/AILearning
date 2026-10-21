@@ -29,7 +29,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
   return <div className="max-w-5xl space-y-10">
     {error ? <ErrorState message={error} /> : project && <ProjectWorkspace key={project.id} project={project} courses={courses} coursesError={coursesError} />}
     {project && <section className="space-y-4">
-      <h2 className="font-display text-title">{t("Materials")}</h2>
+      <h2 className="text-title">{t("Materials")}</h2>
       <ProjectResourcesManager projectId={project.id} isArchived={project.status === 'archived'} />
     </section>}
   </div>;

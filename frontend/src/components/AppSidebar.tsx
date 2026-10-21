@@ -52,8 +52,8 @@ function NavRows({ onNavigate }: { onNavigate?: () => void }) {
             aria-current={active ? "page" : undefined}
             className={
               active
-                ? "flex items-center gap-2.5 rounded-control border border-line/70 bg-surface px-2.5 py-1.5 text-small font-medium text-ink shadow-raise transition-colors duration-fast ease-standard"
-                : "flex items-center gap-2.5 rounded-control border border-transparent px-2.5 py-1.5 text-small text-ink-muted transition-colors duration-fast ease-standard hover:border-line/50 hover:bg-surface hover:text-ink"
+                ? "flex items-center gap-2.5 rounded-control bg-surface-sunken px-2.5 py-1.5 text-small font-medium text-ink transition-colors duration-fast ease-standard"
+                : "flex items-center gap-2.5 rounded-control px-2.5 py-1.5 text-small text-ink-muted transition-colors duration-fast ease-standard hover:bg-surface-sunken hover:text-ink"
             }
           >
             <Icon d={item.icon} />
@@ -105,8 +105,8 @@ function ProjectRows() {
               title={project.name}
               className={
                 active
-                  ? "flex items-center gap-2.5 rounded-control border border-line/70 bg-surface px-2.5 py-1.5 text-small font-medium text-ink shadow-raise transition-colors duration-fast ease-standard"
-                  : "flex items-center gap-2.5 rounded-control border border-transparent px-2.5 py-1.5 text-small text-ink-muted transition-colors duration-fast ease-standard hover:border-line/50 hover:bg-surface hover:text-ink"
+                  ? "flex items-center gap-2.5 rounded-control bg-surface-sunken px-2.5 py-1.5 text-small font-medium text-ink transition-colors duration-fast ease-standard"
+                  : "flex items-center gap-2.5 rounded-control px-2.5 py-1.5 text-small text-ink-muted transition-colors duration-fast ease-standard hover:bg-surface-sunken hover:text-ink"
               }
             >
               <span
@@ -126,8 +126,8 @@ function ProjectRows() {
 
 export function AppSidebar() {
   return (
-    <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface-sunken px-3 py-4 lg:flex">
-      <Link href="/" className="px-2.5 font-display text-subtitle font-semibold tracking-tight text-ink">
+    <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface/70 px-3 py-4 backdrop-blur-xl lg:flex">
+      <Link href="/" className="px-2.5 text-subtitle font-semibold tracking-tight text-ink">
         StudyForge
       </Link>
       <div className="mt-5">
@@ -145,7 +145,7 @@ export function MobileTopBar() {
   const { t } = useI18n();
   const pathname = usePathname();
   return (
-    <header className="border-b border-line bg-surface lg:hidden">
+    <header className="border-b border-line bg-surface/70 backdrop-blur-xl lg:hidden">
       <div className="flex items-center justify-between px-4 py-2.5">
         <Link href="/" className="text-subtitle font-semibold tracking-tight text-ink">
           StudyForge

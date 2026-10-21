@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Noto_Sans_SC, Noto_Serif_SC } from "next/font/google";
+import { Geist, Geist_Mono, Noto_Sans_SC } from "next/font/google";
 
 import { CostBanner } from "@/components/CostBanner";
 import { AppSidebar, MobileTopBar } from "@/components/AppSidebar";
@@ -24,12 +24,6 @@ const notoSansSC = Noto_Sans_SC({
   display: "swap",
 });
 
-const notoSerifSC = Noto_Serif_SC({
-  variable: "--font-noto-serif-sc",
-  subsets: ["latin"],
-  weight: ["600", "700"],
-  display: "swap",
-});
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslator();
@@ -41,7 +35,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html
       lang={t.locale}
-      className={`${geistSans.variable} ${geistMono.variable} ${notoSansSC.variable} ${notoSerifSC.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${notoSansSC.variable} h-full antialiased`}
     >
       <body className="min-h-full">
         <LocaleProvider locale={t.locale}>

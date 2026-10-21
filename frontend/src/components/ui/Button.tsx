@@ -33,7 +33,7 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
  * land on" for a colour nobody chose on purpose.
  */
 const BASE =
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-control font-medium " +
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full font-medium " +
   "transition-colors duration-fast ease-standard disabled:pointer-events-none disabled:opacity-60";
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {

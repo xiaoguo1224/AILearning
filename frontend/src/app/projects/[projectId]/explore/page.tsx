@@ -160,7 +160,7 @@ export default async function ProjectExplorePage({
                   <div className="rounded-surface border border-line bg-surface p-6 shadow-raise">
                     <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 space-y-1">
-                        <h2 className="break-words font-display text-title">
+                        <h2 className="break-words text-title">
                           {detail.title || t("Untitled session")}
                         </h2>
                         <p className="text-micro text-ink-muted">
@@ -192,7 +192,7 @@ export default async function ProjectExplorePage({
                   !listError && (
                     <div className="flex h-full min-h-80 flex-col items-center justify-center gap-5 rounded-surface border border-dashed border-line p-8 text-center">
                       <div className="space-y-1.5">
-                        <h2 className="font-display text-title">{t("No sessions yet")}</h2>
+                        <h2 className="text-title">{t("No sessions yet")}</h2>
                         <p className="mx-auto max-w-xs text-small text-ink-muted">
                           {t("Start a session and ask a question about this project's material.")}
                         </p>

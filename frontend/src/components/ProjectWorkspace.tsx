@@ -89,7 +89,7 @@ export function ProjectWorkspace({ project, courses = [], coursesError }: {
     </div>}
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
       <section className="rounded-surface border border-line bg-surface p-6 shadow-raise">
-        <h2 className="font-display text-title">{t("Project settings")}</h2>
+        <h2 className="text-title">{t("Project settings")}</h2>
         <div className="mt-4">
           {archived ? <p className="text-ink-muted">{t("This project is archived. Courses and learning history are preserved.")}</p> :
             <form onSubmit={save} className="space-y-4" aria-label={t(project ? "Edit project" : "Create project")}>

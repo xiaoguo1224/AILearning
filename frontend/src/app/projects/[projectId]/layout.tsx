@@ -45,7 +45,7 @@ export default async function ProjectLayout({
         ← {t("All projects")}
       </Link>
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        <h1 className="font-display text-display">{name ?? t("Project")}</h1>
+        <h1 className="text-display">{name ?? t("Project")}</h1>
         {status && <Badge>{t(status === "active" ? "Active" : "Archived")}</Badge>}
       </div>
       {goal && <p className="mt-1.5 max-w-2xl whitespace-pre-wrap text-ui text-ink-muted">{goal}</p>}
