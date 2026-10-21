@@ -4,24 +4,25 @@ import { Card, Segmented } from "antd";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-import { KnowledgeGraph } from "@/components/KnowledgeGraph";
-import type { KnowledgeList } from "@/lib/types";
+import { ProjectCourseGraph } from "@/components/ProjectCourseGraph";
+import type { ProjectCurriculum } from "@/lib/types";
 
 interface KnowledgeGraphSectionProps {
-  knowledge: KnowledgeList;
+  curriculum: ProjectCurriculum;
   projectId: number;
 }
 
 /**
- * Toggle between list and ECharts graph view of the knowledge base.
+ * Project knowledge graph: learning order derived automatically from the
+ * project's courses and chapters. Toggle between graph and list views.
  */
-export function KnowledgeGraphSection({ knowledge, projectId }: KnowledgeGraphSectionProps) {
+export function KnowledgeGraphSection({ curriculum, projectId }: KnowledgeGraphSectionProps) {
   const [view, setView] = useState<"graph" | "list">("graph");
   const router = useRouter();
 
   return (
     <Card
-      title="Knowledge Graph"
+      title="学习顺序图"
       extra={
         <Segmented
           value={view}
@@ -35,14 +36,19 @@ export function KnowledgeGraphSection({ knowledge, projectId }: KnowledgeGraphSe
       style={{ marginBottom: 24 }}
     >
       {view === "graph" ? (
-        <KnowledgeGraph
-          knowledge={knowledge}
-          onNodeClick={(id) => {
-            router.push(`/projects/${projectId}/knowledge?entry=${id}`);
-          }}
-        />
+        <>
+          <p style={{ color: "#888", marginBottom: 12 }}>
+            按课程与章节的教学顺序自动生成，无需手动指定关系。
+          </p>
+          <ProjectCourseGraph
+            curriculum={curriculum}
+            onNodeClick={(courseId) => {
+              router.push(`/courses/${courseId}`);
+            }}
+          />
+        </>
       ) : (
-        <p style={{ color: '#888' }}>List view is shown below.</p>
+        <p style={{ color: "#888" }}>List view is shown below.</p>
       )}
     </Card>
   );

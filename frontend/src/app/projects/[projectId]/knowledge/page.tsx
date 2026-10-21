@@ -15,6 +15,7 @@ import {
   compareKnowledge,
   getKnowledge,
   getProject,
+  getProjectCurriculum,
   listKnowledgeRevisions,
   listProjectKnowledge,
 } from "@/lib/api";
@@ -34,6 +35,7 @@ import type {
   KnowledgeRelationRef,
   KnowledgeRevisionList,
   KnowledgeStatus,
+  ProjectCurriculum,
   ProjectDetail,
 } from "@/lib/types";
 
@@ -174,11 +176,17 @@ export default async function ProjectKnowledgePage({
     error = err instanceof ApiError ? err.message : t("Could not reach the server. Is the backend running?");
   }
 
+  let curriculum: ProjectCurriculum | undefined;
   if (project) {
     try {
       list = await listProjectKnowledge(id, { status, core, limit: 50, offset }, t.locale);
     } catch (err) {
       listError = err instanceof ApiError ? err.message : t("Could not load knowledge entries.");
+    }
+    try {
+      curriculum = await getProjectCurriculum(id, t.locale);
+    } catch {
+      curriculum = undefined;
     }
   }
 
@@ -233,7 +241,7 @@ export default async function ProjectKnowledgePage({
       ) : (
         project && (
           <>
-            {list && <KnowledgeGraphSection knowledge={list} projectId={id} />}
+            {curriculum && <KnowledgeGraphSection curriculum={curriculum} projectId={id} />}
             {archived && (
               <p className="text-small text-ink-muted">
                 {t("This project is archived, so the knowledge base is read-only.")}

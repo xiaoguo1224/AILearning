@@ -5,7 +5,7 @@ import { getLocale, getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { ConceptMap, MasteryLegend } from "@/components/ConceptMapECharts";
+import { ConceptStats, MasteryLegend } from "@/components/ConceptMapECharts";
 import { CourseTabs } from "@/components/CourseTabs";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -119,9 +119,7 @@ export default async function CourseConceptsPage(
             scrollbar. Below lg it does not apply at all, which is what keeps a phone
             scrolling the map inside its own box instead of scrolling the page sideways.
           */}
-          <div className="lg:-mx-28 xl:-mx-40">
-            <ConceptMap lessons={lessons} concepts={concepts} />
-          </div>
+          <ConceptStats lessons={lessons} concepts={concepts} />
           <MasteryLegend />
 
           {weakest ? (
