@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from app import models
 from app.db import SessionLocal
 
@@ -107,10 +109,18 @@ def test_foreign_course_evidence_and_calendar_decay_do_not_change_the_tree(clien
         answer(lid, item, "tensors")
     assert tree(client, pid)["points"][0]["status"] == "unassessed"
     # A card's time/stability state is irrelevant to this evidence-only projection.
+    # `due` is set even though this test does not care about it: the planning guard
+    # (test_no_planning_endpoint_touches_the_scheduler) snapshots the WHOLE review_cards
+    # table and refuses unrated rows, and the whole suite shares one database, so a card
+    # left here without a due date would fail a test about planning, not about this one.
     with SessionLocal() as session:
         session.add(
             models.ReviewCard(
-                concept_key="tensors", concept_label="Tensors", stability=999, state="review"
+                concept_key="tensors",
+                concept_label="Tensors",
+                stability=999,
+                state="review",
+                due=datetime.now(UTC).replace(tzinfo=None) + timedelta(days=30),
             )
         )
         session.commit()
