@@ -787,5 +787,14 @@
   "Project settings": "项目设置",
   "Materials": "资料",
   "Select a session on the left, or start a new one to ask a question.": "在左侧选择一个会话，或新建会话开始提问。",
-  "Danger zone": "危险区"
+  "Danger zone": "危险区",
+  "My courses": "我的课程",
+  "Start learning": "开始学习",
+  "Continue learning": "继续学习",
+  "{0} completed": "已完成 {0}",
+  "{0}% complete": "{0}%",
+  "{0} of {1} lessons complete": "已完成 {0}/{1} 课时",
+  "Learning progress": "学习进度",
+  "Course info": "课程信息",
+  "Completed": "已完成"
 }

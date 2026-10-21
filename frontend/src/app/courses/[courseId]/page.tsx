@@ -1,4 +1,3 @@
-
 import { LocalizedText } from "@/components/LocaleProvider";
 
 
@@ -23,6 +22,11 @@ const BACK_TO_COURSES_LINK = (
   >
     <LocalizedText text="&larr; All courses" /></Link>
 );
+
+const START_LEARNING_CLASSES =
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full bg-fill " +
+  "px-8 py-2.5 text-ui font-medium text-on-fill transition-colors duration-fast ease-standard " +
+  "hover:bg-fill-hover";
 
 export default async function CoursePage(props: { params: Promise<{ courseId: string }> }) {
   const t = await getTranslator();
@@ -62,96 +66,128 @@ export default async function CoursePage(props: { params: Promise<{ courseId: st
 
   const lessons = course.modules.flatMap((m) => m.lessons);
   const completedCount = lessons.filter((lesson) => lesson.completed).length;
+  const percent = lessons.length === 0 ? 0 : Math.round((completedCount / lessons.length) * 100);
+  const nextLesson = lessons.find((lesson) => !lesson.completed) ?? lessons[0];
 
   return (
     <CourseDeletionProvider>
-      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
-        {BACK_TO_COURSES_LINK}
-
-        <PageHeader className="mt-4" title={course.title} />
-
-        <CourseTabs courseId={course.id} active="lessons" />
-
-        <p className="mt-5 text-ui text-ink-muted">{course.description}</p>
-        <p className="mt-3 text-small font-medium text-ink-muted">
-          {completedCount}<LocalizedText text={" of "} />{lessons.length} {t(" lessons complete")}</p>
-
-        <div className="mt-8 flex flex-col gap-8">
-          {course.modules.map((module) => (
-            <section key={module.id}>
-              <h2 className="text-subtitle">{module.title}</h2>
-              <ul className="mt-3 flex flex-col gap-2">
-                {module.lessons.map((lesson) => (
-                  <li key={lesson.id}>
-                    <Link
-                      href={`/courses/${course.id}/lessons/${lesson.id}`}
-                      className="flex items-center gap-3 rounded-control border border-line px-4 py-3 transition-colors duration-fast ease-standard hover:border-line-hover"
-                    >
-                      <span
-                        aria-hidden
-                        /*
-                          line-HOVER, not line-strong, for the empty marker. The name is
-                          about hover but the value is what matters here: line-strong is
-                          zinc-300 light / zinc-700 dark, and that dark step takes this 1px
-                          ring from 2.56:1 down to 1.90:1 on the #0a0a0a page, which is
-                          close enough to invisible that the list reads as "green dot" or
-                          "nothing there" instead of filled or empty. line-hover is
-                          zinc-400 / zinc-600: it restores the dark value the raw classes
-                          had exactly, and is more visible than they were in light (2.62
-                          against 1.48), so it is not worse in either mode.
-                        */
-                        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-micro ${
-                          lesson.completed
-                            ? "bg-success-fill text-success-on-fill"
-                            : "border border-line-hover"
-                        }`}
-                      >
-                        {lesson.completed ? "✓" : ""}
-                      </span>
-                      {/*
-                        ink-muted, NOT ink-subtle, and the difference is not cosmetic. This
-                        span is the accessible name of the primary navigation link on the
-                        page, and completed lessons are the majority of the list for any
-                        learner making progress, so that is the worst place in the app to
-                        lose contrast. --sf-ink-subtle's dark value has moved since this was
-                        last written (see globals.css, the dark-mode override block) and
-                        now clears AA on its own (5.21:1 on the #0a0a0a page); ink-muted is
-                        still the deliberate choice here regardless, at 7.72:1 light /
-                        7.55:1 dark, because "clears the floor" and "is the best available
-                        contrast for this element" are different bars and this element gets
-                        the second one. Re-derive both figures from the built CSS before
-                        trusting them again: this comment already went stale once.
-                      */}
-                      <span className={lesson.completed ? "text-ui text-ink-muted" : "text-ui"}>
-                        {lesson.title}
-                      </span>
-                      {lesson.completed && <span className="sr-only">{t("(completed)")}</span>}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
+        {/* Hero card: breadcrumb, title, meta, CTA — the MOOC course header. */}
+        <div className="rounded-surface bg-surface p-6 shadow-raise sm:p-8">
+          <nav aria-label="Breadcrumb" className="text-small text-ink-subtle">
+            <Link href="/courses" className="transition-colors duration-fast ease-standard hover:text-ink">
+              {t("Courses")}
+            </Link>
+            <span aria-hidden className="mx-2">/</span>
+            <span className="text-ink-muted">{course.title}</span>
+          </nav>
+          <h1 className="mt-2 break-words text-[28px] font-bold leading-tight tracking-tight">
+            {course.title}
+          </h1>
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-small text-ink-muted">
+            <span>{t("{0} lessons", lessons.length)}</span>
+            <span>{t("{0} completed", completedCount)}</span>
+            <span>{t("{0}% complete", percent)}</span>
+          </div>
+          {course.description && (
+            <p className="mt-4 max-w-3xl text-ui text-ink-muted">{course.description}</p>
+          )}
+          {nextLesson && (
+            <div className="mt-6">
+              <Link
+                href={`/courses/${course.id}/lessons/${nextLesson.id}`}
+                className={START_LEARNING_CLASSES}
+              >
+                {completedCount > 0 ? t("Continue learning") : t("Start learning")}
+              </Link>
+            </div>
+          )}
         </div>
 
-        {/*
-          A trailing "danger zone" after the modules list, set apart by its own
-          rule, rather than sitting directly under the header the way the list's
-          card puts its trigger directly under the course link. Right-aligned
-          immediately below works there because the card IS the whole of one course,
-          so just under it is still the end of that course's content. Here the
-          equivalent of that card is the entire page, so the same immediate
-          placement would put a destructive, irreversible control ahead of
-          everything the learner came for, as the first interactive thing after the
-          header. Placing it last means reaching it takes scrolling past all of
-          that, which is the point for an action this page cannot recover from.
-        */}
-        <div className="mt-10 border-t border-line pt-6">
-          <DeleteCourseButton
-            courseId={course.id}
-            title={course.title}
-            afterDelete="navigate-to-list"
-          />
+        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+          {/* Chapters */}
+          <div className="min-w-0 rounded-surface bg-surface p-6 shadow-raise sm:p-8">
+            <CourseTabs courseId={course.id} active="lessons" />
+            <div className="mt-6 flex flex-col gap-8">
+              {course.modules.map((module) => (
+                <section key={module.id}>
+                  <h2 className="text-subtitle">{module.title}</h2>
+                  <ul className="mt-2 divide-y divide-line">
+                    {module.lessons.map((lesson) => (
+                      <li key={lesson.id}>
+                        <Link
+                          href={`/courses/${course.id}/lessons/${lesson.id}`}
+                          className="flex items-center gap-3 py-3 transition-colors duration-fast ease-standard hover:text-accent"
+                        >
+                          <span
+                            aria-hidden
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-micro ${
+                              lesson.completed
+                                ? "bg-success-fill text-success-on-fill"
+                                : "border border-line-hover"
+                            }`}
+                          >
+                            {lesson.completed ? "✓" : ""}
+                          </span>
+                          <span className={lesson.completed ? "text-ui text-ink-muted" : "text-ui"}>
+                            {lesson.title}
+                          </span>
+                          {lesson.completed && <span className="sr-only">{t("(completed)")}</span>}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          </div>
+
+          {/* Sidebar */}
+          <aside className="space-y-6">
+            <div className="rounded-surface bg-surface p-6 shadow-raise">
+              <h2 className="text-subtitle">{t("Learning progress")}</h2>
+              <div className="mt-4">
+                <div
+                  className="h-2 overflow-hidden rounded-full bg-surface-sunken"
+                  role="progressbar"
+                  aria-valuenow={percent}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-label={t("Learning progress")}
+                >
+                  <div className="h-full rounded-full bg-fill" style={{ width: `${percent}%` }} />
+                </div>
+                <p className="mt-2 text-small text-ink-muted">
+                  {t("{0} of {1} lessons complete", completedCount, lessons.length)}
+                </p>
+              </div>
+            </div>
+            <div className="rounded-surface bg-surface p-6 shadow-raise">
+              <h2 className="text-subtitle">{t("Course info")}</h2>
+              <dl className="mt-4 space-y-3 text-small">
+                <div className="flex justify-between gap-4">
+                  <dt className="text-ink-muted">{t("Lessons")}</dt>
+                  <dd className="font-medium">{lessons.length}</dd>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <dt className="text-ink-muted">{t("Completed")}</dt>
+                  <dd className="font-medium">{completedCount}</dd>
+                </div>
+              </dl>
+            </div>
+            {/*
+              A trailing "danger zone" after the sidebar, rather than sitting directly
+              under the header. Reaching it takes scrolling past everything the learner
+              came for, which is the point for an action this page cannot recover from.
+            */}
+            <div className="rounded-surface bg-surface p-6 shadow-raise">
+              <DeleteCourseButton
+                courseId={course.id}
+                title={course.title}
+                afterDelete="navigate-to-list"
+              />
+            </div>
+          </aside>
         </div>
       </main>
     </CourseDeletionProvider>

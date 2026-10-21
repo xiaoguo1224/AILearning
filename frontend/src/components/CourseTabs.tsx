@@ -40,7 +40,7 @@ const DISABLED_CLASS = "border-transparent text-ink-subtle";
 export function CourseTabs({ courseId, active }: { courseId: number; active: CourseTab }) {
   const { t } = useI18n();
   return (
-    <nav aria-label={t("Course views")} className="mt-4 border-b border-line">
+    <nav aria-label={t("Course views")} className="border-b border-line">
       <ul className="flex items-center gap-6">
         <li>
           <Link

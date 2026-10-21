@@ -50,18 +50,19 @@
   --sf-ink-muted: #6e6e73;
   --sf-ink-subtle: #86868b;
 
-  /* The one accent: Apple blue. Reserved for focus rings, inline text links,
-     the active nav/tab indicator, and the primary button fill. */
-  --sf-accent: #0071e3;
+  /* The one accent: MOOC green (modeled on icourse163's vivid grass green).
+     Used for focus rings, inline text links, the active nav/tab indicator,
+     and the primary button fill. */
+  --sf-accent: #1fae54;
   --sf-focus: var(--sf-accent);
 
-  /* Solid fills. The neutral `fill` is now Apple blue: Button's primary
-     variant is the blue pill, the same as every Apple platform. `fill-hover`
-     is a genuine second colour, not a filter: the motion policy below only
-     ever animates colour, border-colour, opacity and transform, so a solid
-     button's hover state has to be a token. */
-  --sf-fill: #0071e3;
-  --sf-fill-hover: #0077ed;
+  /* Solid fills. The neutral `fill` is the MOOC green: Button's primary
+     variant is the green capsule CTA (like icourse163's 「立即参加」).
+     `fill-hover` is a genuine second colour, not a filter: the motion policy
+     below only ever animates colour, border-colour, opacity and transform, so
+     a solid button's hover state has to be a token. */
+  --sf-fill: #1fae54;
+  --sf-fill-hover: #2bc25e;
   --sf-on-fill: #ffffff;
 
   /* Status tones, at the emerald/amber/red family and step already used across
@@ -189,9 +190,9 @@
   --text-micro--font-weight: 500;
   --text-micro--letter-spacing: 0.04em;
 
-  /* Radius. Apple steps: 18px surfaces (cards, panels), 10px controls. */
-  --radius-control: 10px;
-  --radius-surface: 18px;
+  /* Radius. MOOC steps: 12px surfaces (cards, panels), 8px controls. */
+  --radius-control: 8px;
+  --radius-surface: 12px;
 
   /*
    * Motion. Only colour, border-colour, opacity and transform are ever animated.
@@ -271,10 +272,10 @@
     --sf-ink-muted: #98989d;
     --sf-ink-subtle: #6e6e73;
 
-    --sf-accent: #0a84ff;
+    --sf-accent: #3ddc74;
 
-    --sf-fill: #0a84ff;
-    --sf-fill-hover: #409cff;
+    --sf-fill: #2bbf5c;
+    --sf-fill-hover: #3ddc74;
     --sf-on-fill: #ffffff;
 
     --sf-success: oklch(76.5% 0.177 163.223); /* emerald-400 */

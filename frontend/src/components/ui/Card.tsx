@@ -14,16 +14,16 @@ const PADDING_CLASSES: Record<CardPadding, string> = {
 };
 
 /**
- * The app's one card shape: a warm paper surface, a 1px border, and a whisper
- * of shadow. --shadow-raise resolves to `none` in dark mode, where depth is
- * expressed with borders instead.
+ * The app's one card shape: a white surface with a soft shadow, no border
+ * (MOOC-style: cards float on the gray page). In dark mode the shadow
+ * resolves to `none` and the card surface step carries the depth.
  */
 export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
   { padding = 5, className, ...props },
   ref,
 ) {
   const classes = [
-    "rounded-surface border border-line bg-surface shadow-raise",
+    "rounded-surface bg-surface shadow-raise",
     PADDING_CLASSES[padding],
     className,
   ]

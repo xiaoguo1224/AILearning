@@ -1,14 +1,9 @@
-
-
-
 import { getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 
 import { CourseDeletionProvider, DeleteCourseButton } from "@/components/DeleteCourseButton";
-import { Card } from "@/components/ui/Card";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, listCourses } from "@/lib/api";
 import type { CourseSummary } from "@/lib/types";
 
@@ -50,11 +45,29 @@ const PRIMARY_LINK_CLASSES =
   "hover:bg-fill-hover";
 
 /**
+ * Deterministic cover gradients, one per course, standing in for MOOC course
+ * cover art. Courses carry no image of their own, so the id picks a gradient;
+ * the white title on top is what makes each card recognizable at a glance.
+ */
+const COVERS = [
+  "linear-gradient(135deg, #1fae54 0%, #0d7a3f 100%)",
+  "linear-gradient(135deg, #2b8cf0 0%, #1a5fb4 100%)",
+  "linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)",
+  "linear-gradient(135deg, #f59e0b 0%, #c26a06 100%)",
+  "linear-gradient(135deg, #ec4899 0%, #be185d 100%)",
+  "linear-gradient(135deg, #14b8a6 0%, #0f766e 100%)",
+];
+
+function coverFor(course: CourseSummary): string {
+  return COVERS[Math.abs(course.id) % COVERS.length];
+}
+
+/**
  * THE CARD IS NO LONGER ONE BIG LINK, and it had to stop being one. Delete is a button,
  * and a button nested inside an anchor is invalid HTML that browsers recover from
  * inconsistently: the press would sometimes navigate to the course it was deleting. The
- * link now wraps only the title and description, and the button is its sibling, so each
- * control has exactly one meaning.
+ * link now wraps only the cover and the title block, and the button is its sibling, so
+ * each control has exactly one meaning.
  *
  * The ids on the two "new course" controls are what the deletion provider focuses after a
  * row disappears. They are mutually exclusive, and which one exists is precisely what
@@ -74,48 +87,64 @@ export default async function CoursesPage() {
 
   return (
     <CourseDeletionProvider>
-      <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
-        <PageHeader
-          className="mb-10"
-          title="StudyForge"
-          description={t("Turn any material into a structured course with quizzes.")}
-          actions={
-            // `courses` stays `[]` on the error path (see the try/catch above: it is
-            // never assigned there), so `courses.length > 0` is already false whenever
-            // loadError is set. That is what keeps #new-course off screen during a load
-            // failure, on its own, with no separate `!loadError` check needed here: a
-            // second guard for the same outcome was dead code, so it has been removed.
-            courses.length > 0 && (
-              <Link id="new-course" href="/courses/new" className={PRIMARY_LINK_CLASSES}>
-                {t("New course")}</Link>
-            )
-          }
-        />
+      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h1 className="text-display">{t("My courses")}</h1>
+            <p className="mt-1.5 text-ui text-ink-muted">
+              {t("Turn any material into a structured course with quizzes.")}
+            </p>
+          </div>
+          {courses.length > 0 && (
+            <Link id="new-course" href="/courses/new" className={PRIMARY_LINK_CLASSES}>
+              {t("New course")}
+            </Link>
+          )}
+        </div>
 
         {loadError ? (
-          <ErrorState message={loadError} />
+          <div className="mt-8"><ErrorState message={loadError} /></div>
         ) : courses.length === 0 ? (
-          <EmptyState
-            title={t("No courses yet")}
-            description={t("Paste text, drop in a URL, or upload a PDF to get started.")}
-            action={
-              <Link id="create-first-course" href="/courses/new" className={PRIMARY_LINK_CLASSES}>
-                {t("Create your first course")}</Link>
-            }
-          />
+          <div className="mt-8">
+            <EmptyState
+              title={t("No courses yet")}
+              description={t("Paste text, drop in a URL, or upload a PDF to get started.")}
+              action={
+                <Link id="create-first-course" href="/courses/new" className={PRIMARY_LINK_CLASSES}>
+                  {t("Create your first course")}
+                </Link>
+              }
+            />
+          </div>
         ) : (
-          <ul className="flex flex-col gap-4">
+          <ul className="mt-8 grid items-start gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {courses.map((course) => (
-              <li key={course.id}>
-                <Card className="transition-colors duration-fast ease-standard hover:border-line-hover">
+              <li key={course.id} className="min-w-0">
+                <article className="overflow-hidden rounded-surface bg-surface shadow-raise transition-transform duration-slow ease-standard hover:-translate-y-1">
                   <Link href={`/courses/${course.id}`} className="block">
-                    <h2 className="text-subtitle">{course.title}</h2>
-                    <p className="mt-1 line-clamp-2 text-ui text-ink-muted">
-                      {course.description}
-                    </p>
+                    <div
+                      className="relative aspect-[16/9]"
+                      style={{ background: coverFor(course) }}
+                    >
+                      <div className="absolute inset-0 flex items-center justify-center p-6">
+                        <span className="line-clamp-2 text-center text-title font-bold text-white">
+                          {course.title}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <h2 className="truncate text-ui font-semibold text-ink">
+                        {course.title}
+                      </h2>
+                      <p className="mt-1 line-clamp-2 min-h-10 text-small text-ink-muted">
+                        {course.description}
+                      </p>
+                    </div>
                   </Link>
-                  <DeleteCourseButton courseId={course.id} title={course.title} />
-                </Card>
+                  <div className="px-4 pb-2">
+                    <DeleteCourseButton courseId={course.id} title={course.title} />
+                  </div>
+                </article>
               </li>
             ))}
           </ul>
