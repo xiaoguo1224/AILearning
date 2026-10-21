@@ -1717,3 +1717,27 @@ export function getProjectGraph(projectId: number): Promise<ProjectGraphEdge[]> 
 export function startGraphExtractJob(projectId: number): Promise<{ job_id: string }> {
   return postJson(`/api/projects/${projectId}/graph/extract/job`, {});
 }
+
+export interface CourseOutline {
+  title: string;
+  modules: {
+    title: string;
+    lessons: { title: string; concepts?: string[] }[];
+  }[];
+}
+
+export function generateCourseOutline(
+  topic: string,
+  sources?: { type: string; content: string }[],
+  feedback?: string,
+): Promise<{ outline: CourseOutline }> {
+  return postJson("/api/courses/outline/generate", { topic, sources, feedback });
+}
+
+export function reviseCourseOutline(
+  outline: CourseOutline,
+  feedback: string,
+  topic?: string,
+): Promise<{ outline: CourseOutline }> {
+  return postJson("/api/courses/outline/revise", { outline, feedback, topic });
+}

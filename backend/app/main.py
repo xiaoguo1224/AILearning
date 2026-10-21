@@ -51,6 +51,7 @@ from app.course_quiz.router import router as course_quiz_router
 from app.jobs.router import router as jobs_router
 from app.project_graph.router import router as project_graph_router
 from app.concept_extract.router import router as concept_extract_router
+from app.staged_gen.router import router as staged_gen_router
 from app.costs import is_priced
 from app.curriculum.router import router as curriculum_router
 from app.db import SessionLocal, get_session, init_db
@@ -87,6 +88,7 @@ app.include_router(course_quiz_router)
 app.include_router(jobs_router)
 app.include_router(project_graph_router)
 app.include_router(concept_extract_router)
+app.include_router(staged_gen_router)
 
 _cors_origins = os.environ.get("STUDYFORGE_CORS_ORIGINS", "http://localhost:3000")
 app.add_middleware(

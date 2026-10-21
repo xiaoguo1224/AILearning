@@ -44,6 +44,7 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
   const { t } = useI18n();
   const [edges, setEdges] = useState<ProjectGraphEdge[] | null>(null);
   const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -61,6 +62,7 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
 
   async function reExtract() {
     setExtracting(true);
+    setExtractError(null);
     try {
       const { job_id } = await startGraphExtractJob(projectId);
       for (let i = 0; i < 60; i++) {
@@ -72,6 +74,10 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
         if (job.status === "failed" || job.status === "cancelled") break;
         await new Promise((r) => setTimeout(r, 2000));
       }
+    } catch (e) {
+      setExtractError(
+        e instanceof Error ? e.message : "提取失败，请确认后端已更新并运行。"
+      );
     } finally {
       setExtracting(false);
     }
@@ -80,17 +86,20 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
   const option = useMemo(() => {
     const nodes: any[] = [];
     const nodeIds = new Set<string>();
+    const categories = curriculum.courses.map((c) => ({ name: c.title }));
 
-    // All courses and lessons as nodes.
-    curriculum.courses.forEach((course) => {
+    // All courses and lessons as nodes. Each course is its own category so the
+    // legend lists course names; lessons take their parent course's category.
+    curriculum.courses.forEach((course, courseIdx) => {
       const cid = `course-${course.id}`;
       nodeIds.add(cid);
       nodes.push({
         id: cid,
         name: course.title,
         value: course.id,
-        category: 0,
+        category: courseIdx,
         symbolSize: 56,
+        itemStyle: { color: "#1fae54" },
       });
       for (const m of course.modules) {
         for (const l of m.lessons) {
@@ -100,8 +109,8 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
             id: lid,
             name: l.title,
             value: l.id,
-            category: 1,
-            symbolSize: 32,
+            category: courseIdx,
+            symbolSize: 28,
           });
         }
       }
@@ -155,14 +164,14 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
 
     return {
       tooltip: {},
-      legend: { data: ["课程", "章节"] },
+      legend: { data: categories.map((c) => c.name) },
       series: [
         {
           type: "graph",
           layout: "force",
           data: nodes,
           links,
-          categories: [{ name: "课程" }, { name: "章节" }],
+          categories,
           roam: true,
           label: {
             show: true,
@@ -193,7 +202,10 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
 
   return (
     <div>
-      <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
+        {extractError && (
+          <span style={{ color: "#f5222d", fontSize: 12 }}>{extractError}</span>
+        )}
         <Button loading={extracting} onClick={() => void reExtract()}>
           {t("Re-extract with AI")}
         </Button>
@@ -207,8 +219,9 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
         option={option}
         style={{ height: 600, width: "100%" }}
         onEvents={{
-          click: (params: { data?: { value?: number; category?: number } }) => {
-            if (params.data?.category === 0 && params.data?.value && onNodeClick) {
+          click: (params: { data?: { id?: string; value?: number } }) => {
+            const id = params.data?.id ?? "";
+            if (id.startsWith("course-") && params.data?.value && onNodeClick) {
               onNodeClick(params.data.value);
             }
           },
