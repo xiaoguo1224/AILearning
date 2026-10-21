@@ -150,22 +150,20 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
         itemStyle: { color: "#1fae54" },
         ...(cx !== undefined ? { x: cx, y: cy } : {}),
       });
-      // Chapter nodes: clustered tightly around their course.
-      let lessonIdx = 0;
-      for (const m of course.modules) {
-        for (const l of m.lessons) {
+      // Chapter nodes: arranged in a circle around their course.
+      const allLessons = course.modules.flatMap((m) => m.lessons);
+      allLessons.forEach((l, lessonIdx) => {
+        {
           const lid = `lesson-${l.id}`;
           nodeIds.add(lid);
           let lx: number | undefined, ly: number | undefined;
           if (cx !== undefined && cy !== undefined) {
-            // Tight grid: 4 per row, close to the course node.
-            const cols = 4;
-            const spacingX = 70;
-            const spacingY = 60;
-            const row = Math.floor(lessonIdx / cols);
-            const col = lessonIdx % cols;
-            lx = cx - ((cols - 1) * spacingX) / 2 + col * spacingX;
-            ly = cy + 70 + row * spacingY;
+            // Circular arrangement around the course.
+            const n = allLessons.length;
+            const radius = 90 + Math.floor(lessonIdx / 8) * 55;
+            const angle = (lessonIdx % 8) * ((2 * Math.PI) / Math.min(8, n)) - Math.PI / 2;
+            lx = cx + radius * Math.cos(angle);
+            ly = cy + radius * Math.sin(angle);
           }
           nodes.push({
             id: lid,
@@ -190,9 +188,8 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
               lineStyle: { color: "#52c41a", width: 2 },
             });
           }
-          lessonIdx++;
         }
-      }
+      });
     });
 
     // AI edges; fall back to teaching sequence if none.
