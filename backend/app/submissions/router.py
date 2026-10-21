@@ -560,6 +560,99 @@ def _hint_ladder(findings, has_log: bool) -> tuple[str, str, str, str | None]:
 
 
 @router.post(
+    "/submissions/{submission_id}/review/job",
+    status_code=201,
+    dependencies=MUTATION,
+)
+def trigger_review_job(submission_id: int, session: Db, use_llm: bool = Query(False)):
+    """Run a submission review as a background job.
+
+    Returns {job_id} immediately. On completion job.result holds the review
+    {id, summary, finding_count}. Poll GET /api/jobs/{id}. Navigating away
+    does NOT cancel it. use_llm=true includes the model review (slower).
+    """
+    from app.jobs.service import create_job, run_in_background
+
+    submission = _submission_or_404(session, submission_id)
+    job_type = "code_review_llm" if use_llm else "code_review"
+    job = create_job(session, job_type, ref_type="submission", ref_id=submission_id)
+
+    def _run(job_id: str):
+        from app.db import SessionLocal
+        from app.jobs.models import Job as _Job
+        from app.jobs.service import complete_job, fail_job, update_progress
+        from app.metering import CostLimitExceeded, cost_limit_detail
+
+        update_progress(job_id, {"stage": "reviewing"})
+        with SessionLocal() as s:
+            j = s.get(_Job, job_id)
+            if j and j.status == "cancelled":
+                return
+            sub = _submission_or_404(s, submission_id)
+            code_findings, log_findings, findings = _static_review(sub)
+            has_log = any(a.kind == "log" for a in sub.artifacts)
+            summary = _default_summary(code_findings, log_findings, has_log)
+            hint_1, hint_2, hint_3, solution = _hint_ladder(findings, has_log)
+            model_name = "static_ast"
+            llm_status = "skipped"
+            if use_llm:
+                question = None
+                if sub.quiz_item_id is not None:
+                    from app.models import QuizItem
+
+                    item = s.get(QuizItem, sub.quiz_item_id)
+                    question = item.question if item else None
+                context = build_context(sub, question=question)
+                s.rollback()
+                try:
+                    model_review = review_with_model(context, findings)
+                except CostLimitExceeded as exc:
+                    fail_job(job_id, f"Cost limit exceeded: {cost_limit_detail(exc)}")
+                    return
+                except Exception as exc:
+                    fail_job(job_id, f"Review failed: {exc}")
+                    return
+                if model_review is None:
+                    fail_job(job_id, "The model did not return a usable review.")
+                    return
+                llm_status = "used"
+                model_name = "static_ast+llm"
+                findings = merge_findings(findings, model_review.findings)
+                summary = model_review.summary
+                hint_1 = model_review.hint_level_1 or hint_1
+                hint_2 = model_review.hint_level_2 or hint_2
+                hint_3 = model_review.hint_level_3 or hint_3
+                if model_review.reference_solution:
+                    solution = model_review.reference_solution
+            from app.submissions.models import CodeReview
+
+            # Re-fetch to avoid detached instance issues after rollback.
+            sub = _submission_or_404(s, submission_id)
+            review = CodeReview(
+                submission_id=sub.id,
+                summary=summary,
+                findings=[f.__dict__ if hasattr(f, "__dict__") else f for f in findings],
+                hint_level_1=hint_1,
+                hint_level_2=hint_2,
+                hint_level_3=hint_3,
+                reference_solution=solution,
+                model_name=model_name,
+                llm_status=llm_status,
+            )
+            s.add(review)
+            sub.status = "reviewed"
+            s.commit()
+            s.refresh(review)
+            complete_job(
+                job_id,
+                {"id": review.id, "summary": review.summary, "finding_count": len(findings)},
+            )
+
+    run_in_background(job.id, _run)
+    return {"job_id": job.id}
+
+
+@router.post(
     "/submissions/{submission_id}/review",
     response_model=CodeReviewOut,
     status_code=201,

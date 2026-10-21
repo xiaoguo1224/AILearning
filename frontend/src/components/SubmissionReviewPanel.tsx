@@ -11,7 +11,7 @@ import { ContentReviewButton } from "@/components/ContentReviewButton";
 import {
   revealReviewHint,
   revealReviewSolution,
-  triggerCodeReview,
+  getJob, getSubmission, startReviewJob,
 } from "@/lib/api";
 import type {
   CodeReviewSummary,
@@ -91,12 +91,25 @@ export function SubmissionReviewPanel({
     setPending(useLlm ? "llm" : "static");
     setError(null);
     try {
-      const created = await triggerCodeReview(submissionId, useLlm);
-      setReviews((current) => [created, ...current]);
-      setHints({});
-      setUnlocked({});
-      setConfirmSolution(false);
-      router.refresh();
+      const { job_id } = await startReviewJob(submissionId, useLlm);
+      // Poll until the job finishes; the job survives navigation.
+      for (let i = 0; i < 90; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const job = await getJob(job_id);
+        if (job.status === "completed") {
+          const detail = await getSubmission(submissionId);
+          setReviews(detail.reviews);
+          setHints({});
+          setUnlocked({});
+          setConfirmSolution(false);
+          router.refresh();
+          break;
+        }
+        if (job.status === "failed" || job.status === "cancelled") {
+          setError(job.error || t("The review could not be completed."));
+          break;
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : t("The review could not be completed."));
     } finally {

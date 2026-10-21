@@ -1443,6 +1443,30 @@ export function triggerCodeReview(submissionId: number, useLlm = false): Promise
   });
 }
 
+export function startGradeJob(
+  itemId: number,
+  answer: string,
+): Promise<{ job_id: string }> {
+  return postJson(`/quiz/${itemId}/answer/job`, { answer });
+}
+
+export function startHintJob(
+  itemId: number,
+  level: number,
+): Promise<{ job_id: string }> {
+  return postJson(`/quiz/${itemId}/hints/job`, { level });
+}
+
+export function startReviewJob(
+  submissionId: number,
+  useLlm = false,
+): Promise<{ job_id: string }> {
+  return postJson(
+    `/api/submissions/${submissionId}/review/job?use_llm=${useLlm ? "true" : "false"}`,
+    {},
+  );
+}
+
 export function listSubmissionReviews(submissionId: number, locale?: Locale): Promise<CodeReviewSummary[]> {
   return get(`/api/submissions/${submissionId}/reviews`, locale);
 }

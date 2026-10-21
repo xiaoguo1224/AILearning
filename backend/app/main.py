@@ -1696,6 +1696,74 @@ class QuizAnswer(BaseModel):
     elapsed_ms: int | None = None
 
 
+@app.post("/quiz/{item_id}/answer/job")
+def answer_quiz_job(item_id: int, body: QuizAnswer, session: Session = Depends(get_session)):
+    """Grade a quiz answer as a background job.
+
+    Returns {job_id} immediately. On completion job.result holds
+    {correct, feedback}. Poll GET /api/jobs/{id}.
+    """
+    from app.jobs.service import create_job, run_in_background
+
+    item = session.get(models.QuizItem, item_id)
+    if not item:
+        raise HTTPException(404, "Quiz item not found")
+    if not body.answer.strip():
+        raise HTTPException(400, "Answer cannot be empty")
+
+    job = create_job(session, "quiz_grade", ref_type="quiz", ref_id=item_id)
+    answer_snap = body.answer.strip()
+    kind_snap = item.kind
+    question_snap = item.question
+    reference_snap = item.answer
+
+    def _run(job_id: str):
+        from app.jobs.service import complete_job, fail_job, update_progress
+        from app.llm import get_provider as _get_provider
+        from app.llm.base import LLMCallError
+        from app.metering import CostLimitExceeded, MeteredLLM, cost_limit_detail
+        from app import code_grade as _cg
+
+        update_progress(job_id, {"stage": "grading"})
+        try:
+            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex)
+            correct, feedback = _cg.grade_answer(
+                meter, question_snap, reference_snap, answer_snap
+            )
+        except CostLimitExceeded as exc:
+            fail_job(job_id, f"Cost limit exceeded: {cost_limit_detail(exc)}")
+            return
+        except LLMCallError as exc:
+            fail_job(job_id, str(exc))
+            return
+        # Record the attempt.
+        from app.db import SessionLocal
+        from app import models as _m
+
+        with SessionLocal() as s:
+            j = s.get(__import__("app.jobs.models", fromlist=["Job"]).Job, job_id)
+            if j and j.status == "cancelled":
+                return
+            # Count existing attempts for ordinal.
+            count = s.query(_m.Attempt).filter_by(quiz_item_id=item_id).count()
+            s.add(
+                _m.Attempt(
+                    quiz_item_id=item_id,
+                    lesson_id=s.get(_m.QuizItem, item_id).lesson_id,
+                    submitted_answer=answer_snap,
+                    expected_answer=reference_snap,
+                    correct=correct,
+                    attempt_no=count + 1,
+                    source="lesson_quiz",
+                )
+            )
+            s.commit()
+        complete_job(job_id, {"correct": correct, "feedback": feedback})
+
+    run_in_background(job.id, _run)
+    return {"job_id": job.id}
+
+
 @app.post("/quiz/{item_id}/answer")
 def answer_quiz(item_id: int, body: QuizAnswer, session: Session = Depends(get_session)):
     item = session.get(models.QuizItem, item_id)
@@ -1746,6 +1814,51 @@ def answer_quiz(item_id: int, body: QuizAnswer, session: Session = Depends(get_s
 
 class QuizHintRequest(BaseModel):
     level: int
+
+
+@app.post("/quiz/{item_id}/hints/job")
+def quiz_hints_job(
+    item_id: int, body: QuizHintRequest, session: Session = Depends(get_session)
+):
+    """Generate a quiz hint as a background job.
+
+    Returns {job_id} immediately. On completion job.result.hint holds the text.
+    Poll GET /api/jobs/{id}.
+    """
+    from app.jobs.service import create_job, run_in_background
+
+    item = session.get(models.QuizItem, item_id)
+    if not item:
+        raise HTTPException(404, "Quiz item not found")
+
+    job = create_job(session, "quiz_hint", ref_type="quiz", ref_id=item_id)
+    level_snap = body.level
+    question_snap = item.question
+    reference_snap = item.answer
+
+    def _run(job_id: str):
+        from app.jobs.service import complete_job, fail_job, update_progress
+        from app.llm import get_provider as _get_provider
+        from app.llm.base import LLMCallError
+        from app.metering import CostLimitExceeded, MeteredLLM, cost_limit_detail
+        from app import quiz_hint as _qh
+
+        update_progress(job_id, {"stage": "generating"})
+        try:
+            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex)
+            hint = _qh.hint_for(
+                meter, question_snap, reference_snap, None, level_snap
+            )
+        except CostLimitExceeded as exc:
+            fail_job(job_id, f"Cost limit exceeded: {cost_limit_detail(exc)}")
+            return
+        except LLMCallError as exc:
+            fail_job(job_id, str(exc))
+            return
+        complete_job(job_id, {"hint": hint})
+
+    run_in_background(job.id, _run)
+    return {"job_id": job.id}
 
 
 @app.post("/quiz/{item_id}/hints")
