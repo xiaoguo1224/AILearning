@@ -85,6 +85,7 @@
   4. 项目列表页：卡片网格改为 Linear 式分割线行布局（头像字首、hover 高亮、chevron）；进行中/已归档改为分段控件。
 - 实际验证：tsc、eslint 通过；vitest 24 文件/178 通过；生产构建成功；Playwright 真机截图（桌面 1440px + 移动 390px）目检通过。演示后端（gemini provider）与前端均为临时进程。
 - 提交：本地 `feat(ui)`，经 GitHub App 快照推送至 main（`05d1aca2dea8`），内容校验一致。
+- 用户反馈"还是太简洁"：追加雅致编辑风精修并推送（`991e439bcfcd`）——暖纸底色（#fbfaf7/#f4f1ea，明暗两档）、Noto Serif SC 衬线标题与字标、卡片柔和阴影、侧边栏暖底 + 纸白 active pill。tsc/eslint/vitest 全过，Playwright 目检通过。
 
 
 ### 2026-10-20 — P1 完整验收与学习机制调整（取消时间驱动，转为知识掌握驱动）
