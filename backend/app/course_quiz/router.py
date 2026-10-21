@@ -152,7 +152,7 @@ def generate_solution_job(item_id: int, session: Db):
             f"Correct answer:\n{answer_snap or '(none)'}\n"
         )
         try:
-            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex)
+            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, job_id=job_id)
             raw: str = meter.generate(
                 "quiz_solution", SOLUTION_SYSTEM, prompt, max_tokens=4000
             )
@@ -303,7 +303,7 @@ def generate_quiz_job(course_id: CourseId, body: QuizGenerateInput, session: Db)
             user_prompt,
         )
         try:
-            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, course_id=course_id)
+            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, course_id=course_id, job_id=job_id)
             raw = meter.generate(quizgen.QUIZGEN_STAGE, _quizgen_system(), prompt)
         except CostLimitExceeded as exc:
             fail_job(job_id, f"Cost limit exceeded: {cost_limit_detail(exc)}")
@@ -501,7 +501,7 @@ def create_variant_job(course_id: CourseId, item_id: int, session: Db):
 
             prompt = quizgen.build_variant_prompt(_Item(), attempt_dicts)
         try:
-            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, course_id=course_id)
+            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, course_id=course_id, job_id=job_id)
             raw = meter.generate(quizgen.VARIANT_STAGE, _quizgen_system(), prompt)
         except CostLimitExceeded as exc:
             fail_job(job_id, f"Cost limit exceeded: {cost_limit_detail(exc)}")

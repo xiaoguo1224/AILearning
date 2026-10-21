@@ -24,7 +24,9 @@ SYSTEM_PROMPT = """你是课程知识点提炼助手。给定一节课的标题�
 """
 
 
-def extract_lesson_concepts(content: str, title: str) -> tuple[list[str], dict[str, int]]:
+def extract_lesson_concepts(
+    content: str, title: str, job_id: str | None = None
+) -> tuple[list[str], dict[str, int]]:
     """Extract concept names and their importance (1-5) from a lesson's content via LLM.
     Returns (concepts, {concept_name: importance})."""
     if not content or not content.strip():
@@ -34,7 +36,7 @@ def extract_lesson_concepts(content: str, title: str) -> tuple[list[str], dict[s
     # Concept extraction can be slow; allow up to 10 minutes.
     if hasattr(provider, "timeout"):
         provider.timeout = 600
-    meter = MeteredLLM(provider, run_id)
+    meter = MeteredLLM(provider, run_id, job_id=job_id)
     prompt = f"课程标题：{title}\n\n课程内容：\n{content[:4000]}"
     raw = meter.generate(EXTRACT_STAGE, SYSTEM_PROMPT, prompt)
     try:
@@ -66,7 +68,9 @@ def extract_lesson_concepts(content: str, title: str) -> tuple[list[str], dict[s
         return [], {}
 
 
-def extract_course_concepts(session: Session, course_id: int) -> dict[int, list[str]]:
+def extract_course_concepts(
+    session: Session, course_id: int, job_id: str | None = None
+) -> dict[int, list[str]]:
     """Extract concepts for all lessons in a course. Returns {lesson_id: concepts}."""
     course = session.get(models.Course, course_id)
     if not course:
@@ -74,7 +78,9 @@ def extract_course_concepts(session: Session, course_id: int) -> dict[int, list[
     result = {}
     for mod in course.modules:
         for lesson in mod.lessons:
-            concepts, importance = extract_lesson_concepts(lesson.content or "", lesson.title)
+            concepts, importance = extract_lesson_concepts(
+                lesson.content or "", lesson.title, job_id=job_id
+            )
             if concepts:
                 lesson.concepts = concepts
                 lesson.concept_importance = importance

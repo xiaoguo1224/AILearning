@@ -91,7 +91,7 @@ def _run_extraction(job_id: str, project_id: int):
             "tool": "extract_relationships",
             "input": {"project_id": project_id, "course_count": len(courses)},
         })
-        result = graph_service.extract_relationships(db, project_id, courses)
+        result = graph_service.extract_relationships(db, project_id, courses, job_id=job_id)
         edges = result["edges"] if isinstance(result, dict) else result
         jobs.append_trace(job_id, {
             "type": "tool_result",

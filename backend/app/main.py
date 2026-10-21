@@ -1137,7 +1137,7 @@ def regenerate_lesson_job(
         update_progress(job_id, {"stage": "generating", "title": title})
         prompt_feedback = f"\nLearner feedback: {feedback}" if feedback else ""
         try:
-            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex)
+            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, job_id=job_id)
             draft, _ = gen.generate_lesson_with_retry(
                 meter,
                 lesson_title=title,
@@ -1281,7 +1281,7 @@ def regenerate_course_job(
             lessons = [s.get(_m.Lesson, lid) for lid in lesson_ids]
             titles = [(l.id, l.title, l.content.strip()) for l in lessons if l]
         total = len(titles)
-        meter = MeteredLLM(_get_provider(), uuid.uuid4().hex)
+        meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, job_id=job_id)
         prompt_feedback = f"\nLearner feedback: {feedback}" if feedback else ""
         for index, (lid, title, text) in enumerate(titles):
             with SessionLocal() as s:
@@ -1732,7 +1732,7 @@ def answer_quiz_job(item_id: int, body: QuizAnswer, session: Session = Depends(g
 
         update_progress(job_id, {"stage": "grading"})
         try:
-            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex)
+            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, job_id=job_id)
             correct, feedback = _cg.grade_answer(
                 meter, question_snap, reference_snap, answer_snap
             )
@@ -1851,7 +1851,7 @@ def quiz_hints_job(
 
         update_progress(job_id, {"stage": "generating"})
         try:
-            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex)
+            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, job_id=job_id)
             hint = _qh.hint_for(
                 meter, question_snap, reference_snap, None, level_snap
             )

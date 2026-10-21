@@ -16,7 +16,7 @@ def _run_extraction(job_id: str, course_id: int):
     db = SessionLocal()
     try:
         jobs.update_progress(job_id, {"stage": "extracting"})
-        result = extract_service.extract_course_concepts(db, course_id)
+        result = extract_service.extract_course_concepts(db, course_id, job_id=job_id)
         total = sum(len(v) for v in result.values())
         jobs.complete_job(job_id, {"course_id": course_id, "lessons": len(result), "concepts": total})
     except Exception as exc:  # noqa: BLE001

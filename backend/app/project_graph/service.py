@@ -60,6 +60,7 @@ def extract_relationships(
     session: Session,
     project_id: int,
     courses: list[dict],
+    job_id: str | None = None,
 ) -> list[dict]:
     """Run the LLM extraction and persist edges, replacing old ones."""
     if not courses:
@@ -72,7 +73,7 @@ def extract_relationships(
     # Graph extraction is a long task; allow up to 10 minutes.
     if hasattr(provider, "timeout"):
         provider.timeout = 600
-    meter = MeteredLLM(provider, run_id)
+    meter = MeteredLLM(provider, run_id, job_id=job_id)
     prompt = build_prompt(courses)
     raw = meter.generate(EXTRACT_STAGE, SYSTEM_PROMPT, prompt)
 

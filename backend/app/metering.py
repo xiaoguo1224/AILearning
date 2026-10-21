@@ -101,25 +101,71 @@ def _format_threshold(threshold: float) -> str:
 class MeteredLLM:
     """Wraps an LLMProvider so every call is cost-estimated, persisted, and cap-checked."""
 
-    def __init__(self, provider: LLMProvider, run_id: str, course_id: int | None = None):
+    def __init__(
+        self,
+        provider: LLMProvider,
+        run_id: str,
+        course_id: int | None = None,
+        job_id: str | None = None,
+    ):
         """course_id is the course every call on this meter is charged to, when the
         caller already knows it. Course generation does not: it is discovering the
         course as it goes, so it leaves this None and backfills the run's rows once
         the course has an id. Re-teaching does know, or knows that no single course
-        can honestly be named, and either way nothing backfills its rows later."""
+        can honestly be named, and either way nothing backfills its rows later.
+        job_id, when given, enables trace recording of each LLM call."""
         self.provider = provider
         self.run_id = run_id
         self.course_id = course_id
+        self.job_id = job_id
 
     def generate(self, stage: str, system: str, prompt: str, max_tokens: int = 64000) -> str:
         self._check_cap()
+        if self.job_id:
+            self._trace_call(stage, prompt)
         try:
             result = self.provider.generate(teaching_system(system), prompt, max_tokens)
         except LLMCallError as exc:
             self._record(stage, exc.input_tokens, exc.output_tokens)
+            if self.job_id:
+                self._trace_error(stage, str(exc))
             raise
         self._record(stage, result.input_tokens, result.output_tokens)
+        if self.job_id:
+            self._trace_result(stage, result.text)
         return result.text
+
+    def _trace_call(self, stage: str, prompt: str) -> None:
+        try:
+            from app.jobs.service import append_trace
+            append_trace(self.job_id, {  # type: ignore[arg-type]
+                "type": "tool_call",
+                "tool": f"llm.{stage}",
+                "input": {"prompt_preview": prompt[:500]},
+            })
+        except Exception:
+            pass
+
+    def _trace_result(self, stage: str, text: str) -> None:
+        try:
+            from app.jobs.service import append_trace
+            append_trace(self.job_id, {  # type: ignore[arg-type]
+                "type": "tool_result",
+                "tool": f"llm.{stage}",
+                "output": {"response_preview": text[:500], "length": len(text)},
+            })
+        except Exception:
+            pass
+
+    def _trace_error(self, stage: str, error: str) -> None:
+        try:
+            from app.jobs.service import append_trace
+            append_trace(self.job_id, {  # type: ignore[arg-type]
+                "type": "thinking",
+                "content": f"LLM 调用失败 ({stage}): {error[:200]}",
+            })
+        except Exception:
+            pass
 
     def _check_cap(self) -> None:
         if not self.provider.is_paid:
