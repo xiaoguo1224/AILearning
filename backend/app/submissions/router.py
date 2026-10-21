@@ -300,12 +300,17 @@ def _hint_ladder(findings, has_log: bool) -> tuple[str, str, str, str | None]:
                 "code assumes."
             ),
             (
-                "Keep the axis when the shape matters: use [:, i:i+1] or .unsqueeze(1) "
-                "instead of [:, i]."
+                "First decide whether a vector or column matrix is intended. For a column, "
+                "apply .unsqueeze(1) to the selected vector, or use a slice for a non-negative "
+                "index. This does not repair incompatible matmul inner dimensions."
             ),
             (
-                "# Keep the column axis:\n# instead of: w_col = weights[:, 0]\n"
-                "# use:        w_col = weights[:, 0:1]"
+                "# Conditional reference: weights must be a 2-D tensor and a column is intended.\n"
+                "# A matrix @ vector is also valid when a vector output is intended.\n"
+                "w_col = weights[:, 0:1]\n"
+                "# Equivalent column values: weights[:, 0].unsqueeze(1)\n"
+                "# Check inner dimensions, expected output, dtype and device locally.\n"
+                "# This snippet was not executed by the server."
             ),
         )
     if has_runtime:
@@ -324,12 +329,11 @@ def _hint_ladder(findings, has_log: bool) -> tuple[str, str, str, str | None]:
     if has_log:
         return (
             (
-                "Read the innermost frame of your traceback: that is where the error is "
-                "raised."
+                "No recognized failure was found in the uploaded log. Inspect the expected "
+                "output shapes and values locally."
             ),
             (
-                "The exception type tells you which assumption broke; the line tells you "
-                "where."
+                "A log without recognized errors is user-provided evidence, not a correctness proof."
             ),
             "Add a print of the involved tensors' shape and dtype just before that line.",
             None,
@@ -357,8 +361,10 @@ def trigger_submission_review(
     project_id = submission.project_id
 
     code_findings, log_findings, findings = _static_review(submission)
-    summary = _default_summary(code_findings, log_findings)
-    hint_1, hint_2, hint_3, solution = _hint_ladder(findings, bool(log_findings))
+    has_log = any(artifact.kind == "log" for artifact in submission.artifacts)
+    summary = _default_summary(code_findings, log_findings, has_log)
+    hint_1, hint_2, hint_3, solution = _hint_ladder(findings, has_log)
+    solution_label = "static_reference_unverified" if solution else None
     llm_status = "skipped"
     model_name = "static_ast"
 
@@ -385,7 +391,9 @@ def trigger_submission_review(
             hint_1 = model_review.hint_level_1 or hint_1
             hint_2 = model_review.hint_level_2 or hint_2
             hint_3 = model_review.hint_level_3 or hint_3
-            solution = model_review.reference_solution or solution
+            if model_review.reference_solution:
+                solution = model_review.reference_solution
+                solution_label = "ai_generated_unverified"
         else:
             # Either the call failed or the model answered something that is not the
             # contract; both mean the learner is looking at a static-only review.
@@ -404,7 +412,7 @@ def trigger_submission_review(
         hint_level_2=hint_2,
         hint_level_3=hint_3,
         reference_solution=solution,
-        solution_label="ai_generated_unverified" if solution else None,
+        solution_label=solution_label,
         hints_revealed=1,
         llm_status=llm_status,
         model=model_name,
@@ -428,7 +436,7 @@ def _serialize(findings) -> list[dict]:
     return [item if isinstance(item, dict) else item.to_dict() for item in findings]
 
 
-def _default_summary(code_findings, log_findings) -> str:
+def _default_summary(code_findings, log_findings, has_log: bool = False) -> str:
     parts = []
     if any(f.category == "syntax_error" for f in code_findings):
         parts.append("The uploaded file does not parse, so nothing after that point was analysed.")
@@ -443,6 +451,8 @@ def _default_summary(code_findings, log_findings) -> str:
             f"Your log reports {len(log_findings)} runtime symptom(s); they are recorded as "
             "your evidence, not as a result produced here."
         )
+    elif has_log:
+        parts.append("A log was uploaded, but no recognized runtime error was found; runtime correctness is unverified.")
     else:
         parts.append("No log was uploaded, so runtime behaviour is unverified.")
     return " ".join(parts)

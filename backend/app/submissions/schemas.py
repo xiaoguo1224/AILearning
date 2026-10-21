@@ -52,7 +52,7 @@ class HintOut(BaseModel):
 
 class SolutionOut(BaseModel):
     reference_solution: str
-    label: Literal["ai_generated_unverified"]
+    label: Literal["ai_generated_unverified", "static_reference_unverified"]
     revealed_at: datetime
 
     @field_serializer("revealed_at")

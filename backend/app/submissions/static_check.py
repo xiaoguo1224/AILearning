@@ -106,7 +106,7 @@ def _shape_reduction_finding(filename: str, node: ast.Subscript) -> StaticFindin
     first, second = node.slice.elts
     if not isinstance(first, ast.Slice):
         return None
-    if not (isinstance(second, ast.Constant) and isinstance(second.value, int)):
+    if not (isinstance(second, ast.Constant) and type(second.value) is int):
         return None
     index = second.value
     return StaticFinding(
@@ -117,13 +117,13 @@ def _shape_reduction_finding(filename: str, node: ast.Subscript) -> StaticFindin
         severity="warning",
         evidence_type="confirmed_static",
         description=(
-            f"Indexing with the scalar {index} on the second axis removes that axis: "
-            f"a (N, M) tensor becomes (N,), not (N, 1). Any later matmul or broadcast "
-            "sees a different rank than the surrounding code assumes."
+            f"The source uses the scalar integer index {index} on the second axis. "
+            "If this object is a 2-D PyTorch tensor, the selected result is a vector, "
+            "not a column matrix. The object's runtime type and intended shape are not proven here."
         ),
         suggestion=(
-            f"Keep the axis when the shape matters: use [:, {index}:{index + 1}] "
-            "or .unsqueeze(1). Use the scalar form only when a 1-D result is intended."
+            f"If a column matrix is intended, use [:, {index}:{index + 1}] "
+            "or apply .unsqueeze(1) to the selected vector. Keep scalar indexing when a vector is intended."
         ),
     )
 
@@ -142,8 +142,9 @@ def _process_call_finding(filename: str, node: ast.Call) -> StaticFinding | None
         severity="info",
         evidence_type="confirmed_static",
         description=(
-            f"The file contains {label}. The server does not run uploaded code, so this "
-            "call was not executed here and its behaviour is unknown to this review."
+            f"The source calls {ast.unparse(func)}(...). A matching method name does not "
+            "prove process execution; its runtime implementation is unknown. "
+            "Uploaded code was not executed here."
         ),
         suggestion=(
             "Run the script yourself and upload the output if that call is part of the "
@@ -227,8 +228,9 @@ def correlate(
                 "your log, not a verified run."
             ),
             suggestion=(
-                "Change that index to keep the axis, re-run locally, and upload the new "
-                "log so the fix can be checked against real output."
+                "Check the intended output shape first. Matrix-vector matmul can be valid. "
+                "Keep the axis only if a column is required; this alone cannot fix "
+                "incompatible inner dimensions. Re-run locally and upload the output."
             ),
         )
     ]
@@ -251,7 +253,8 @@ def needs_local_check(code_findings: list[StaticFinding]) -> list[StaticFinding]
             evidence_type="needs_local_check",
             description=(
                 "Static analysis cannot confirm the runtime shapes, dtypes or device "
-                "placement of these tensors, and no log was uploaded."
+                "placement of these tensors. A log without recognized errors is not "
+                "proof that the code is correct."
             ),
             suggestion=(
                 "Run the script locally with print(t.shape, t.dtype, t.device) before the "
