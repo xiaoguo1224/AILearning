@@ -3,6 +3,7 @@ import logging
 import os
 import uuid
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import UTC, date, datetime
 from typing import Any, Literal
 
@@ -10,7 +11,7 @@ import httpx
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field, TypeAdapter, ValidationError, model_validator
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
@@ -737,6 +738,186 @@ def generate_from_text(body: GenerateRequest, session: Session = Depends(get_ses
     ]
     ingested = _ingest_or_refuse(specs, legacy=not body.used_canonical_field(), stage="url")
     return _run_generation_from(session, ingested)
+
+
+# How many lessons are authored at once on the streaming route. The provider
+# opens a fresh HTTP connection per call and the meter opens a fresh DB session
+# per recorded call, so parallel authorship is safe; 4 keeps a 12-lesson course
+# moving without hammering a small gateway.
+STREAM_LESSON_WORKERS = 4
+
+
+def _sse(event: str, payload: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+@app.post("/courses/generate/stream")
+def generate_stream(body: GenerateRequest, session: Session = Depends(get_session)):
+    """Generate a course as a Server-Sent Events stream.
+
+    The synchronous /courses/generate route makes the learner stare at a spinner
+    for minutes. This route narrates the work instead: one `outline` event first
+    (the full planned structure, so the page can draw every lesson's slot up
+    front), then one `lesson` event per authored lesson as it finishes — lessons
+    are authored in parallel, so events can arrive out of order and the client
+    places each by its module/lesson index — then a final `done` event carrying
+    the saved course id and the run's cost. A failed lesson is reported as
+    `lesson_failed` and the rest of the course is kept, mirroring the sync
+    route's drop-one-keep-the-rest rule. Any fatal failure becomes an `error`
+    event; nothing is saved on that path.
+
+    Source intake (422s) still happens before the first byte, so malformed
+    sources are a normal HTTP error, not a stream event.
+    """
+    specs = [
+        ingest.SourceSpec(
+            kind=source.kind,
+            ref=ingest.clean_ref(source.ref or "")
+            or (source.value if source.kind == "url" else f"source {index + 1}"),
+            value=source.value,
+        )
+        for index, source in enumerate(body.sources or [])
+    ]
+    chunks, owners = _ingest_or_refuse(specs, legacy=not body.used_canonical_field(), stage="url")
+
+    def event_stream():
+        run_id = uuid.uuid4().hex
+        meter = MeteredLLM(get_provider(), run_id)
+        try:
+            outline = generation.generate_outline(meter, chunks, owners)
+        except CostLimitExceeded as exc:
+            yield _sse("error", {"error": "cost_limit_exceeded", **metering.cost_limit_detail(exc)})
+            return
+        except Exception as exc:
+            yield _sse("error", {"error": "generation_failed", "message": str(exc)[:300]})
+            return
+
+        plan = [
+            {
+                "title": module.get("title", "Module"),
+                "lessons": [
+                    {"title": lesson.get("title", "Lesson")}
+                    for lesson in module.get("lessons", [])
+                ],
+            }
+            for module in outline.get("modules", [])
+        ]
+        yield _sse(
+            "outline",
+            {
+                "title": outline.get("title", "Untitled course"),
+                "description": outline.get("description", ""),
+                "modules": plan,
+            },
+        )
+
+        jobs: list[tuple[int, int, dict, list[int]]] = []
+        for module_index, module in enumerate(outline.get("modules", [])):
+            for lesson_index, stub in enumerate(module.get("lessons", [])):
+                segments = generation.lesson_segments(stub, len(chunks))
+                jobs.append((module_index, lesson_index, stub, segments))
+
+        course = {
+            "title": outline.get("title", "Untitled course"),
+            "description": outline.get("description", ""),
+            "modules": [
+                {"title": module.get("title", "Module"), "lessons": [None] * len(module.get("lessons", []))}
+                for module in outline.get("modules", [])
+            ],
+        }
+        failures: list[dict] = []
+
+        def author(job: tuple[int, int, dict, list[int]]) -> tuple[int, int, dict]:
+            module_index, lesson_index, stub, segments = job
+            authored = generation.generate_lesson(
+                meter,
+                stub.get("title", "Lesson"),
+                stub.get("summary", ""),
+                chunks,
+                segments,
+                owners,
+            )
+            return module_index, lesson_index, {
+                "title": stub.get("title", "Lesson"),
+                "segments": segments,
+                **authored,
+            }
+
+        with ThreadPoolExecutor(max_workers=STREAM_LESSON_WORKERS) as pool:
+            futures = {pool.submit(author, job): job for job in jobs}
+            for future in as_completed(futures):
+                module_index, lesson_index, stub, _ = futures[future]
+                try:
+                    _, _, lesson = future.result()
+                except CostLimitExceeded as exc:
+                    yield _sse("error", {"error": "cost_limit_exceeded", **metering.cost_limit_detail(exc)})
+                    return
+                except Exception as exc:
+                    failures.append(
+                        {"lesson": stub.get("title", "Lesson"), "error": str(exc)[:200]}
+                    )
+                    yield _sse(
+                        "lesson_failed",
+                        {
+                            "module_index": module_index,
+                            "lesson_index": lesson_index,
+                            "title": stub.get("title", "Lesson"),
+                        },
+                    )
+                    continue
+                course["modules"][module_index]["lessons"][lesson_index] = lesson
+                yield _sse(
+                    "lesson",
+                    {
+                        "module_index": module_index,
+                        "lesson_index": lesson_index,
+                        "lesson": lesson,
+                    },
+                )
+
+        for module in course["modules"]:
+            module["lessons"] = [lesson for lesson in module["lessons"] if lesson]
+        course["modules"] = [m for m in course["modules"] if m["lessons"]]
+        if not course["modules"]:
+            yield _sse(
+                "error",
+                {"error": "generation_failed", "message": "No lesson could be generated."},
+            )
+            return
+        if failures:
+            course["dropped_lessons"] = failures
+
+        try:
+            row = _save_course(session, course)
+        except Exception as exc:
+            yield _sse("error", {"error": "generation_failed", "message": str(exc)[:300]})
+            return
+        session.query(models.LlmCall).filter(models.LlmCall.run_id == run_id).update(
+            {"course_id": row.id}
+        )
+        session.commit()
+        run_cost = (
+            session.query(func.sum(models.LlmCall.estimated_cost_usd))
+            .filter(models.LlmCall.run_id == run_id)
+            .scalar()
+            or 0.0
+        )
+        state = alert_state(session)
+        yield _sse(
+            "done",
+            {
+                "id": row.id,
+                "title": row.title,
+                "dropped_lessons": failures,
+                "usage": {
+                    "run_cost_usd": run_cost,
+                    "total_cost_usd": state["total_usd"],
+                    "alert_active": state["active"],
+                },
+            },
+        )
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 @app.post("/courses/generate/pdf")

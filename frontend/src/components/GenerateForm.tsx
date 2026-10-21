@@ -13,6 +13,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Callout } from "@/components/ui/Callout";
 import { Card } from "@/components/ui/Card";
+import { GenerationProgress } from "@/components/GenerationProgress";
 import {
   ApiError,
   SourceGenerationError,
@@ -197,6 +198,10 @@ export function GenerateForm() {
   const [submitting, setSubmitting] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [success, setSuccess] = useState<GenerateResult | null>(null);
+  // Non-null while the streaming generation view owns the screen. PDFs still
+  // go through the synchronous route, which is why this is only set when no
+  // files were attached.
+  const [streaming, setStreaming] = useState<SourceInput[] | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement>(null);
@@ -600,6 +605,12 @@ export function GenerateForm() {
     const files = fileRows.map((row) => row.file);
 
     setElapsed(0);
+    if (files.length === 0) {
+      // Text/URL-only: stream the generation so each finished lesson appears
+      // as it lands instead of after the whole course is done.
+      setStreaming(sources);
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await generateFromSources(sources, files);
@@ -622,6 +633,19 @@ export function GenerateForm() {
 
   return (
     <form onSubmit={(event) => void handleSubmit(event)} className="flex flex-col gap-5">
+      {streaming ? (
+        <GenerationProgress
+          sources={streaming}
+          onSourceFailures={(failures) => {
+            applyFailures(failures);
+            announceSummaryError(
+              t("{0} marked below.", plural(failures.length, "source is", "sources are", t)),
+            );
+          }}
+          onCancel={() => setStreaming(null)}
+        />
+      ) : (
+      <>
       {!success && (
         <>
           <div className="flex flex-col gap-3">
@@ -773,6 +797,8 @@ export function GenerateForm() {
         </div>
       ) : (
         <Button type="submit">{t("Generate course")}</Button>
+      )}
+      </>
       )}
     </form>
   );

@@ -442,6 +442,108 @@ export async function generateFromSources(
   );
 }
 
+
+/** Events from POST /courses/generate/stream, in stream order. */
+export interface StreamQuizItem {
+  question: string;
+  kind: string;
+  options?: string[];
+  answer: string;
+  concept?: string;
+}
+export interface StreamLesson {
+  title: string;
+  content: string;
+  concepts: string[];
+  quiz: StreamQuizItem[];
+}
+export interface StreamOutlineModule {
+  title: string;
+  lessons: { title: string }[];
+}
+export type GenerationStreamEvent =
+  | { type: "outline"; title: string; description: string; modules: StreamOutlineModule[] }
+  | { type: "lesson"; module_index: number; lesson_index: number; lesson: StreamLesson }
+  | { type: "lesson_failed"; module_index: number; lesson_index: number; title: string }
+  | { type: "done"; id: number; title: string; usage: GenerateResult["usage"] }
+  | { type: "error"; error: string; message?: string };
+
+/**
+ * Open the streaming generation route and yield its events as they arrive.
+ * Non-2xx responses throw the same ApiError / SourceGenerationError shapes the
+ * synchronous route throws, because source intake happens before the first byte.
+ */
+export async function* streamCourseGeneration(
+  sources: SourceInput[],
+  init?: { signal?: AbortSignal },
+): AsyncGenerator<GenerationStreamEvent> {
+  const res = await localizedFetch(`${BASE_URL}/courses/generate/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sources }),
+    signal: init?.signal,
+  });
+  if (!res.ok) {
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      // Non-JSON body, so the status has to carry the meaning on its own.
+    }
+    const detail = (body as { detail?: unknown } | null)?.detail;
+    if (
+      detail &&
+      typeof detail === "object" &&
+      (detail as { error?: unknown }).error === "source_failed" &&
+      Array.isArray((detail as { sources?: unknown }).sources)
+    ) {
+      const failed = detail as { message?: string; sources: SourceFailure[] };
+      throw new SourceGenerationError(
+        res.status,
+        createTranslator(browserLocale())(failed.message || "Some of your sources could not be read."),
+        failed.sources,
+      );
+    }
+    const fallback = res.statusText || `Request failed with status ${res.status}`;
+    throw new ApiError(
+      res.status,
+      messageFromErrorBody(body, fallback, COST_LIMIT_CONSEQUENCE.generate),
+    );
+  }
+  if (!res.body) return;
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let kind = "";
+  let data = "";
+  const flush = function* (): Generator<GenerationStreamEvent> {
+    if (kind) {
+      try {
+        yield { type: kind, ...JSON.parse(data) } as GenerationStreamEvent;
+      } catch {
+        // A truncated frame is dropped; the stream's own error/done event
+        // still tells the client how the run ended.
+      }
+    }
+    kind = "";
+    data = "";
+  };
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newline: number;
+    while ((newline = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, newline).replace(/\r$/, "");
+      buffer = buffer.slice(newline + 1);
+      if (line.startsWith("event:")) kind = line.slice(6).trim();
+      else if (line.startsWith("data:")) data += (data ? "\n" : "") + line.slice(5).replace(/^\s/, "");
+      else if (line === "") yield* flush();
+    }
+  }
+  yield* flush();
+}
+
 /** `elapsedMs` is a soft timing signal; omit it when the measurement is unavailable. */
 export function answerQuiz(
   itemId: number,

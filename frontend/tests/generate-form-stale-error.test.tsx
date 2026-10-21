@@ -285,6 +285,9 @@ describe("GenerateForm summary error staleness", () => {
     fireEvent.click(screen.getByRole("button", { name: "+ Add text" }));
     const textarea = container.querySelector("textarea") as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "Spaced repetition schedules reviews." } });
+    // A PDF keeps this on the synchronous route, which is the path whose
+    // request-level failure this test pins; text-only submissions stream now.
+    pick(container, aPdf());
     vi.mocked(generateFromSources).mockRejectedValue(new ApiError(503, "The service is away."));
 
     await act(async () => {

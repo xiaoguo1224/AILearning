@@ -203,3 +203,10 @@
 - 影响与风险：
 - 验证/重新评估条件：
 ```
+
+## ADR-025 — 流式课程生成端点与 main.py 共处
+- 日期：2026-10-21
+- 状态：Accepted
+- 决策：`POST /courses/generate/stream`（SSE）放在 `backend/app/main.py`，与既有的 `/courses/generate`、`/courses/generate/pdf`、`/courses/generate/multipart` 同文件。AGENTS.md 要求新业务独立模块、避免 main.py 膨胀，但流式端点复用 main.py 内 helpers（`_ingest_or_refuse`、`_save_course`、`_cost_limit_exceeded` 语义、`generation`/`ingest` 装配），抽离需整体搬运 4 个端点的共享装配，得不偿失；既有格局本就是 4 个 generate 端点同文件。
+- 追溯：并行 lesson 生成线程安全——provider 每次调用新建 httpx 连接，`MeteredLLM._record` 每次开独立 DB session；请求级 session 只在流结束后的 `_save_course` 使用。失败一节不中断全程（`lesson_failed` 事件），与同步路由 drop-one-keep-rest 一致。
+- 前端：文本/URL 来源走流式（`GenerationProgress` 渐进渲染）；PDF 仍走同步 multipart（流式 multipart 未做）。
