@@ -16,6 +16,8 @@ import type {
   AnswerResult,
   AttemptState,
   CoursePlan,
+  ExploreMessage,
+  ExploreSourceRef,
   QuizItem,
   QuizProgress,
   TutorConversation,
@@ -23,6 +25,7 @@ import type {
   TutorLimits,
   TutorMessage,
   TutorTurn,
+  VariantDraft,
 } from "@/lib/types";
 
 /** A promise resolved by the test, so a request can be held in flight deliberately. */
@@ -109,6 +112,89 @@ export function turnOutcome(reply: TutorRow, question = "What grows stability?")
     guided: GUIDED,
   };
   return { kind: "turn", turn };
+}
+
+/**
+ * One question in a free-exploration conversation.
+ *
+ * The two roles share one wire shape, so this is an ordinary ExploreMessage rather than
+ * a narrowed variant: the only field that differs is `body`, and every register field
+ * is genuinely absent on a learner row.
+ */
+export function exploreQuestion(body: string, id = 1): ExploreMessage {
+  return {
+    id,
+    role: "user",
+    body,
+    beyond: null,
+    check_question: null,
+    source_refs: [],
+    grounded: false,
+    model: "",
+    created_at: "2026-10-01T12:00:00Z",
+    exercise: null,
+  };
+}
+
+/**
+ * One assistant row in a free-exploration conversation.
+ *
+ * `grounded` is derived from whether refs were passed, rather than fixed, because that
+ * is exactly how the server sets it: a fixture where the two disagree would describe a
+ * payload the backend can never send.
+ */
+export function exploreReply(fields: {
+  id?: number;
+  body: string;
+  beyond?: string | null;
+  check?: string | null;
+  refs?: ExploreSourceRef[];
+}): ExploreMessage {
+  const refs = fields.refs ?? [];
+  return {
+    id: fields.id ?? 2,
+    role: "assistant",
+    body: fields.body,
+    beyond: fields.beyond ?? null,
+    check_question: fields.check ?? null,
+    source_refs: refs,
+    grounded: refs.length > 0,
+    model: "explore-model",
+    created_at: "2026-10-01T12:00:05Z",
+    exercise: null,
+  };
+}
+
+/**
+ * One draft exercise, in the shape the practice endpoint sends.
+ *
+ * `source_submission_id` and `session_id` are mutually exclusive on the server — an
+ * exercise is drafted from one origin or the other — so this builder sets exactly one and
+ * nulls the other, rather than letting a test describe a row the backend cannot produce.
+ */
+export function variantDraft(fields: {
+  id?: number;
+  title?: string;
+  prompt?: string;
+  starter?: string | null;
+  acceptance?: string;
+  sessionId?: number | null;
+  sourceQuestion?: string | null;
+}): VariantDraft {
+  const sessionId = fields.sessionId ?? null;
+  return {
+    id: fields.id ?? 21,
+    project_id: 1,
+    source_submission_id: sessionId === null ? 5 : null,
+    session_id: sessionId,
+    source_question: fields.sourceQuestion ?? null,
+    title: fields.title ?? "Widen the attention mask",
+    prompt: fields.prompt ?? "Change the mask so the padded tokens stop contributing.",
+    starter_code: fields.starter ?? "def attend(q, k, mask):\n    ...\n",
+    acceptance: fields.acceptance ?? "Padded positions score zero for every query.",
+    status: "draft",
+    created_at: "2026-10-01T12:00:10Z",
+  };
 }
 
 /**

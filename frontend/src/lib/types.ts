@@ -4,6 +4,20 @@ export interface CourseSummary {
   description: string;
 }
 
+export type ProjectMode = "course" | "research" | "practice";
+export type ProjectStatus = "active" | "archived";
+export interface ProjectInput { name: string; goal: string; mode: ProjectMode }
+export interface ProjectSummary extends ProjectInput {
+  id: number;
+  status: ProjectStatus;
+  created_at: string;
+  updated_at: string;
+}
+export interface ProjectDetail extends ProjectSummary {
+  courses: { course_id: number; title: string; description: string; position: number }[];
+}
+export interface ProjectList { items: ProjectSummary[]; total: number }
+
 export interface LessonSummary {
   id: number;
   title: string;
@@ -121,7 +135,13 @@ export interface UsageTotals {
  * Which kind of row this is: one course, re-teaching that no single course owns, or
  * a generation run that failed before its course could be saved.
  */
-export type SpendGroup = "course" | "remediation" | "failed_run";
+export type SpendGroup =
+  | "course"
+  | "remediation"
+  | "tutor"
+  | "code_review"
+  | "variant_exercise"
+  | "failed_run";
 
 export interface PerCourseUsage {
   group: SpendGroup;
@@ -647,6 +667,52 @@ export interface ReviewQueue {
   cards: ReviewCard[];
 }
 
+export type DiagnosisCause = "concept_gap" | "procedure" | "notation" | "misread" | "tooling" | "careless" | "unclassified";
+export interface ProjectReviewTask {
+  concept_key: string;
+  concept_label: string;
+  knowledge_id: number | null;
+  knowledge_title: string | null;
+  knowledge_status: KnowledgeStatus | null;
+  open_errors: number;
+  causes: { cause: DiagnosisCause; count: number }[];
+  latest_error_id: number;
+  latest_note: string;
+  latest_detail: string;
+}
+export interface ProjectReviewTasks { items: ProjectReviewTask[]; total: number }
+
+export interface LearningSuggestion {
+  id: number; source_project_id: number; target_project_id: number;
+  source_name: string; target_name: string; source_error_id: number;
+  concept_key: string; concept_label: string; cause: DiagnosisCause; evidence: string;
+  state: "pending" | "accepted" | "rejected"; target_error_id: number | null;
+  created_at: string; decided_at: string | null;
+}
+export interface SuggestionList { items: LearningSuggestion[]; total: number }
+
+export interface CurriculumReading { title: string; url: string }
+export interface CurriculumPoint {
+  key: string; label: string; lesson_ids: number[]; knowledge_ids: number[];
+  status: "unassessed" | "learning" | "needs_review" | "ready_for_advanced";
+  evidence_count: number; distinct_items: number;
+  prerequisites: { key: string; label: string; ready: boolean; in_project: boolean; reading: CurriculumReading | null }[];
+  reading: CurriculumReading | null; extension: boolean;
+  recommendation: "review" | "prerequisite" | "foundation" | "consolidation" | "advanced" | "integrated";
+}
+export interface ProjectCurriculum {
+  project_id: number;
+  courses: { id: number; title: string; modules: { id: number; title: string; lessons: { id: number; title: string; completed: boolean; concept_keys: string[] }[] }[] }[];
+  points: CurriculumPoint[];
+  pathway: { id: string; title: string; prerequisites: string[]; reading: CurriculumReading | null }[];
+}
+
+export interface ContentReview {
+  id: number; project_id: number; source_kind: "lesson" | "solution"; source_id: number;
+  source_hash: string; knowledge_id: number; knowledge_status: KnowledgeStatus;
+  source_unchanged: boolean; matches_source: boolean; approved: boolean;
+}
+
 export interface ReviewAnswerResult {
   correct: boolean;
   /** The reference answer, shown beside the learner's own for them to judge. */
@@ -910,4 +976,431 @@ export interface SourceFailure {
   ref: string;
   error: string;
   message: string;
+}
+
+export type ResourceKind = "pdf" | "docx" | "markdown" | "text" | "url";
+export interface ResourceSummary {
+  id: number;
+  filename: string;
+  kind: ResourceKind;
+  sha256?: string | null;
+  source_url?: string | null;
+  parse_status: "pending" | "completed" | "failed";
+  created_at: string;
+}
+export interface ResourceChunk {
+  id: number;
+  ordinal: number;
+  locator: string;
+  text: string;
+}
+export interface ResourceDetail extends ResourceSummary {
+  chunks: ResourceChunk[];
+}
+export interface ResourceSearchResult {
+  chunk_id: number;
+  resource_id: number;
+  filename: string;
+  kind: string;
+  locator: string;
+  snippet: string;
+}
+
+/**
+ * Where one finding's evidence comes from. The distinction is the feature, not a tag:
+ * `confirmed_static` is what the source text alone proves, `user_reported` is what a
+ * log the learner supplied claims happened, `inferred` links the two, and
+ * `needs_local_check` is something only the learner's own environment can settle.
+ */
+export type EvidenceType = "confirmed_static" | "user_reported" | "inferred" | "needs_local_check";
+export type FindingSeverity = "error" | "warning" | "info";
+
+export interface Finding {
+  file: string;
+  line_start: number;
+  line_end: number;
+  category: string;
+  severity: FindingSeverity;
+  evidence_type: EvidenceType;
+  description: string;
+  suggestion: string;
+}
+
+export type SubmissionStatus = "submitted" | "reviewed";
+
+/** How much model involvement one review had. `skipped` means static analysis only. */
+export type LlmStatus = "skipped" | "used" | "unavailable";
+
+/**
+ * One review as it arrives on a submission. Deliberately carries only the first hint:
+ * levels two and three are fetched one at a time through POST /reviews/{id}/hints, so a
+ * response cannot hand the learner the whole ladder without them asking for it.
+ */
+export interface CodeReviewSummary {
+  id: number;
+  submission_id: number;
+  summary: string;
+  findings: Finding[];
+  hint_level_1: string | null;
+  /** How far up the ladder the learner has already climbed, from 0 to 3. */
+  hints_revealed: number;
+  llm_status: LlmStatus;
+  model: string;
+  created_at: string;
+}
+
+export interface ReviewHint {
+  level: 1 | 2 | 3;
+  text: string;
+  /** The highest rung now unlocked on this review, so the page can restore the ladder. */
+  revealed: number;
+}
+
+/** Model-written, and labelled as such wherever it is shown. */
+export type ReferenceSolutionLabel = "ai_generated_unverified";
+
+export interface ReferenceSolution {
+  reference_solution: string;
+  label: ReferenceSolutionLabel;
+  revealed_at: string;
+}
+
+export type SubmissionArtifactKind = "code" | "log" | "config" | "output";
+
+export interface SubmissionArtifactDetail {
+  id: number;
+  filename: string;
+  kind: SubmissionArtifactKind;
+  /** Null when the stored text could not be read back, which is not the same as empty. */
+  content: string | null;
+  sha256: string;
+  size_bytes: number;
+  /** True when the stored copy was cut short; the preview is everything that was kept. */
+  truncated: boolean;
+  created_at: string;
+}
+
+/** The list row: enough to choose a version without fetching its artifacts. */
+export interface SubmissionSummary {
+  id: number;
+  project_id: number;
+  exercise_id: string | null;
+  version: number;
+  status: SubmissionStatus;
+  user_note: string | null;
+  variant_id: number | null;
+  created_at: string;
+  artifact_count: number;
+  latest_review: { id: number; summary: string; finding_count: number } | null;
+}
+
+export interface SubmissionList {
+  items: SubmissionSummary[];
+  total: number;
+}
+
+export interface SubmissionDetail {
+  id: number;
+  project_id: number;
+  exercise_id: string | null;
+  version: number;
+  status: SubmissionStatus;
+  user_note: string | null;
+  variant_id: number | null;
+  created_at: string;
+  artifacts: SubmissionArtifactDetail[];
+  reviews: CodeReviewSummary[];
+  /** What the server noticed about credentials in the uploaded text, never quoting them. */
+  privacy_warnings: string[];
+}
+
+/** A model-drafted practice exercise. Always a draft: nobody has reviewed it. */
+export interface VariantDraft {
+  id: number;
+  project_id: number;
+  source_submission_id: number | null;
+  /**
+   * Set when the exercise was drafted from a free-exploration question rather than from
+   * a submission, which is the only other way one gets made. Both are null together:
+   * an exercise always has one origin, and a screen that showed neither would be
+   * describing a row the server cannot produce.
+   */
+  session_id: number | null;
+  /** The question verbatim, so the exercise can sit next to what prompted it. */
+  source_question: string | null;
+  title: string;
+  prompt: string;
+  starter_code: string | null;
+  acceptance: string;
+  status: "draft";
+  created_at: string;
+}
+
+export interface CreateSubmissionPayload {
+  exercise_id?: string;
+  variant_id?: number;
+  user_note?: string;
+  code_filename: string;
+  /** One of code or log is required; the server refuses a submission with neither. */
+  code_content?: string;
+  log_filename?: string;
+  log_content?: string;
+}
+
+/** The browser-side form of an upload; api.uploadSubmission turns it into multipart. */
+export interface UploadSubmissionInput {
+  codeFile?: File | null;
+  logFile?: File | null;
+  exerciseId?: string;
+  variantId?: number;
+  userNote?: string;
+}
+
+/**
+ * Where one citation points: the file and the position inside it.
+ *
+ * `marker` is the label the model wrote in the reply ("S1") and is only stable within
+ * that one reply, so it must never be used as a key outside the message it came from.
+ * `locator` is the chunker's own position string ("p.2"), and it can be empty for
+ * sources with no pagination, which is why the badge falls back to the filename alone
+ * rather than printing a dangling separator.
+ */
+export interface ExploreSourceRef {
+  marker: string;
+  chunk_id: number;
+  resource_id: number;
+  filename: string;
+  locator: string;
+}
+
+/**
+ * One row of a free-exploration conversation. Both roles share this shape, because the
+ * learner's question and the reply are one column on the server.
+ *
+ * `body` is what the project's material supports. `beyond` is the model's general
+ * knowledge, capped by the server, and MUST be rendered as its own block under its own
+ * heading: the split lives in this schema, so a renderer that inlines it is what erases
+ * the guarantee. `grounded` is the server's answer to "did this reply cite anything",
+ * sent rather than derived from `source_refs.length` so the two can never disagree.
+ */
+export interface ExploreMessage {
+  id: number;
+  role: "user" | "assistant";
+  /** Markdown on a reply, the learner's own text on a question. Render via LessonMarkdown. */
+  body: string;
+  beyond: string | null;
+  check_question: string | null;
+  source_refs: ExploreSourceRef[];
+  grounded: boolean;
+  /** Which model answered. Empty on a learner row, which no model wrote. */
+  model: string;
+  created_at: string;
+  /**
+   * The draft exercise this reply produced, when it produced one.
+   *
+   * Sent on read rather than kept client-side, so reopening a conversation months later
+   * still shows the exercise under the reply that introduced it. A card that only
+   * existed in memory would leave the learner with an exercise they can no longer find.
+   */
+  exercise: VariantDraft | null;
+}
+
+/**
+ * A conversation under one project, in the list shape.
+ *
+ * `title` is null until the first question is answered, at which point the server takes
+ * it from that question. So a null title means "nothing asked yet" and not "a session
+ * the learner forgot to name".
+ */
+export interface ExploreSession {
+  id: number;
+  project_id: number;
+  mode: "explore";
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+  message_count: number;
+}
+
+export interface ExploreSessionList {
+  items: ExploreSession[];
+  total: number;
+}
+
+export interface ExploreSessionDetail extends ExploreSession {
+  messages: ExploreMessage[];
+}
+
+/**
+ * The two rows one question wrote, not the conversation. The client already holds the
+ * transcript and appends these, so no third copy of it comes back to disagree.
+ */
+export interface ExploreAskResult {
+  user: ExploreMessage;
+  assistant: ExploreMessage;
+}
+
+/**
+ * What one practice request wrote: a reply and a draft exercise, not the conversation.
+ *
+ * `message` is an ordinary assistant row and belongs in the transcript; `exercise` is
+ * the draft, and it carries its own id so the follow-up submission links to it. The
+ * question is NOT echoed back, because it is already in the transcript and a second copy
+ * would read as if the learner had asked twice.
+ */
+export interface ExplorePracticeResult {
+  message: ExploreMessage;
+  exercise: VariantDraft;
+}
+
+/** `mode` is required here even though the server defaults it, for the reason TutorMode is. */
+export interface CreateSessionPayload {
+  mode: "explore";
+  title?: string | null;
+}
+
+/**
+ * How far an entry has got through the review step.
+ *
+ * `draft` is an ordinary note the assistant saved in passing and is usable at once.
+ * `pending_review` and `confirmed` only ever belong to the core kinds (a definition or a
+ * standard answer), because those are the ones another entry will be checked against.
+ * Nothing moves from pending to confirmed on its own: only a person confirming does.
+ */
+export type KnowledgeStatus = "draft" | "pending_review" | "confirmed";
+
+/**
+ * `note` is scratch material. `definition` and `standard_answer` are the core kinds,
+ * which must be confirmed before they are presented as settled.
+ */
+export type KnowledgeKind = "note" | "definition" | "standard_answer";
+
+export type KnowledgeSourceKind = "manual" | "exploration" | "resource" | "submission";
+
+/**
+ * One thing an entry came from, as it stood when the entry was written.
+ *
+ * Every field is optional because a manual entry has no origin to name, and the server
+ * drops the fields an item does not use rather than sending them as null. A renderer
+ * therefore reads the fields that are present and never assumes the rest.
+ */
+export interface KnowledgeProvenanceItem {
+  lesson_id?: number;
+  review_id?: number;
+  source_hash?: string;
+  kind?: string;
+  resource_id?: number;
+  chunk_id?: number;
+  filename?: string;
+  locator?: string;
+  session_id?: number;
+  message_id?: number;
+  submission_id?: number;
+  question?: string;
+}
+
+/** A project that points at an entry. An entry can be shared, so this is not just its owner. */
+export interface KnowledgeProjectRef {
+  project_id: number;
+  name: string;
+}
+
+/**
+ * One edge between two entries. `prerequisite` is the only directed reading the UI
+ * shows; `related` and `extends` are the same shape and are drawn as plain connections.
+ */
+export interface KnowledgeRelationRef {
+  from_id: number;
+  to_id: number;
+  kind: "prerequisite" | "related" | "extends";
+}
+
+export interface KnowledgeSummary {
+  id: number;
+  /** The owning project, or null for an entry that no single project owns. */
+  project_id: number | null;
+  title: string;
+  kind: KnowledgeKind;
+  status: KnowledgeStatus;
+  concept_key: string;
+  source_kind: string;
+  created_at: string;
+  updated_at: string;
+  confirmed_at: string | null;
+}
+
+export interface KnowledgeDetail extends KnowledgeSummary {
+  body: string;
+  provenance: KnowledgeProvenanceItem[];
+  projects: KnowledgeProjectRef[];
+  prerequisites: KnowledgeRelationRef[];
+  related: KnowledgeRelationRef[];
+  /**
+   * True only on a PATCH response that took a confirmed entry back to `pending_review`.
+   * The edit succeeded, so this is not an error: it is the fact the screen has to state
+   * instead of letting the badge change under the reader. A GET never sets it, which is
+   * why the component that made the edit is the one that shows the notice.
+   */
+  sent_back_for_review: boolean;
+}
+
+export interface KnowledgeList {
+  items: KnowledgeSummary[];
+  total: number;
+}
+
+/**
+ * One snapshot, without its text. A version is written for every act that can change
+ * what the entry says, confirmation included, so `reason` is what tells them apart.
+ */
+export interface KnowledgeRevisionSummary {
+  version: number;
+  title: string;
+  kind: KnowledgeKind;
+  status: KnowledgeStatus;
+  reason: "created" | "edited" | "confirmed";
+  body_chars: number;
+  created_at: string;
+}
+
+export interface KnowledgeRevisionDetail extends KnowledgeRevisionSummary {
+  body: string;
+  concept_key: string;
+}
+
+export interface KnowledgeRevisionList {
+  items: KnowledgeRevisionSummary[];
+  total: number;
+  /** The version a person last confirmed, or null when nothing ever was. */
+  confirmed_version: number | null;
+  /** The newest version, which is the entry as it stands now. */
+  current_version: number;
+}
+
+/**
+ * One line of a bounded line diff. `gap` is an elided run of unchanged text and is
+ * decoration, not a paragraph the entry actually contains, so it must not be read out.
+ */
+export interface KnowledgeDiffLine {
+  op: "equal" | "delete" | "insert" | "gap";
+  text: string;
+}
+
+/**
+ * One version against the entry as it stands now — never two historical versions.
+ *
+ * The endpoint's default start is the last version a person confirmed, because that is
+ * the question the review step exists to answer: is the text still the text I signed?
+ */
+export interface KnowledgeCompare {
+  from_version: number;
+  from_title: string;
+  from_kind: string;
+  from_status: string;
+  to_title: string;
+  to_kind: string;
+  to_status: string;
+  changed: boolean;
+  truncated: boolean;
+  lines: KnowledgeDiffLine[];
 }

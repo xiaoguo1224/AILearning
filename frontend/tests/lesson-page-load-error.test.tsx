@@ -9,7 +9,7 @@
  * non-numeric cases against the pre-existing code path; this file adds the nonexistent-
  * lesson 404 and the new non-404 friendly-message behaviour without touching those.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "./render";
 import { describe, expect, test, vi, beforeEach } from "vitest";
 
 import LessonPage from "@/app/courses/[courseId]/lessons/[lessonId]/page";

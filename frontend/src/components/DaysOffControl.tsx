@@ -1,5 +1,7 @@
 "use client";
 
+import { LocalizedText, useI18n } from "@/components/LocaleProvider";
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
@@ -55,10 +57,11 @@ function DayOffRow({
   pending: boolean;
   onUnmark: (entry: DayOff) => void;
 }) {
+  const { t } = useI18n();
   return (
     <li className="flex items-center justify-between gap-4 py-2.5">
       <div className="min-w-0">
-        <div className="text-small">{formatDayKey(entry.day)}</div>
+        <div className="text-small">{formatDayKey(entry.day, t.locale)}</div>
         {entry.note && <div className="truncate text-xs text-ink-muted">{entry.note}</div>}
       </div>
       <Button
@@ -67,11 +70,9 @@ function DayOffRow({
         size="sm"
         disabled={pending}
         onClick={() => onUnmark(entry)}
-        aria-label={`Unmark ${formatDayKey(entry.day)} as a day off`}
+        aria-label={t("Unmark {0} as a day off", formatDayKey(entry.day, t.locale))}
         className="shrink-0"
-      >
-        Unmark
-      </Button>
+      ><LocalizedText text={" Unmark "} /></Button>
     </li>
   );
 }
@@ -104,6 +105,7 @@ export function DaysOffControl({
   /** The server's study day, or null when this course has no deadline to derive it from. */
   today: string | null;
 }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [day, setDay] = useState("");
   const [note, setNote] = useState("");
@@ -159,7 +161,7 @@ export function DaysOffControl({
       startTransition(() => router.refresh());
       return true;
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not reach the server.");
+      setError(err instanceof ApiError ? err.message : t("Could not reach the server."));
       return false;
     } finally {
       setSaving(false);
@@ -173,7 +175,7 @@ export function DaysOffControl({
     const ok = await run(
       () => addDayOff(day, note.trim()),
       already
-        ? `${formatDayKey(day)} was already marked off, so nothing changed. Its note is left as it was.`
+        ? t("{0} was already marked off, so nothing changed. Its note is left as it was.", formatDayKey(day, t.locale))
         : null,
       "submit",
     );
@@ -187,7 +189,7 @@ export function DaysOffControl({
   function unmark(entry: DayOff) {
     void run(
       () => removeDayOff(entry.day),
-      `${formatDayKey(entry.day)} counts as a study day again.`,
+      t("{0} counts as a study day again.", formatDayKey(entry.day, t.locale)),
       "day",
     );
   }
@@ -197,9 +199,7 @@ export function DaysOffControl({
       <form onSubmit={(event) => void submit(event)}>
         <div className="flex flex-wrap gap-4">
           <div className="min-w-[10rem] flex-1">
-            <label htmlFor="day-off-day" className="block text-small font-medium text-ink-muted">
-              Date
-            </label>
+            <label htmlFor="day-off-day" className="block text-small font-medium text-ink-muted"><LocalizedText text={" Date "} /></label>
             {/* Never disabled, mid-request included. Disabling the focused control
                 blurs it to the body, and a second submit from here is refused by the
                 `pending` check at the top of `run`. Same rule the tutor's composer
@@ -214,15 +214,14 @@ export function DaysOffControl({
             />
           </div>
           <div className="min-w-[10rem] flex-1">
-            <label htmlFor="day-off-note" className="block text-small font-medium text-ink-muted">
-              Why <span className="font-normal text-ink-subtle">(optional)</span>
+            <label htmlFor="day-off-note" className="block text-small font-medium text-ink-muted"><LocalizedText text={" Why "} /><span className="font-normal text-ink-subtle"><LocalizedText text={"(optional)"} /></span>
             </label>
             <input
               id="day-off-note"
               type="text"
               value={note}
               maxLength={200}
-              placeholder="Travelling"
+              placeholder={t("Travelling")}
               onChange={(event) => setNote(event.target.value)}
               className={`mt-1 ${FIELD_CLASS}`}
             />
@@ -242,7 +241,7 @@ export function DaysOffControl({
           disabled={pending || !day}
           className="mt-3.5"
         >
-          {saving ? "Saving…" : "Mark day off"}
+          {saving ? t("Saving…") : t("Mark day off")}
         </Button>
       </form>
 
@@ -258,14 +257,11 @@ export function DaysOffControl({
       )}
 
       {daysOff.length === 0 ? (
-        <p className="mt-4 border-t border-line pt-4 text-small text-ink-muted">
-          No days marked off. Every day between now and a deadline counts as a day you could
-          study on.
-        </p>
+        <p className="mt-4 border-t border-line pt-4 text-small text-ink-muted"><LocalizedText text={" No days marked off. Every day between now and a deadline counts as a day you could study on. "} /></p>
       ) : (
         <div className="mt-4 border-t border-line">
           {upcoming.length === 0 ? (
-            <p className="pt-4 text-small text-ink-muted">No days off coming up.</p>
+            <p className="pt-4 text-small text-ink-muted"><LocalizedText text={"No days off coming up."} /></p>
           ) : (
             <ul className="flex flex-col divide-y divide-line">
               {upcoming.map((entry) => (
@@ -289,7 +285,7 @@ export function DaysOffControl({
              */
             <details className="mt-1 border-t border-line pt-2.5">
               <summary className="cursor-pointer text-xs text-ink-muted hover:text-ink">
-                {past.length === 1 ? "1 earlier day off" : `${past.length} earlier days off`}
+                {past.length === 1 ? t("1 earlier day off") : t("{0} earlier days off", past.length)}
               </summary>
               <ul className="mt-1 flex flex-col divide-y divide-line">
                 {past.map((entry) => (

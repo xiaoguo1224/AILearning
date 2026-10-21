@@ -1,5 +1,7 @@
 "use client";
 
+import { LocalizedText, useI18n } from "@/components/LocaleProvider";
+
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
@@ -18,6 +20,7 @@ const POLL_INTERVAL_MS = 60_000;
  * down, network error) is swallowed and the component simply renders nothing.
  */
 export function CostBanner() {
+  const { t } = useI18n();
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [acking, setAcking] = useState(false);
 
@@ -59,21 +62,17 @@ export function CostBanner() {
           role="status"
           className="flex flex-wrap items-center justify-between gap-3 border-b border-warning-border bg-warning-surface px-6 py-3 text-ui text-warning"
         >
-          <p className="font-medium">
-            You have spent {formatUsd(alert.total_usd)} on API calls (estimated), past the{" "}
-            {formatUsd(alert.threshold_usd)} alert threshold.
-          </p>
+          <p className="font-medium"><LocalizedText text={" You have spent "} />{formatUsd(alert.total_usd)}<LocalizedText text={" on API calls (estimated), past the"} />{" "}
+            {formatUsd(alert.threshold_usd)}<LocalizedText text={" alert threshold. "} /></p>
           <div className="flex shrink-0 items-center gap-3">
-            <Link href="/usage" className="underline underline-offset-2 hover:no-underline">
-              View usage
-            </Link>
+            <Link href="/usage" className="underline underline-offset-2 hover:no-underline"><LocalizedText text={" View usage "} /></Link>
             <button
               type="button"
               onClick={() => void handleAcknowledge()}
               disabled={acking}
               className="rounded-control border border-warning-border bg-surface px-3 py-1 font-medium text-warning transition-colors duration-fast ease-standard hover:bg-surface-sunken disabled:opacity-60"
             >
-              {acking ? "Acknowledging..." : "Acknowledge"}
+              {acking ? t("Acknowledging...") : t("Acknowledge")}
             </button>
           </div>
         </div>
@@ -81,8 +80,7 @@ export function CostBanner() {
       <Link
         href="/usage"
         className="border-b border-line bg-surface-sunken px-6 py-1.5 text-right text-small text-ink-muted transition-colors duration-fast ease-standard hover:text-ink"
-      >
-        Total API spend (estimated): {formatUsd(totals.estimated_cost_usd)}
+      ><LocalizedText text={" Total API spend (estimated): "} />{formatUsd(totals.estimated_cost_usd)}
       </Link>
     </div>
   );

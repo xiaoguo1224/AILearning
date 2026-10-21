@@ -21,6 +21,19 @@ dist/
 # Databases
 *.sqlite3
 *.db
+*.sqlite3-*
+*.db-*
+/data/
+# Resource files and submission storage default to the backend working directory.
+backend/data/
+# Local tool caches and the agent workspace, never project source.
+**/.codegraph/
+.workbuddy-ai/
+/.artifacts/
+/.playwright-mcp/
+/output/playwright/
+/*-build.log
+/*-baseline.log
 
 # Agent worktrees
 .claude/worktrees/

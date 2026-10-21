@@ -23,12 +23,16 @@ from app import (
     generation,
     ics,
     ingest,
+    metering,
     models,
     planning,
     remediation,
     review,
     tutor,
 )
+from app.agent import practice as agent_practice
+from app.agent import router as agent_router_module
+from app.agent.router import router as agent_router
 from app.attempts import (
     _attempt_state,
     _attempts_by_item,
@@ -39,16 +43,36 @@ from app.attempts import (
     iso_utc,
 )
 from app.concepts import normalize_concept
+from app.content_reviews.router import router as content_reviews_router
 from app.costs import is_priced
+from app.curriculum.router import router as curriculum_router
 from app.db import SessionLocal, get_session, init_db
+from app.knowledge.errors_router import router as knowledge_errors_router
+from app.knowledge.router import router as knowledge_router
 from app.llm import get_provider
 from app.llm.base import LLMCallError
+from app.locale import TeachingLocaleMiddleware
 from app.metering import CostLimitExceeded, MeteredLLM, acknowledge_alert, alert_state
+from app.projects.router import router as projects_router
 from app.rating import rating_v1
+from app.resources.router import router as resources_router
+from app.submissions import llm_review, llm_variant
+from app.submissions.router import router as submissions_router
+from app.suggestions.router import router as suggestions_router
 
 logger = logging.getLogger("studyforge.api")
 
 app = FastAPI(title="StudyForge", version="0.1.0")
+app.add_middleware(TeachingLocaleMiddleware)
+app.include_router(projects_router)
+app.include_router(resources_router)
+app.include_router(submissions_router)
+app.include_router(agent_router)
+app.include_router(knowledge_router)
+app.include_router(knowledge_errors_router)
+app.include_router(suggestions_router)
+app.include_router(curriculum_router)
+app.include_router(content_reviews_router)
 
 _cors_origins = os.environ.get("STUDYFORGE_CORS_ORIGINS", "http://localhost:3000")
 app.add_middleware(
@@ -451,15 +475,7 @@ def _cost_limit_exceeded(exc: CostLimitExceeded) -> HTTPException:
     branches on `error` and reads `limit_usd` and `spent_usd`, and each extra copy of
     that shape is another chance for one surface to spell it differently from the rest.
     """
-    return HTTPException(
-        402,
-        detail={
-            "error": "cost_limit_exceeded",
-            "message": "LLM spend limit reached",
-            "limit_usd": exc.limit_usd,
-            "spent_usd": exc.spent_usd,
-        },
-    )
+    return HTTPException(402, detail=metering.cost_limit_detail(exc))
 
 
 def _save_course(session: Session, course: dict) -> models.Course:
@@ -495,8 +511,8 @@ def _run_generation(session: Session, chunks: list[str], owners: list[str]) -> d
     """Run the metered generation pipeline, save the course, backfill the run's
     llm_calls rows with the new course id, and return the generate-endpoint response."""
     run_id = uuid.uuid4().hex
-    meter = MeteredLLM(get_provider(), run_id)
     try:
+        meter = MeteredLLM(get_provider(), run_id)
         course = generation.generate_course(meter, chunks, owners)
     except CostLimitExceeded as exc:
         raise _cost_limit_exceeded(exc) from exc
@@ -1090,30 +1106,7 @@ def uncomplete_lesson(lesson_id: int, session: Session = Depends(get_session)):
     return _completion_state(lesson)
 
 
-def _card_payload(
-    row: models.ReviewCard, item: models.QuizItem | None, now: datetime
-) -> dict:
-    """One queue entry: the card, the question to ask, and the four button intervals."""
-    return {
-        "card_id": row.id,
-        "concept_key": row.concept_key,
-        "concept_label": row.concept_label,
-        "state": row.state,
-        "due": iso_utc(row.due),
-        "lapses": row.lapses,
-        "retrievability": review.card_retrievability(row, now),
-        "preview": review.preview(row, now),
-        # No answer key: the learner has not answered yet, and the whole point of a
-        # review is that they retrieve it rather than recognize it.
-        "item": None
-        if item is None
-        else {
-            "id": item.id,
-            "question": item.question,
-            "kind": item.kind,
-            "options": item.options,
-        },
-    }
+_card_payload = review.card_payload
 
 
 @app.get("/review/today")
@@ -1849,7 +1842,10 @@ def post_tutor_message(body: TutorQuestion, session: Session = Depends(get_sessi
     if counts.concept_used >= tutor.CONCEPT_TURNS_PER_DAY:
         raise _tutor_conflict("concept_turn_limit", CONCEPT_TURN_LIMIT_MESSAGE, counts)
 
-    provider = get_provider()
+    try:
+        provider = get_provider()
+    except LLMCallError:
+        raise HTTPException(502, "Check the model provider configuration.") from None
     run_id = uuid.uuid4().hex
     # Which course this call is charged to, decided here at call time and from the
     # UNTRIMMED matches: sole_course_id is answering which courses teach the concept, and
@@ -2042,11 +2038,19 @@ def get_tutor_conversation(concept_key: str, session: Session = Depends(get_sess
 GROUP_COURSE = "course"
 GROUP_REMEDIATION = "remediation"
 GROUP_TUTOR = "tutor"
+GROUP_CODE_REVIEW = "code_review"
+GROUP_VARIANT = "variant_exercise"
+GROUP_EXPLORE = "explore"
+GROUP_PRACTICE = "practice"
 GROUP_FAILED_RUN = "failed_run"
 
 GROUP_LABELS = {
     GROUP_REMEDIATION: "Re-teaching (no single course)",
     GROUP_TUTOR: "Tutor chat (no single course)",
+    GROUP_CODE_REVIEW: "Code review (no single course)",
+    GROUP_VARIANT: "Variant exercises (no single course)",
+    GROUP_EXPLORE: "Free exploration (no single course)",
+    GROUP_PRACTICE: "Practice from a question (no single course)",
     GROUP_FAILED_RUN: "Unattributed",
 }
 
@@ -2092,6 +2096,32 @@ GROUP_NOTES = {
     # "or from one still running" is not padding. Generation is synchronous and can take
     # minutes, and its rows carry no course until it finishes, so a learner who opens
     # this page mid-run is reading about a run that has not failed at all.
+    GROUP_CODE_REVIEW: (
+        "A code review is charged to no course: it belongs to a project submission, and a "
+        "project may hold no course at all. The static pass costs nothing; only the "
+        "model-assisted pass appears here."
+    ),
+    GROUP_VARIANT: (
+        "A variant exercise is drafted from one submission, so it is charged to no course. "
+        "Nothing is recorded when the model returns an unusable draft."
+    ),
+    # Different from the two above in one way that matters to a learner reading the
+    # number: exploration is the only stage here that can be asked repeatedly about the
+    # same material, so a rising figure is a conversation, not a repair loop.
+    GROUP_EXPLORE: (
+        "A free-exploration question is answered from one project's own resources, so it "
+        "is charged to no course. Questions are metered whether or not the project "
+        "material covered them, and nothing is recorded when the model returns an "
+        "unusable answer."
+    ),
+    # Separate from exploration because it buys something different and the learner chose
+    # it explicitly: one longer explanation and one exercise, rather than an answer to the
+    # question they asked.
+    GROUP_PRACTICE: (
+        "Practice drafted from a free-exploration question is charged to no course: it "
+        "belongs to a conversation, not to any curriculum. Nothing is recorded when the "
+        "model returns an unusable practice set."
+    ),
     GROUP_FAILED_RUN: (
         '"Unattributed" calls have no course to attach to: they come from a generation run '
         "that failed before its course could be saved, or from one still running now."
@@ -2182,13 +2212,21 @@ def _unattributed_group(stage: str) -> str:
         return GROUP_REMEDIATION
     if stage == tutor.TUTOR_STAGE:
         return GROUP_TUTOR
+    if stage == llm_review.REVIEW_STAGE:
+        return GROUP_CODE_REVIEW
+    if stage == llm_variant.VARIANT_STAGE:
+        return GROUP_VARIANT
+    if stage == agent_router_module.EXPLORE_STAGE:
+        return GROUP_EXPLORE
+    if stage == agent_practice.PRACTICE_STAGE:
+        return GROUP_PRACTICE
     return GROUP_FAILED_RUN
 
 
 def _spend_groups(session: Session) -> list[dict]:
     """Spend for the /usage table: one row per course, then one row per reason a call
-    has no course. Courses first in id order, then re-teaching, then the tutor, then
-    the failed runs."""
+    has no course. Courses first in id order, then the non-course stages in the order
+    `rank` gives them, then the failed runs."""
     rows = (
         session.query(
             models.LlmCall.course_id,
@@ -2222,7 +2260,16 @@ def _spend_groups(session: Session) -> list[dict]:
         bucket["output_tokens"] += stage_out or 0
         bucket["estimated_cost_usd"] += stage_cost or 0.0
 
-    rank = {GROUP_COURSE: 0, GROUP_REMEDIATION: 1, GROUP_TUTOR: 2, GROUP_FAILED_RUN: 3}
+    rank = {
+        GROUP_COURSE: 0,
+        GROUP_REMEDIATION: 1,
+        GROUP_TUTOR: 2,
+        GROUP_CODE_REVIEW: 3,
+        GROUP_VARIANT: 4,
+        GROUP_EXPLORE: 5,
+        GROUP_PRACTICE: 6,
+        GROUP_FAILED_RUN: 7,
+    }
     groups = []
     for (group, course_id, stamped), bucket in sorted(
         buckets.items(),

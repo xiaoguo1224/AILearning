@@ -1,3 +1,7 @@
+import type { Translator } from "@/lib/i18n";
+
+import { LocalizedText } from "@/components/LocaleProvider";
+import { getLocale, getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -15,7 +19,8 @@ export const dynamic = "force-dynamic";
  * the server ever ranks by something other than stability. An unrecognised reason says
  * only that the concept was flagged: better a thin sentence than a confident wrong one.
  */
-function weakestExplanation(weakest: WeakestConcept): string {
+function weakestExplanation(weakest: WeakestConcept, t: Translator): string {
+  if (t.locale === "zh-CN") return t("This concept needs attention. Introduced in {0}.", weakest.lesson_title);
   const taught = `It is introduced in ${weakest.lesson_title}.`;
   if (weakest.reason === "lowest_stability") {
     return `Of everything you have studied in this course, this is the concept your memory is least likely to still be holding. ${taught}`;
@@ -25,10 +30,7 @@ function weakestExplanation(weakest: WeakestConcept): string {
 
 function ConceptsEmptyState() {
   return (
-    <p className="mt-5 rounded-surface border border-line px-4 py-6 text-ui text-ink-muted">
-      This course has no concepts to map yet. Concepts are listed by each lesson when the course
-      is generated, so a map appears here as soon as its lessons name any.
-    </p>
+    <p className="mt-5 rounded-surface border border-line px-4 py-6 text-ui text-ink-muted"><LocalizedText text={" This course has no concepts to map yet. Concepts are listed by each lesson when the course is generated, so a map appears here as soon as its lessons name any. "} /></p>
   );
 }
 
@@ -36,21 +38,20 @@ const BACK_TO_COURSES_LINK = (
   <Link
     href="/courses"
     className="text-small text-ink-muted transition-colors duration-fast ease-standard hover:text-ink"
-  >
-    &larr; All courses
-  </Link>
+  ><LocalizedText text={" ← All courses "} /></Link>
 );
 
 export default async function CourseConceptsPage(
   props: PageProps<"/courses/[courseId]/concepts">,
 ) {
+  const t = await getTranslator();
   const { courseId } = await props.params;
   const id = Number(courseId);
   if (!Number.isInteger(id)) notFound();
 
   let data: CourseConcepts;
   try {
-    data = await getCourseConcepts(id);
+    data = await getCourseConcepts(id, await getLocale());
   } catch (err) {
     // This is the last of the three re-throwing pages this PR converts, and the order
     // matters for reading the sentence: on main, /courses/1, its lesson pages and this
@@ -86,7 +87,7 @@ export default async function CourseConceptsPage(
           only the title text and, on the lesson page, the action differ. The plan page's
           error branch is the one that does not also share the mt-4.
         */}
-        <PageHeader className="mt-4" title="Concept map" />
+        <PageHeader className="mt-4" title={t("Concept map")} />
         <ErrorState className="mt-8" message={message} />
       </main>
     );
@@ -103,11 +104,7 @@ export default async function CourseConceptsPage(
 
       <CourseTabs courseId={data.course_id} active="concepts" />
 
-      <p className="mt-5 max-w-xl text-ui text-ink-muted">
-        Concepts grouped by the lesson that teaches them, sized by how often they come up and
-        filled by your current mastery. Reading left to right is the order the course teaches
-        them.
-      </p>
+      <p className="mt-5 max-w-xl text-ui text-ink-muted"><LocalizedText text={" Concepts grouped by the lesson that teaches them, sized by how often they come up and filled by your current mastery. Reading left to right is the order the course teaches them. "} /></p>
 
       {concepts.length === 0 || lessons.length === 0 ? (
         <ConceptsEmptyState />
@@ -123,9 +120,9 @@ export default async function CourseConceptsPage(
             scrolling the map inside its own box instead of scrolling the page sideways.
           */}
           <div className="lg:-mx-28 xl:-mx-40">
-            <ConceptMap lessons={lessons} concepts={concepts} courseTitle={data.title} />
+            <ConceptMap lessons={lessons} concepts={concepts} courseTitle={data.title} locale={t.locale} />
           </div>
-          <MasteryLegend />
+          <MasteryLegend locale={t.locale} />
 
           {weakest ? (
             <section className="mt-6 flex items-center justify-between gap-5 rounded-surface border border-line px-5 py-4">
@@ -137,22 +134,16 @@ export default async function CourseConceptsPage(
                   never made.
                 */}
                 <h2 className="text-subtitle">
-                  {weakest.concept_label} is the weakest concept you have studied so far
-                </h2>
-                <p className="mt-1 text-small text-ink-muted">{weakestExplanation(weakest)}</p>
+                  {weakest.concept_label}<LocalizedText text={" is the weakest concept you have studied so far "} /></h2>
+                <p className="mt-1 text-small text-ink-muted">{weakestExplanation(weakest, t)}</p>
               </div>
               <Link
                 href={`/courses/${data.course_id}/lessons/${weakest.lesson_id}`}
                 className="shrink-0 whitespace-nowrap rounded-control bg-fill px-4 py-2 text-small font-medium text-on-fill transition-colors duration-fast ease-standard hover:bg-fill-hover"
-              >
-                Study this
-              </Link>
+              ><LocalizedText text={" Study this "} /></Link>
             </section>
           ) : (
-            <p className="mt-6 rounded-surface border border-line px-5 py-4 text-small text-ink-muted">
-              Nothing here has been scheduled for review yet, so there is no weakest concept to
-              name. Finish a lesson and answer its quiz, and its concepts start earning a colour.
-            </p>
+            <p className="mt-6 rounded-surface border border-line px-5 py-4 text-small text-ink-muted"><LocalizedText text={" Nothing here has been scheduled for review yet, so there is no weakest concept to name. Finish a lesson and answer its quiz, and its concepts start earning a colour. "} /></p>
           )}
 
           {/*
@@ -163,8 +154,7 @@ export default async function CourseConceptsPage(
             lower-contrast of the two ink tokens, and globals.css carries its measured figures.
           */}
           <p className="mt-4 text-xs text-ink-muted">
-            {studied} of {concepts.length} concepts have been studied at least once.
-          </p>
+            {studied}<LocalizedText text={" of "} />{concepts.length}<LocalizedText text={" concepts have been studied at least once. "} /></p>
         </>
       )}
     </main>

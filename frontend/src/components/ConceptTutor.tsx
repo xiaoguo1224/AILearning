@@ -1,5 +1,10 @@
 "use client";
 
+
+
+import { useI18n } from "@/components/LocaleProvider";
+import type { Translator } from "@/lib/i18n";
+
 import { useEffect, useId, useRef, useState } from "react";
 
 import { LessonMarkdown } from "@/components/LessonMarkdown";
@@ -79,10 +84,10 @@ const GUIDED_SPENT_HINT =
 /** Where focus belongs once the response has landed and React has committed the tree. */
 type FocusTarget = "reply" | "composer" | "send";
 
-function errorMessage(err: unknown): string {
+function errorMessage(err: unknown, t: Translator): string {
   return err instanceof ApiError
     ? err.message
-    : "Could not reach the server. Is the backend running?";
+    : t("Could not reach the server. Is the backend running?");
 }
 
 /**
@@ -94,7 +99,8 @@ function errorMessage(err: unknown): string {
  * ask about another concept or stop for the day. A second wording of that here is the
  * failure lib/copy exists to prevent, one screen further along.
  */
-function usageLine(limits: TutorLimits): string {
+function usageLine(limits: TutorLimits, t: Translator): string {
+  if (t.locale === "zh-CN") return t("Questions today: {0}/{1} on this concept; {2}/{3} in total.", limits.concept_used, limits.concept_limit, limits.day_used, limits.day_limit);
   return (
     `${limits.concept_used} of ${limits.concept_limit} questions on this concept today, ` +
     `${limits.day_used} of ${limits.day_limit} across all of them.`
@@ -124,6 +130,7 @@ function TutorReply({
   conceptLabel: string;
   blockRef?: React.RefObject<HTMLDivElement | null>;
 }) {
+  const { t } = useI18n();
   const headingId = useId();
 
   return (
@@ -139,12 +146,11 @@ function TutorReply({
           grounded at exactly the moment a screen reader user is being told where they
           have landed. */}
       <h5 id={headingId} className="sr-only">
-        Tutor reply
-      </h5>
+        {t("Tutor reply")}</h5>
 
       <div className="rounded-lg border border-amber-200 bg-white/70 px-4 py-3 dark:border-amber-900 dark:bg-zinc-900/40">
         <p className="text-[12px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-400">
-          {GROUNDED_HEADING}
+          {t(GROUNDED_HEADING)}
         </p>
         {/* Through LessonMarkdown, which runs react-markdown without rehype-raw: this is
             model output derived from an uploaded document, so raw HTML in it stays
@@ -177,7 +183,7 @@ function TutorReply({
       {message.ask && (
         <div className="rounded-lg border-l-4 border-amber-600 bg-amber-100/70 px-4 py-3 dark:border-amber-500 dark:bg-amber-950/60">
           <p className="text-[12px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-200">
-            {ASK_HEADING}
+            {t(ASK_HEADING)}
           </p>
           {/* Through LessonMarkdown like `answer` and `beyond`. This is model output
               derived from an uploaded document and gets the same escaping as the rest of
@@ -194,10 +200,10 @@ function TutorReply({
            one card that happens to have a subheading in it. */
         <div className="rounded-lg border border-dashed border-zinc-400 bg-zinc-50 px-4 py-3 dark:border-zinc-600 dark:bg-zinc-900/60">
           <p className="text-[12px] font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
-            {BEYOND_HEADING}
+            {t(BEYOND_HEADING)}
           </p>
           <p className="mt-1.5 text-[12px] leading-[1.5] text-zinc-600 dark:text-zinc-400">
-            {BEYOND_DISCLAIMER}
+            {t(BEYOND_DISCLAIMER)}
           </p>
           {/* No title to strip here: `beyond` is at most three sentences and has no
               heading of its own, and passing the concept label would let it eat a first
@@ -211,8 +217,7 @@ function TutorReply({
       {message.check && (
         <div className="rounded-lg border border-amber-200/70 px-4 py-2.5 dark:border-amber-900/70">
           <p className="text-[12px] font-semibold uppercase tracking-wide text-amber-800/80 dark:text-amber-400/80">
-            Check yourself
-          </p>
+            {t("Check yourself")}</p>
           {/* Plain text, not markdown. It is one question, and a text node is escaped by
               React on its own, which is the least this untrusted string can be given. */}
           <p className="mt-1.5 text-[13px] text-zinc-700 dark:text-zinc-300">{message.check}</p>
@@ -224,11 +229,11 @@ function TutorReply({
 
 /** One thing the learner asked, as it sits in the transcript. */
 function LearnerMessage({ text }: { text: string }) {
+  const { t } = useI18n();
   return (
     <div className="rounded-lg bg-amber-100/60 px-4 py-2.5 dark:bg-amber-950/50">
       <p className="text-[12px] font-semibold uppercase tracking-wide text-amber-900/70 dark:text-amber-200/70">
-        You asked
-      </p>
+        {t("You asked")}</p>
       {/* A text node, so whatever was typed is escaped rather than parsed. */}
       <p className="mt-1 whitespace-pre-wrap text-[13px] text-zinc-800 dark:text-zinc-200">
         {text}
@@ -277,6 +282,7 @@ export function ConceptTutor({
    */
   onAnnounce: (message: string) => void;
 }) {
+  const { t } = useI18n();
   const [messages, setMessages] = useState<TutorMessage[]>([]);
   const [limits, setLimits] = useState<TutorLimits | null>(null);
   /** The server's view of the fade. Never computed from `messages`. */
@@ -338,7 +344,7 @@ export function ConceptTutor({
         setGuided(conversation.guided);
       })
       .catch((err) => {
-        const message = errorMessage(err);
+        const message = errorMessage(err, t);
         setLoadError(message);
         onAnnounce(message);
       })
@@ -410,7 +416,7 @@ export function ConceptTutor({
       // the announcement a screen reader user presses Send and nothing happens at all.
       const empty = "Type a question first.";
       setError(empty);
-      onAnnounce(empty);
+      onAnnounce(t(empty));
       return;
     }
     setSendingMode(mode);
@@ -418,8 +424,8 @@ export function ConceptTutor({
     setNotice(null);
     onAnnounce(
       mode === "guided"
-        ? `Sending your question about ${conceptLabel}, to work through yourself.`
-        : `Sending your question about ${conceptLabel}.`,
+        ? t("Sending your question about {0}, to work through yourself.", conceptLabel)
+        : t("Sending your question about {0}.", conceptLabel),
     );
     try {
       const outcome = await sendTutorMessage(conceptKey, question, mode);
@@ -449,10 +455,10 @@ export function ConceptTutor({
         const withheld = reply.role === "tutor" && reply.ask;
         const outside = reply.role === "tutor" && reply.beyond;
         const arrival = withheld
-          ? `The tutor worked through ${conceptLabel} up to the last step and left that step for you.`
-          : `The tutor answered your question about ${conceptLabel}.`;
+          ? t("The tutor worked through {0} up to the last step and left that step for you.", conceptLabel)
+          : t("The tutor answered your question about {0}.", conceptLabel);
         onAnnounce(
-          outside ? `${arrival} It also includes a part that is not from your course.` : arrival,
+          outside ? `${arrival} ${t("It also includes a part that is not from your course.")}` : arrival,
         );
         return;
       }
@@ -498,7 +504,7 @@ export function ConceptTutor({
       // where the learner should be put. The notice below the button explains why.
       pendingFocus.current = "send";
     } catch (err) {
-      const message = errorMessage(err);
+      const message = errorMessage(err, t);
       setError(message);
       onAnnounce(message);
       // The question is STILL IN THE BOX, on every one of these paths. A 502 writes
@@ -524,19 +530,15 @@ export function ConceptTutor({
       className="mt-4 border-t border-amber-200 pt-4 dark:border-amber-900"
     >
       <h4 id={headingId} className="text-[14px] font-semibold">
-        Ask about this concept
-      </h4>
+        {t("Ask about this concept")}</h4>
       {/* The register contract, said once and before the first reply, so the two
           headings below are not the first the learner hears of it. */}
       <p className="mt-0.5 text-[13px] text-amber-900/80 dark:text-amber-200/80">
-        Answers come from your course. Anything the tutor adds from outside it is kept
-        under its own heading.
-      </p>
+        {t("Answers come from your course. Anything the tutor adds from outside it is kept under its own heading.")}</p>
 
       {loading && messages.length === 0 && (
         <p className="mt-3 text-[13px] text-amber-900/70 dark:text-amber-200/70">
-          Loading your conversation&hellip;
-        </p>
+          {t("Loading your conversation…")}</p>
       )}
 
       {loadError && (
@@ -548,8 +550,7 @@ export function ConceptTutor({
             disabled={loading}
             className="mt-2 rounded-lg border border-amber-300 px-3 py-1 text-[13px] font-medium text-amber-900 transition-colors hover:border-amber-500 disabled:opacity-60 dark:border-amber-800 dark:text-amber-200 dark:hover:border-amber-600"
           >
-            Try again
-          </button>
+            {t("Try again")}</button>
         </div>
       )}
 
@@ -565,7 +566,7 @@ export function ConceptTutor({
               <li key={message.id} className="flex flex-col gap-3.5">
                 {day && day !== previous && (
                   <p className="text-[12px] text-zinc-500 dark:text-zinc-500">
-                    {formatDay(message.created_at)}
+                    {formatDay(message.created_at, t.locale)}
                   </p>
                 )}
                 {message.role === "learner" ? (
@@ -587,7 +588,7 @@ export function ConceptTutor({
 
       <div className="mt-3.5">
         <label htmlFor={composerId} className="sr-only">
-          Ask about {conceptLabel}
+          {t("Ask about ")}{conceptLabel}
         </label>
         {/* Never disabled, mid-request included. Disabling the focused control blurs it
             to the body, and a second send is already refused by the handler and by the
@@ -611,11 +612,11 @@ export function ConceptTutor({
               void send("answer");
             }
           }}
-          placeholder={`Ask anything about ${conceptLabel}`}
+          placeholder={t("Ask anything about {0}", conceptLabel)}
           className="w-full resize-y rounded-lg border border-amber-300 bg-transparent px-3 py-2 text-[13px] leading-[1.5] outline-none focus:border-amber-500 dark:border-amber-800"
         />
 
-        {error && <p className="mt-2 text-[13px] text-red-800 dark:text-red-300">{error}</p>}
+        {error && <p className="mt-2 text-[13px] text-red-800 dark:text-red-300">{t(error)}</p>}
 
         {/* The server's own refusal, shown where the send it refused happened. */}
         {notice && (
@@ -643,7 +644,7 @@ export function ConceptTutor({
                 : "hover:bg-amber-700 dark:hover:bg-amber-100"
             }`}
           >
-            {sendingMode === "answer" ? "Asking…" : "Ask"}
+            {sendingMode === "answer" ? t("Asking…") : t("Ask")}
           </button>
           {/*
             TWO BUTTONS, not a toggle beside one. The register is a choice about THIS
@@ -666,19 +667,18 @@ export function ConceptTutor({
                 : "hover:border-amber-900 hover:bg-amber-100/60 dark:hover:border-amber-300 dark:hover:bg-amber-950/50"
             }`}
           >
-            {sendingMode === "guided" ? "Working…" : "Let me work it out"}
+            {sendingMode === "guided" ? t("Working…") : t("Let me work it out")}
           </button>
           <p className="text-[12px] text-zinc-500 dark:text-zinc-500">
-            Ctrl or Cmd and Enter sends.
-            {/* Only once the server has said what they are. Nothing here invents the
+            {t("Ctrl or Cmd and Enter sends.")}{/* Only once the server has said what they are. Nothing here invents the
                 numbers, and until the conversation has loaded there are none to show. */}
-            {limits && ` ${usageLine(limits)}`}
+            {limits && ` ${usageLine(limits, t)}`}
           </p>
         </div>
         {/* Which of the two sentences shows is the server's call, off `guided.available`,
             and never counted out of the transcript above. */}
         <p className="mt-1.5 text-[12px] text-zinc-500 dark:text-zinc-500">
-          {guided && !guided.available ? GUIDED_SPENT_HINT : GUIDED_HINT}
+          {t(guided && !guided.available ? GUIDED_SPENT_HINT : GUIDED_HINT)}
         </p>
       </div>
       {/* No schedule promise here. The note panel this is mounted inside carries it,

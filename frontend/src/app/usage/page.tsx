@@ -1,3 +1,6 @@
+
+import { LocalizedText } from "@/components/LocaleProvider";
+import { getLocale, getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/Badge";
@@ -10,10 +13,10 @@ import type { PerCourseUsage, UsageSummary } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-function formatTimestamp(iso: string): string {
+function formatTimestamp(iso: string, locale: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString();
+  return date.toLocaleString(locale);
 }
 
 /**
@@ -38,7 +41,7 @@ function AttributedTo({ row }: { row: PerCourseUsage }) {
   if (row.title === null || row.course_id === null) {
     return (
       <span className="text-ink-muted">
-        {row.label} <span className="text-small">(deleted)</span>
+        {row.label} <span className="text-small"><LocalizedText text={"(deleted)"} /></span>
       </span>
     );
   }
@@ -63,13 +66,14 @@ function rowKey(row: PerCourseUsage): string {
 }
 
 export default async function UsagePage() {
+  const t = await getTranslator();
   let usage: UsageSummary | null = null;
   let loadError: string | null = null;
   try {
-    usage = await getUsage(50);
+    usage = await getUsage(50, await getLocale());
   } catch (err) {
     loadError =
-      err instanceof ApiError ? err.message : "Could not reach the server. Is the backend running?";
+      err instanceof ApiError ? err.message : t("Could not reach the server. Is the backend running?");
   }
 
   return (
@@ -77,13 +81,11 @@ export default async function UsagePage() {
       <Link
         href="/courses"
         className="text-small text-ink-muted transition-colors duration-fast ease-standard hover:text-ink"
-      >
-        &larr; All courses
-      </Link>
+      ><LocalizedText text={" ← All courses "} /></Link>
       <PageHeader
         className="mt-4"
-        title="API cost usage"
-        description="Estimated LLM spend on this server, across course generation and re-teaching alike. Figures on this page are ESTIMATES derived from token counts and provider pricing tables, not billed amounts."
+        title={t("API cost usage")}
+        description={t("Estimated LLM spend on this server, across course generation and re-teaching alike. Figures on this page are ESTIMATES derived from token counts and provider pricing tables, not billed amounts.")}
       />
 
       {loadError && <ErrorState className="mt-8" title="" message={loadError} />}
@@ -91,28 +93,26 @@ export default async function UsagePage() {
       {usage && (
         <>
           <section aria-labelledby="totals-heading" className="mt-8">
-            <h2 id="totals-heading" className="text-subtitle">
-              Totals
-            </h2>
+            <h2 id="totals-heading" className="text-subtitle"><LocalizedText text={" Totals "} /></h2>
             <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
               <Card padding={4}>
-                <dt className="text-small text-ink-subtle">LLM calls</dt>
+                <dt className="text-small text-ink-subtle"><LocalizedText text={"LLM calls"} /></dt>
                 <dd className="mt-1 text-title tabular-nums">{formatCount(usage.totals.calls)}</dd>
               </Card>
               <Card padding={4}>
-                <dt className="text-small text-ink-subtle">Input tokens</dt>
+                <dt className="text-small text-ink-subtle"><LocalizedText text={"Input tokens"} /></dt>
                 <dd className="mt-1 text-title tabular-nums">
                   {formatCount(usage.totals.input_tokens)}
                 </dd>
               </Card>
               <Card padding={4}>
-                <dt className="text-small text-ink-subtle">Output tokens</dt>
+                <dt className="text-small text-ink-subtle"><LocalizedText text={"Output tokens"} /></dt>
                 <dd className="mt-1 text-title tabular-nums">
                   {formatCount(usage.totals.output_tokens)}
                 </dd>
               </Card>
               <Card padding={4}>
-                <dt className="text-small text-ink-subtle">Estimated cost (USD)</dt>
+                <dt className="text-small text-ink-subtle"><LocalizedText text={"Estimated cost (USD)"} /></dt>
                 <dd className="mt-1 text-title tabular-nums">
                   {formatUsd(usage.totals.estimated_cost_usd)}
                 </dd>
@@ -127,22 +127,16 @@ export default async function UsagePage() {
             aria-labelledby="alert-heading"
             className="mt-6 rounded-surface border border-line p-4 text-ui"
           >
-            <h2 id="alert-heading" className="sr-only">
-              Alert and spend limit configuration
-            </h2>
-            <p>
-              Recurring spend alert threshold:{" "}
+            <h2 id="alert-heading" className="sr-only"><LocalizedText text={" Alert and spend limit configuration "} /></h2>
+            <p><LocalizedText text={" Recurring spend alert threshold:"} />{" "}
               <span className="font-medium tabular-nums">{formatUsd(usage.alert.threshold_usd)}</span>
               {usage.alert.active && (
-                <Badge tone="warning" className="ml-2">
-                  Active
-                </Badge>
+                <Badge tone="warning" className="ml-2"><LocalizedText text={" Active "} /></Badge>
               )}
             </p>
             {usage.limit.configured ? (
               <>
-                <p className="mt-1">
-                  Hard spend cap:{" "}
+                <p className="mt-1"><LocalizedText text={" Hard spend cap:"} />{" "}
                   <span className="font-medium tabular-nums">
                     {formatUsd(usage.limit.limit_usd)}
                   </span>
@@ -151,44 +145,28 @@ export default async function UsagePage() {
                   </Badge>
                 </p>
                 {usage.limit.reached && (
-                  <p className="mt-1 text-ink-muted">Further paid generations are blocked.</p>
+                  <p className="mt-1 text-ink-muted"><LocalizedText text={"Further paid generations are blocked."} /></p>
                 )}
               </>
             ) : (
-              <p className="mt-1 text-ink-muted">
-                No hard spend cap is configured, generations are never blocked on cost.
-              </p>
+              <p className="mt-1 text-ink-muted"><LocalizedText text={" No hard spend cap is configured, generations are never blocked on cost. "} /></p>
             )}
           </section>
 
           <section aria-labelledby="per-course-heading" className="mt-10">
-            <h2 id="per-course-heading" className="text-subtitle">
-              Where the spend went
-            </h2>
+            <h2 id="per-course-heading" className="text-subtitle"><LocalizedText text={" Where the spend went "} /></h2>
             {usage.per_course.length === 0 ? (
-              <p className="mt-3 rounded-surface border border-dashed border-line-strong px-4 py-6 text-center text-small text-ink-muted">
-                No LLM spend recorded yet.
-              </p>
+              <p className="mt-3 rounded-surface border border-dashed border-line-strong px-4 py-6 text-center text-small text-ink-muted"><LocalizedText text={" No LLM spend recorded yet. "} /></p>
             ) : (
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full min-w-[560px] border-collapse text-left text-ui">
                   <thead>
                     <tr className="border-b border-line-strong text-micro uppercase text-ink-subtle">
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        Attributed to
-                      </th>
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        Calls
-                      </th>
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        Input tokens
-                      </th>
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        Output tokens
-                      </th>
-                      <th scope="col" className="py-2 font-medium">
-                        Est. cost
-                      </th>
+                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Attributed to "} /></th>
+                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Calls "} /></th>
+                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Input tokens "} /></th>
+                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Output tokens "} /></th>
+                      <th scope="col" className="py-2 font-medium"><LocalizedText text={" Est. cost "} /></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -220,43 +198,27 @@ export default async function UsagePage() {
           </section>
 
           <section aria-labelledby="recent-calls-heading" className="mt-10">
-            <h2 id="recent-calls-heading" className="text-subtitle">
-              Recent calls
-            </h2>
+            <h2 id="recent-calls-heading" className="text-subtitle"><LocalizedText text={" Recent calls "} /></h2>
             {usage.recent_calls.length === 0 ? (
-              <p className="mt-3 rounded-surface border border-dashed border-line-strong px-4 py-6 text-center text-small text-ink-muted">
-                No LLM calls recorded yet.
-              </p>
+              <p className="mt-3 rounded-surface border border-dashed border-line-strong px-4 py-6 text-center text-small text-ink-muted"><LocalizedText text={" No LLM calls recorded yet. "} /></p>
             ) : (
               <div className="mt-3 overflow-x-auto">
                 <table className="w-full min-w-[720px] border-collapse text-left text-ui">
                   <thead>
                     <tr className="border-b border-line-strong text-micro uppercase text-ink-subtle">
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        Time
-                      </th>
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        Provider
-                      </th>
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        Model
-                      </th>
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        Stage
-                      </th>
-                      <th scope="col" className="py-2 pr-4 font-medium">
-                        In / out tokens
-                      </th>
-                      <th scope="col" className="py-2 font-medium">
-                        Est. cost
-                      </th>
+                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Time "} /></th>
+                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Provider "} /></th>
+                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Model "} /></th>
+                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Stage "} /></th>
+                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" In / out tokens "} /></th>
+                      <th scope="col" className="py-2 font-medium"><LocalizedText text={" Est. cost "} /></th>
                     </tr>
                   </thead>
                   <tbody>
                     {usage.recent_calls.map((call) => (
                       <tr key={call.id} className="border-b border-line last:border-0">
                         <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
-                          {formatTimestamp(call.created_at)}
+                          {formatTimestamp(call.created_at, t.locale)}
                         </td>
                         <td className="py-2 pr-4">{call.provider}</td>
                         <td className="py-2 pr-4">{call.model}</td>
@@ -267,7 +229,7 @@ export default async function UsagePage() {
                         <td className="py-2 tabular-nums">
                           {formatUsd(call.estimated_cost_usd)}
                           {call.approximate && (
-                            <span className="ml-1 text-small text-ink-subtle">(approx.)</span>
+                            <span className="ml-1 text-small text-ink-subtle"><LocalizedText text={"(approx.)"} /></span>
                           )}
                         </td>
                       </tr>

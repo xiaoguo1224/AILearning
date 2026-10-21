@@ -1,5 +1,10 @@
 "use client";
 
+
+
+import { useI18n } from "@/components/LocaleProvider";
+import type { Translator } from "@/lib/i18n";
+
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -57,11 +62,12 @@ type Phase =
       alreadyAnswered: boolean;
     };
 
-function errorMessage(err: unknown): string {
-  return err instanceof ApiError ? err.message : "Could not reach the server.";
+function errorMessage(err: unknown, t: Translator): string {
+  return err instanceof ApiError ? err.message : t("Could not reach the server.");
 }
 
-export function ReviewSession({ queue }: { queue: ReviewQueue }) {
+export function ReviewSession({ queue, returnHref }: { queue: ReviewQueue; returnHref?: string }) {
+  const { t } = useI18n();
   /**
    * The session runs over this snapshot and never refetches. Every answer and every
    * rating is its own durable POST, so ending mid-session and coming back simply
@@ -105,7 +111,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
   async function submitAnswer() {
     if (!card || !item || busy) return;
     if (!answer.trim()) {
-      setError("Enter an answer first.");
+      setError(t("Enter an answer first."));
       return;
     }
     const elapsed = Date.now() - shownAt.current;
@@ -141,7 +147,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
           alreadyAnswered: true,
         });
       } else {
-        setError(errorMessage(err));
+        setError(errorMessage(err, t));
       }
     } finally {
       setBusy(false);
@@ -156,7 +162,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
       await rateReviewCard(card.card_id, rating, phase.suggested, phase.attemptIds);
       advance();
     } catch (err) {
-      setError(errorMessage(err));
+      setError(errorMessage(err, t));
     } finally {
       setBusy(false);
     }
@@ -172,12 +178,12 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
   // quietly folded into a smaller number.
   const notes: string[] = [];
   if (queue.due_total > queue.cards.length) {
-    notes.push(`${queue.due_total} due, showing ${queue.cards.length}`);
+    notes.push(t("{0} due, showing {1}", queue.due_total, queue.cards.length));
   }
   const skipped = queue.cards.length - total;
   if (skipped > 0) {
     notes.push(
-      `${skipped} skipped: ${skipped === 1 ? "its concept has" : "their concepts have"} no quiz question left`,
+      t("{0} skipped: {1} no quiz question left", skipped, skipped === 1 ? "its concept has" : "their concepts have"),
     );
   }
 
@@ -186,18 +192,17 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
       <div className="border-b border-line bg-surface">
         <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-5 px-6 py-3">
           <Link
-            href="/"
+            href={returnHref ?? "/"}
             className="text-small font-medium text-ink-muted transition-colors duration-fast ease-standard hover:text-ink"
           >
-            End session
-          </Link>
+            {t("End session")}</Link>
           <div
             role="progressbar"
-            aria-label="Review session progress"
+            aria-label={t("Review session progress")}
             aria-valuemin={0}
             aria-valuemax={total}
             aria-valuenow={done}
-            aria-valuetext={`${done} of ${total} cards reviewed`}
+            aria-valuetext={t("{0} of {1} cards reviewed", done, total)}
             className="h-1 max-w-[420px] flex-1 overflow-hidden rounded-full bg-line"
           >
             <div
@@ -220,28 +225,23 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
       <div className="mx-auto w-full max-w-[720px] flex-1 px-6 py-14">
         {total === 0 && (
           <div className="rounded-surface border border-line bg-surface p-8 text-center">
-            <p className="text-lg font-medium">Nothing to review right now</p>
+            <p className="text-lg font-medium">{t("Nothing to review right now")}</p>
             <p className="mt-1 text-ui text-ink-muted">
-              Concepts come back as their recall probability drops. Finish a lesson to put new
-              ones into the schedule.
-            </p>
-            <Link href="/" className={`mt-6 ${PRIMARY_LINK_CLASSES}`}>
-              Back to Today
-            </Link>
+              {t(returnHref ? "There is no existing review card or course question for this concept. Read its knowledge entry or practise locally and upload your results." : "Concepts come back as their recall probability drops. Finish a lesson to put new ones into the schedule.")}</p>
+            <Link href={returnHref ?? "/"} className={`mt-6 ${PRIMARY_LINK_CLASSES}`}>
+              {t(returnHref ? "Back to review suggestions" : "Back to Today")}</Link>
           </div>
         )}
 
         {total > 0 && finished && (
           <div className="rounded-surface border border-line bg-surface p-8 text-center">
-            <p className="text-lg font-medium">Session complete</p>
+            <p className="text-lg font-medium">{t("Session complete")}</p>
             <p className="mt-1 text-ui text-ink-muted">
-              {total} {total === 1 ? "concept" : "concepts"} reviewed and rescheduled.
-              {queue.due_total > queue.cards.length &&
-                ` ${queue.due_total - queue.cards.length} more are still due: start another session when you are ready.`}
+              {t(returnHref ? "{0} concepts reviewed. Your self-rating is recorded; it does not certify a code fix." : "{0} concepts reviewed and rescheduled.", total)}{!returnHref && queue.due_total > queue.cards.length &&
+                t(" {0} more are still due: start another session when you are ready.", queue.due_total - queue.cards.length)}
             </p>
-            <Link href="/" className={`mt-6 ${PRIMARY_LINK_CLASSES}`}>
-              Back to Today
-            </Link>
+            <Link href={returnHref ?? "/"} className={`mt-6 ${PRIMARY_LINK_CLASSES}`}>
+              {t(returnHref ? "Back to review suggestions" : "Back to Today")}</Link>
           </div>
         )}
 
@@ -249,8 +249,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
           <>
             <div className="flex flex-wrap items-center gap-2.5">
               <span className="font-mono text-micro uppercase text-ink-muted">
-                Concept
-              </span>
+                {t("Concept")}</span>
               <span className="text-small text-ink">{card.concept_label}</span>
               {card.lapses > 0 && (
                 /*
@@ -265,8 +264,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
                   stay Badge's so the two still read as siblings.
                 */
                 <span className="inline-flex items-center rounded-full bg-warning-surface px-2 py-0.5 text-small font-medium text-warning">
-                  Missed last time
-                </span>
+                  {t("Missed last time")}</span>
               )}
             </div>
 
@@ -277,7 +275,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
                 <div className="mt-6">
                   {item.kind === "mcq" ? (
                     <fieldset className="flex flex-col gap-2">
-                      <legend className="sr-only">Choose an answer</legend>
+                      <legend className="sr-only">{t("Choose an answer")}</legend>
                       {item.options.map((option) => (
                         <label key={option} className="flex cursor-pointer items-center gap-2 text-sm">
                           <input
@@ -295,8 +293,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
                   ) : (
                     <>
                       <label htmlFor={`answer-${card.card_id}`} className="sr-only">
-                        Your answer
-                      </label>
+                        {t("Your answer")}</label>
                       <input
                         id={`answer-${card.card_id}`}
                         type="text"
@@ -310,7 +307,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
                             void submitAnswer();
                           }
                         }}
-                        placeholder="Your answer"
+                        placeholder={t("Your answer")}
                         /*
                           No `outline-none` here, deliberately, where the raw version had one:
                           globals.css's app-wide `:focus-visible` rule is unlayered, and Tailwind
@@ -330,7 +327,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
                     disabled={busy}
                     className="mt-4 rounded-control bg-fill px-5 py-2 text-ui font-medium text-on-fill transition-colors duration-fast ease-standard hover:bg-fill-hover disabled:opacity-60"
                   >
-                    {busy ? "Checking…" : "Show answer"}
+                    {busy ? t("Checking…") : t("Show answer")}
                   </button>
                 </div>
               )}
@@ -347,23 +344,18 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
                   {phase.alreadyAnswered ? (
                     <div className="mt-6 border-t border-line pt-5">
                       <Callout tone="warning">
-                        You already answered this question earlier in this review, so it was not
-                        recorded again. Rate how well you recalled it and the card will be
-                        rescheduled.
-                      </Callout>
+                        {t(returnHref ? "Your answer was already recorded. Rate your recall to finish this review." : "You already answered this question earlier in this review, so it was not recorded again. Rate how well you recalled it and the card will be rescheduled.")}</Callout>
                     </div>
                   ) : (
                     <>
                       <div className="mt-6 border-t border-line pt-5">
                         <p className="mb-2.5 font-mono text-micro uppercase text-ink-muted">
-                          Your answer
-                        </p>
+                          {t("Your answer")}</p>
                         <p className="text-ui leading-relaxed text-ink">{phase.submitted}</p>
                       </div>
                       <div className="mt-5 border-t border-line pt-5">
                         <p className="mb-2.5 font-mono text-micro uppercase text-ink-muted">
-                          Reference answer
-                        </p>
+                          {t("Reference answer")}</p>
                         <p className="text-ui leading-relaxed text-ink-muted">
                           {phase.expected}
                         </p>
@@ -384,8 +376,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
             {phase.kind === "rating" && (
               <>
                 <p className="mb-3 mt-6 text-center text-small text-ink-muted">
-                  How well did you recall it?
-                </p>
+                  {t("How well did you recall it?")}</p>
                 <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4">
                   {phase.preview.map((option, index) => {
                     const style = RATING_STYLES[option.name];
@@ -403,9 +394,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
                         ref={takesFocus ? ratingRef : undefined}
                         disabled={busy}
                         onClick={() => void rate(option.rating)}
-                        aria-label={`${style.title}, next review in ${option.label}${
-                          suggested ? ", suggested" : ""
-                        }`}
+                        aria-label={returnHref ? `${t(style.title)}${suggested ? t(", suggested") : ""}` : t("{0}, next review in {1}{2}", t(style.title), option.label, suggested ? t(", suggested") : "")}
                         className={`rounded-control bg-surface text-center transition-colors duration-fast ease-standard disabled:opacity-60 ${
                           suggested
                             ? "border-2 border-ink px-2.5 py-[13px]"
@@ -413,14 +402,14 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
                         }`}
                       >
                         <span className={`block text-sm font-semibold ${style.className}`}>
-                          {style.title}
+                          {t(style.title)}
                         </span>
                         {/* Rendered verbatim: the server computes it from the real
                             scheduler transition with fuzzing off, so two buttons
                             showing the same label are both telling the truth. */}
-                        <span aria-hidden className="mt-1 block font-mono text-[11px] text-ink-muted">
+                        {!returnHref && <span aria-hidden className="mt-1 block font-mono text-[11px] text-ink-muted">
                           {option.label}
-                        </span>
+                        </span>}
                       </button>
                     );
                   })}
@@ -434,11 +423,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
                   to ink-subtle: it is the lower-contrast of the two ink tokens.
                 */}
                 <p className="mt-4.5 text-center text-xs leading-relaxed text-ink-muted">
-                  Intervals come from FSRS using your own history on this concept, and bunch
-                  closer together than you might expect.
-                  <br />
-                  Rate honestly: a generous rating today costs you a forgotten concept later.
-                </p>
+                  {returnHref ? t("Rate your actual recall. Review suggestions follow mistakes and your choices.") : <>{t("Intervals come from FSRS using your own history on this concept, and bunch closer together than you might expect.")}<br />{t("Rate honestly: a generous rating today costs you a forgotten concept later.")}</>}</p>
               </>
             )}
           </>

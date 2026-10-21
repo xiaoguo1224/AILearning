@@ -1,3 +1,4 @@
+import { browserLocale, createTranslator, type Locale } from "./i18n";
 import { formatUsd } from "./format";
 import type {
   AlertState,
@@ -16,10 +17,44 @@ import type {
   PracticeAnswer,
   PracticeConflict,
   PracticeState,
+  ProjectDetail,
+  ProjectInput,
+  ProjectList,
+  ProjectStatus,
+  ReferenceSolution,
+  ResourceSummary,
+  ResourceDetail,
+  ResourceSearchResult,
+  ReviewHint,
+  SubmissionDetail,
+  SubmissionList,
+  VariantDraft,
+  CreateSubmissionPayload,
+  CodeReviewSummary,
+  UploadSubmissionInput,
+  CreateSessionPayload,
+  ExploreAskResult,
+  ExplorePracticeResult,
+  ExploreSession,
+  ExploreSessionDetail,
+  ExploreSessionList,
+  KnowledgeCompare,
+  KnowledgeDetail,
+  KnowledgeKind,
+  KnowledgeList,
+  KnowledgeRevisionDetail,
+  KnowledgeRevisionList,
+  KnowledgeStatus,
   RemediationConflict,
   RemediationNote,
   ReviewAnswerResult,
   ReviewQueue,
+  ProjectReviewTasks,
+  DiagnosisCause,
+  LearningSuggestion,
+  SuggestionList,
+  ProjectCurriculum,
+  ContentReview,
   ReviewRatingResult,
   ReviewToday,
   SourceFailure,
@@ -32,12 +67,61 @@ import type {
   UsageSummary,
 } from "./types";
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const BASE_URL =
+  (typeof window === "undefined" ? process.env.API_INTERNAL_URL : undefined) ??
+  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+export function listProjectReviewTasks(projectId: number, locale?: Locale): Promise<ProjectReviewTasks> {
+  return get(`/api/projects/${projectId}/review-tasks`, locale);
+}
+
+export function getProjectPractice(projectId: number, concept: string, locale?: Locale): Promise<ReviewQueue> {
+  return get(`/api/projects/${projectId}/review-tasks/practice?concept=${encodeURIComponent(concept)}`, locale);
+}
+
+export function recordDiagnosis(projectId: number, data: { concept_key: string; cause: DiagnosisCause; note: string; review_id?: number; finding_index?: number }): Promise<{ id: number }> {
+  return request(`/api/projects/${projectId}/errors${data.review_id !== undefined ? "/from-review" : ""}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+  });
+}
+
+export function dismissDiagnosis(errorId: number): Promise<{ id: number }> {
+  return request(`/api/errors/${errorId}/dismiss`, { method: "POST" });
+}
+
+export function listSuggestions(projectId: number, offset = 0, locale?: Locale): Promise<SuggestionList> {
+  return get(`/api/projects/${projectId}/suggestions?offset=${offset}`, locale);
+}
+
+export function getProjectCurriculum(projectId: number, locale?: Locale): Promise<ProjectCurriculum> {
+  return get(`/api/projects/${projectId}/curriculum`, locale);
+}
+
+export function requestContentReview(projectId: number, kind: "lesson" | "solution", sourceId: number): Promise<ContentReview> {
+  return request(`/api/projects/${projectId}/content-reviews`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source_kind: kind, source_id: sourceId }) });
+}
+export function listContentReviews(projectId: number, offset = 0, locale?: Locale): Promise<{ items: ContentReview[]; total: number }> {
+  return get(`/api/projects/${projectId}/content-reviews?offset=${offset}`, locale);
+}
+export function createSuggestion(projectId: number, sourceErrorId: number, targetProjectId: number): Promise<LearningSuggestion> {
+  return request(`/api/projects/${projectId}/suggestions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source_error_id: sourceErrorId, target_project_id: targetProjectId }) });
+}
+export function decideSuggestion(id: number, decision: "accepted" | "rejected"): Promise<LearningSuggestion> {
+  return request(`/api/suggestions/${id}/decision`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision }) });
+}
+
+/** A shared request boundary for browser calls and explicit server locale forwarding. */
+async function localizedFetch(input: RequestInfo | URL, init?: RequestInit, locale: Locale = browserLocale()): Promise<Response> {
+  const headers = new Headers(init?.headers);
+  headers.set("Accept-Language", locale);
+  return fetch(input, { ...init, headers });
+}
 
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
     message: string,
+    public readonly code?: string,
   ) {
     super(message);
     this.name = "ApiError";
@@ -87,16 +171,25 @@ const COST_LIMIT_CONSEQUENCE = {
   // the cap is tested before the model is called, and a turn that fails writes neither
   // row, the learner's own message included. So the transcript is exactly as it was.
   tutor: "No message was recorded, and this attempt spent nothing.",
+  // Same two reasons again: the explore endpoint commits both rows only after the reply
+  // has parsed, and the cap is checked before the provider call, so a refused question
+  // leaves the session untouched.
+  explore: "No message was recorded, and this attempt spent nothing.",
+  // The practice endpoint writes its reply and its draft together, after the model has
+  // answered, and the cap is checked before the provider call. So a refusal here leaves
+  // the transcript and the exercise list exactly as they were.
+  practice: "No exercise was recorded, and this attempt spent nothing.",
 } as const;
 
 /** Returns null when the detail carries nothing useful, so the caller keeps its statusText fallback. */
-function messageFromObjectDetail(detail: ObjectDetail, consequence?: string): string | null {
+function messageFromObjectDetail(detail: ObjectDetail, consequence?: string, locale: Locale = browserLocale()): string | null {
+  const t = createTranslator(locale);
   if (detail.error === "cost_limit_exceeded") {
-    const tail = consequence ? ` ${consequence}` : "";
+    const tail = consequence ? ` ${t(consequence)}` : "";
     if (typeof detail.limit_usd === "number" && typeof detail.spent_usd === "number") {
-      return `LLM spend limit reached: ${formatUsd(detail.spent_usd)} spent of a ${formatUsd(detail.limit_usd)} cap.${tail}`;
+      return `${t("LLM spend limit reached: {0} spent of a {1} cap.", formatUsd(detail.spent_usd), formatUsd(detail.limit_usd))}${tail}`;
     }
-    return `LLM spend limit reached.${tail}`;
+    return `${t("LLM spend limit reached.")}${tail}`;
   }
   if (typeof detail.message === "string" && detail.message) {
     return detail.message;
@@ -113,34 +206,50 @@ function messageFromValidationDetail(detail: unknown[]): string | null {
   return null;
 }
 
+/** Turn a non-2xx response into the ApiError every caller already knows. */
+async function errorFromResponse(
+  res: Response,
+  costLimitConsequence?: string,
+  locale?: Locale,
+): Promise<ApiError> {
+  let message = res.statusText || `Request failed with status ${res.status}`;
+  let code: string | undefined;
+  try {
+    const body = await res.json();
+    const detail = body?.detail;
+    if (typeof detail === "string") {
+      message = detail;
+    } else if (Array.isArray(detail)) {
+      message = messageFromValidationDetail(detail) ?? message;
+    } else if (detail && typeof detail === "object") {
+      if (typeof detail.error === "string") code = detail.error;
+      message = messageFromObjectDetail(detail as ObjectDetail, costLimitConsequence, locale) ?? message;
+    }
+  } catch {
+    // Non-JSON error body - keep the statusText fallback.
+  }
+  return new ApiError(res.status, createTranslator(locale ?? browserLocale())(message), code);
+}
+
 async function request<T>(
   path: string,
   init?: RequestInit,
   costLimitConsequence?: string,
+  locale?: Locale,
 ): Promise<T> {
-  const res = await fetch(`${BASE_URL}${path}`, init);
-  if (!res.ok) {
-    let message = res.statusText || `Request failed with status ${res.status}`;
-    try {
-      const body = await res.json();
-      const detail = body?.detail;
-      if (typeof detail === "string") {
-        message = detail;
-      } else if (Array.isArray(detail)) {
-        message = messageFromValidationDetail(detail) ?? message;
-      } else if (detail && typeof detail === "object") {
-        message = messageFromObjectDetail(detail as ObjectDetail, costLimitConsequence) ?? message;
-      }
-    } catch {
-      // Non-JSON error body - keep the statusText fallback.
-    }
-    throw new ApiError(res.status, message);
-  }
+  const res = await localizedFetch(`${BASE_URL}${path}`, init, locale);
+  if (!res.ok) throw await errorFromResponse(res, costLimitConsequence, locale);
   return res.json() as Promise<T>;
 }
 
-function get<T>(path: string): Promise<T> {
-  return request<T>(path, { cache: "no-store" });
+/** A request whose success carries no body, such as a 204 DELETE. */
+async function requestNoContent(path: string, init?: RequestInit, locale?: Locale): Promise<void> {
+  const res = await localizedFetch(`${BASE_URL}${path}`, init, locale);
+  if (!res.ok) throw await errorFromResponse(res, undefined, locale);
+}
+
+function get<T>(path: string, locale?: Locale): Promise<T> {
+  return request<T>(path, { cache: "no-store" }, undefined, locale);
 }
 
 function postJson<T>(path: string, body: unknown, costLimitConsequence?: string): Promise<T> {
@@ -163,8 +272,30 @@ function putJson<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
-export function listCourses(): Promise<CourseSummary[]> {
-  return get("/courses");
+export function listCourses(locale?: Locale): Promise<CourseSummary[]> {
+  return get("/courses", locale);
+}
+
+export function listProjects(status: ProjectStatus = "active", offset = 0, locale?: Locale): Promise<ProjectList> {
+  return get(`/api/projects?status=${status}&offset=${offset}&limit=20`, locale);
+}
+export function getProject(id: number, locale?: Locale): Promise<ProjectDetail> {
+  return get(`/api/projects/${id}`, locale);
+}
+export function createProject(body: ProjectInput): Promise<ProjectDetail> {
+  return postJson("/api/projects", body);
+}
+export function updateProject(id: number, body: Partial<ProjectInput> & { expected_updated_at?: string }): Promise<ProjectDetail> {
+  return request(`/api/projects/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+}
+export function archiveProject(id: number): Promise<ProjectDetail> {
+  return request(`/api/projects/${id}/archive`, { method: "POST" });
+}
+export function linkProjectCourse(id: number, courseId: number, position: number): Promise<ProjectDetail> {
+  return putJson(`/api/projects/${id}/courses/${courseId}`, { position });
+}
+export function unlinkProjectCourse(id: number, courseId: number): Promise<ProjectDetail> {
+  return request(`/api/projects/${id}/courses/${courseId}`, { method: "DELETE" });
 }
 
 /**
@@ -200,17 +331,17 @@ export function deleteCourse(id: number): Promise<CourseDeletion> {
   return request(`/courses/${id}`, { method: "DELETE" });
 }
 
-export function getCourse(id: number): Promise<CourseDetail> {
-  return get(`/courses/${id}`);
+export function getCourse(id: number, locale?: Locale): Promise<CourseDetail> {
+  return get(`/courses/${id}`, locale);
 }
 
-export function getLesson(id: number): Promise<LessonDetail> {
-  return get(`/lessons/${id}`);
+export function getLesson(id: number, locale?: Locale): Promise<LessonDetail> {
+  return get(`/lessons/${id}`, locale);
 }
 
 /** The concept map's data: every concept in the course, its lesson, and its mastery. */
-export function getCourseConcepts(id: number): Promise<CourseConcepts> {
-  return get(`/courses/${id}/concepts`);
+export function getCourseConcepts(id: number, locale?: Locale): Promise<CourseConcepts> {
+  return get(`/courses/${id}/concepts`, locale);
 }
 
 export function generateFromText(text: string): Promise<GenerateResult> {
@@ -278,7 +409,7 @@ export async function generateFromSources(
     form.append("file", file);
   }
 
-  const res = await fetch(`${BASE_URL}/courses/generate/multipart`, {
+  const res = await localizedFetch(`${BASE_URL}/courses/generate/multipart`, {
     method: "POST",
     body: form,
   });
@@ -300,7 +431,7 @@ export async function generateFromSources(
     const failed = detail as { message?: string; sources: SourceFailure[] };
     throw new SourceGenerationError(
       res.status,
-      failed.message || "Some of your sources could not be read.",
+      createTranslator(browserLocale())(failed.message || "Some of your sources could not be read."),
       failed.sources,
     );
   }
@@ -329,13 +460,13 @@ export function uncompleteLesson(id: number): Promise<CompleteResult> {
   return request(`/lessons/${id}/complete`, { method: "DELETE" });
 }
 
-export function getReviewToday(): Promise<ReviewToday> {
-  return get("/review/today");
+export function getReviewToday(locale?: Locale): Promise<ReviewToday> {
+  return get("/review/today", locale);
 }
 
-export function getReviewQueue(limit?: number): Promise<ReviewQueue> {
+export function getReviewQueue(limit?: number, locale?: Locale): Promise<ReviewQueue> {
   const query = limit ? `?limit=${limit}` : "";
-  return get(`/review/queue${query}`);
+  return get(`/review/queue${query}`, locale);
 }
 
 /**
@@ -421,7 +552,7 @@ function messageFromErrorBody(
  * and would throw the 409 note away.
  */
 export async function requestRemediation(cardId: number): Promise<RemediationOutcome> {
-  const res = await fetch(`${BASE_URL}/review/cards/${cardId}/remediation`, { method: "POST" });
+  const res = await localizedFetch(`${BASE_URL}/review/cards/${cardId}/remediation`, { method: "POST" });
   let body: unknown = null;
   try {
     body = await res.json();
@@ -441,8 +572,8 @@ export async function requestRemediation(cardId: number): Promise<RemediationOut
 }
 
 /** The concept's current explanation, or null when it has none. Costs nothing. */
-export function getRemediation(cardId: number): Promise<RemediationNote | null> {
-  return get(`/review/cards/${cardId}/remediation`);
+export function getRemediation(cardId: number, locale?: Locale): Promise<RemediationNote | null> {
+  return get(`/review/cards/${cardId}/remediation`, locale);
 }
 
 function practicePath(cardId: number): string {
@@ -493,7 +624,7 @@ export async function submitPractice(
   answer: string,
   elapsedMs?: number,
 ): Promise<PracticeOutcome> {
-  const res = await fetch(`${BASE_URL}${practicePath(cardId)}`, {
+  const res = await localizedFetch(`${BASE_URL}${practicePath(cardId)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -579,7 +710,7 @@ export async function sendTutorMessage(
   message: string,
   mode: TutorMode,
 ): Promise<TutorOutcome> {
-  const res = await fetch(`${BASE_URL}/tutor/messages`, {
+  const res = await localizedFetch(`${BASE_URL}/tutor/messages`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ concept_key: conceptKey, message, mode }),
@@ -610,8 +741,8 @@ export async function sendTutorMessage(
  * the bespoke fetch that requestRemediation, submitPractice and sendTutorMessage use.
  * They all go through plain get/postJson/putJson, deliberately.
  */
-export function getCoursePlan(id: number): Promise<CoursePlan> {
-  return get(`/courses/${id}/plan`);
+export function getCoursePlan(id: number, locale?: Locale): Promise<CoursePlan> {
+  return get(`/courses/${id}/plan`, locale);
 }
 
 /**
@@ -674,8 +805,8 @@ export function coursePlanIcsFilename(id: number): string {
 }
 
 /** Every day the learner has marked off, oldest first. Global, not per course. */
-export function listDaysOff(): Promise<DaysOff> {
-  return get("/plan/days-off");
+export function listDaysOff(locale?: Locale): Promise<DaysOff> {
+  return get("/plan/days-off", locale);
 }
 
 /**
@@ -698,11 +829,362 @@ export function removeDayOff(day: string): Promise<DayOffRemoval> {
   return request(`/plan/days-off/${encodeURIComponent(day)}`, { method: "DELETE" });
 }
 
-export function getUsage(limit?: number): Promise<UsageSummary> {
+export function getUsage(limit?: number, locale?: Locale): Promise<UsageSummary> {
   const query = limit ? `?limit=${limit}` : "";
-  return get(`/usage${query}`);
+  return get(`/usage${query}`, locale);
 }
 
 export function acknowledgeCostAlert(): Promise<AlertState> {
   return request("/usage/alert/ack", { method: "POST" });
+}
+
+export function listProjectResources(projectId: number, locale?: Locale): Promise<ResourceSummary[]> {
+  return get(`/api/projects/${projectId}/resources`, locale);
+}
+export function getResource(resourceId: number, locale?: Locale): Promise<ResourceDetail> {
+  return get(`/api/resources/${resourceId}`, locale);
+}
+export function searchProjectResources(projectId: number, query: string, locale?: Locale): Promise<ResourceSearchResult[]> {
+  return get(`/api/projects/${projectId}/resources/search?q=${encodeURIComponent(query)}`, locale);
+}
+export function addUrlResource(projectId: number, url: string, title?: string): Promise<ResourceDetail> {
+  return postJson(`/api/projects/${projectId}/resources/url`, { url, title });
+}
+export function addTextResource(projectId: number, title: string, content: string, kind: "markdown" | "text" = "markdown"): Promise<ResourceDetail> {
+  return postJson(`/api/projects/${projectId}/resources/text`, { title, content, kind });
+}
+export function deleteProjectResource(projectId: number, resourceId: number): Promise<{ status: string; deleted_permanently: boolean }> {
+  return request(`/api/projects/${projectId}/resources/${resourceId}`, { method: "DELETE" });
+}
+export async function uploadProjectResource(projectId: number, file: File): Promise<ResourceDetail> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await localizedFetch(`${BASE_URL}/api/projects/${projectId}/resources/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    let msg = `Upload failed (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data?.detail?.message) msg = data.detail.message;
+    } catch {}
+    throw new ApiError(res.status, msg);
+  }
+  return res.json() as Promise<ResourceDetail>;
+}
+
+export interface ListSubmissionsOptions {
+  exerciseId?: string;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * One page of a project's submissions, newest first. Costs nothing.
+ *
+ * The list endpoint returns summaries rather than full details, so a row can be drawn
+ * without every artifact's text: a project with fifty versions should not ship fifty
+ * copies of the code to render an index.
+ */
+export function listProjectSubmissions(
+  projectId: number,
+  options: ListSubmissionsOptions = {},
+  locale?: Locale,
+): Promise<SubmissionList> {
+  const params = new URLSearchParams();
+  if (options.exerciseId) params.set("exercise_id", options.exerciseId);
+  params.set("limit", String(options.limit ?? 50));
+  params.set("offset", String(options.offset ?? 0));
+  return get(`/api/projects/${projectId}/submissions?${params.toString()}`, locale);
+}
+
+export function getSubmission(submissionId: number, locale?: Locale): Promise<SubmissionDetail> {
+  return get(`/api/submissions/${submissionId}`, locale);
+}
+
+/** Paste one version. The server stores it and analyses it; it never runs it. */
+export function createSubmission(projectId: number, body: CreateSubmissionPayload): Promise<SubmissionDetail> {
+  return postJson(`/api/projects/${projectId}/submissions`, body);
+}
+
+/**
+ * Upload one version as files. At least one of `codeFile` and `logFile` must be set;
+ * the server refuses an empty submission with a 422 whose detail carries a message.
+ *
+ * Mirrors uploadProjectResource's error handling rather than `request`'s: a 422 here is
+ * about one file the learner chose, so its `detail.message` is the sentence to show.
+ */
+export async function uploadSubmission(
+  projectId: number,
+  input: UploadSubmissionInput,
+): Promise<SubmissionDetail> {
+  const form = new FormData();
+  if (input.codeFile) form.append("code_file", input.codeFile);
+  if (input.logFile) form.append("log_file", input.logFile);
+  if (input.exerciseId?.trim()) form.append("exercise_id", input.exerciseId.trim());
+  if (input.variantId) form.append("variant_id", String(input.variantId));
+  if (input.userNote?.trim()) form.append("user_note", input.userNote.trim());
+
+  const res = await localizedFetch(`${BASE_URL}/api/projects/${projectId}/submissions/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    let message = `Upload failed (${res.status})`;
+    let code: string | undefined;
+    try {
+      const data = await res.json();
+      if (typeof data?.detail?.message === "string") message = data.detail.message;
+      if (typeof data?.detail?.error === "string") code = data.detail.error;
+    } catch {
+      // Non-JSON error body - the status has to carry the meaning on its own.
+    }
+    throw new ApiError(res.status, message, code);
+  }
+  return res.json() as Promise<SubmissionDetail>;
+}
+
+/**
+ * Analyse one submission and record the review. `useLlm` asks for the model-assisted
+ * pass, which may spend provider quota and may come back `unavailable`; the static pass
+ * is free and always available. Neither runs the learner's code.
+ */
+export function triggerCodeReview(submissionId: number, useLlm = false): Promise<CodeReviewSummary> {
+  return request(`/api/submissions/${submissionId}/review?use_llm=${useLlm ? "true" : "false"}`, {
+    method: "POST",
+  });
+}
+
+export function listSubmissionReviews(submissionId: number, locale?: Locale): Promise<CodeReviewSummary[]> {
+  return get(`/api/submissions/${submissionId}/reviews`, locale);
+}
+
+/** Unlock one rung of the hint ladder. A level the review does not have is a 422. */
+export function revealReviewHint(reviewId: number, level: 1 | 2 | 3): Promise<ReviewHint> {
+  return postJson(`/api/reviews/${reviewId}/hints`, { level });
+}
+
+/**
+ * Ask for the reference solution. Deliberately a separate, confirmed action: the
+ * response is model output, labelled `ai_generated_unverified`, not an answer key.
+ */
+export function revealReviewSolution(reviewId: number): Promise<ReferenceSolution> {
+  return request(`/api/reviews/${reviewId}/solution`, { method: "POST" });
+}
+
+/**
+ * Draft a practice variant from one submission. Model-only: there is no static
+ * fallback, so a 502 means the model produced nothing usable.
+ */
+export function createVariant(submissionId: number): Promise<VariantDraft> {
+  return request(`/api/submissions/${submissionId}/variant`, { method: "POST" });
+}
+
+/** Delete one version, its artifacts and its reviews. Irreversible; confirm first. */
+export function deleteSubmission(submissionId: number): Promise<void> {
+  return requestNoContent(`/api/submissions/${submissionId}`, { method: "DELETE" });
+}
+
+export interface ListSessionsOptions {
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * One page of a project's free-exploration sessions, most recently touched first.
+ * Costs nothing.
+ *
+ * The list endpoint returns summaries with a message count rather than transcripts, so
+ * an index of fifty sessions does not ship fifty conversations to render a list.
+ */
+export function listProjectSessions(
+  projectId: number,
+  options: ListSessionsOptions = {},
+  locale?: Locale,
+): Promise<ExploreSessionList> {
+  const params = new URLSearchParams();
+  params.set("limit", String(options.limit ?? 50));
+  params.set("offset", String(options.offset ?? 0));
+  return get(`/api/projects/${projectId}/sessions?${params.toString()}`, locale);
+}
+
+/**
+ * Start an empty session. Nothing is asked and nothing is spent.
+ *
+ * `mode` is sent explicitly rather than omitted. The server defaults it, but this client
+ * only ever creates exploration sessions, and a call site that has not said so is worth
+ * a compile error rather than a silent default.
+ *
+ * A 409 `project_archived` means the project is read-only and no session was written.
+ */
+export function createProjectSession(
+  projectId: number,
+  body: CreateSessionPayload = { mode: "explore" },
+): Promise<ExploreSession> {
+  return postJson(`/api/projects/${projectId}/sessions`, body);
+}
+
+/** One session with its whole transcript, oldest first. 404 when the id is unknown. */
+export function getExploreSession(sessionId: number, locale?: Locale): Promise<ExploreSessionDetail> {
+  return get(`/api/sessions/${sessionId}`, locale);
+}
+
+/** Delete one session and every message in it. Irreversible; confirm first. */
+export function deleteExploreSession(sessionId: number): Promise<void> {
+  return requestNoContent(`/api/sessions/${sessionId}`, { method: "DELETE" });
+}
+
+/**
+ * Ask one question against this project's own material. One metered model call, two rows.
+ *
+ * THE FIELD IS `body`, not `message`, which is the one place this endpoint and the
+ * tutor's disagree. Sending the wrong one is a generic 422 rather than a sentence about
+ * the question, so it is worth naming here.
+ *
+ * NOTHING IS WRITTEN when this fails, on every failing path: both rows are committed
+ * together, and only after the reply has parsed. So a caller may keep the learner's
+ * typed text and let them send it again, and a 502 `agent_unavailable` is a retry rather
+ * than a lost question. That is the reason the component branches on the code instead of
+ * on the message: the server's 502 sentence is the one place the fact is stated, and the
+ * screen has to say it too.
+ *
+ * Other failures throw ApiError: 404 unknown session, 409 project archived, 422 empty
+ * message, 402 spend cap, 502 model unavailable or off-schema.
+ */
+export function askExploreQuestion(sessionId: number, body: string): Promise<ExploreAskResult> {
+  return postJson(
+    `/api/sessions/${sessionId}/messages`,
+    { body },
+    COST_LIMIT_CONSEQUENCE.explore,
+  );
+}
+
+/**
+ * Turn one question from this session into a temporary explanation plus one draft
+ * exercise. One metered model call.
+ *
+ * `body` is omitted by every caller that has a question in the transcript already, and
+ * the server then uses the last thing the learner asked. Sending an explicit question is
+ * possible but is NOT the same act: it is not written to the transcript, so a learner who
+ * asked it here alone would find the exercise quoting a question the conversation never
+ * shows.
+ *
+ * NOTHING IS WRITTEN on any failing path, the same two reasons as the endpoint above:
+ * both rows commit together after the model answers, and the cap is checked before the
+ * provider is called. A 502 `practice_unavailable` is therefore a retry, not a partial
+ * save, and the caller may say so.
+ *
+ * Other failures throw ApiError: 404 unknown session, 409 project archived, 422
+ * `nothing_to_practise` (nothing asked yet and no body), 402 spend cap, 502 model
+ * unavailable or off-schema.
+ */
+export function createExplorePractice(
+  sessionId: number,
+  body?: string,
+): Promise<ExplorePracticeResult> {
+  return postJson(
+    `/api/sessions/${sessionId}/practice`,
+    { body: body ?? null },
+    COST_LIMIT_CONSEQUENCE.practice,
+  );
+}
+
+export interface ListKnowledgeOptions {
+  status?: KnowledgeStatus;
+  kind?: KnowledgeKind;
+  /** Only the kinds that must be confirmed before they are presented as settled. */
+  core?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * One page of a project's knowledge, most recently changed first. Costs nothing.
+ *
+ * `core` is sent only when it is true. The server's parameter defaults to false and a
+ * `core=false` would mean the same thing, but an absent filter is the honest way to say
+ * "no filter": it keeps the URL a reader sees in the address bar equal to the one the
+ * page is actually asking for.
+ */
+export function listProjectKnowledge(
+  projectId: number,
+  params: ListKnowledgeOptions = {},
+  locale?: Locale,
+): Promise<KnowledgeList> {
+  const query = new URLSearchParams();
+  if (params.status) query.set("status", params.status);
+  if (params.kind) query.set("kind", params.kind);
+  if (params.core) query.set("core", "true");
+  query.set("limit", String(params.limit ?? 50));
+  query.set("offset", String(params.offset ?? 0));
+  return get(`/api/projects/${projectId}/knowledge?${query.toString()}`, locale);
+}
+
+/** One entry with its body, provenance and relations. 404 when the id is unknown. */
+export function getKnowledge(knowledgeId: number, locale?: Locale): Promise<KnowledgeDetail> {
+  return get(`/api/knowledge/${knowledgeId}`, locale);
+}
+
+/**
+ * Edit an entry. Absent fields are left alone, so a caller may send only what changed.
+ *
+ * THE RESPONSE'S `sent_back_for_review` IS THE POINT. Editing a confirmed entry puts it
+ * back into `pending_review`, and the response says so on the one request that caused it.
+ * A caller that discards the response and only refreshes shows a badge changing colour
+ * with nothing to explain it, which is exactly what the review step exists to prevent.
+ */
+export function updateKnowledge(
+  knowledgeId: number,
+  patch: { title?: string; body?: string; kind?: KnowledgeKind; concept_key?: string; expected_updated_at?: string },
+  locale?: Locale,
+): Promise<KnowledgeDetail> {
+  return request(
+    `/api/knowledge/${knowledgeId}`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) },
+    undefined,
+    locale,
+  );
+}
+
+/**
+ * Confirm an entry, which is a separate act from editing it. Idempotent: confirming an
+ * already-confirmed entry succeeds and writes nothing that changes what it says.
+ */
+export function confirmKnowledge(knowledgeId: number, locale?: Locale, expectedUpdatedAt?: string): Promise<KnowledgeDetail> {
+  return request(`/api/knowledge/${knowledgeId}/confirm`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: expectedUpdatedAt ? JSON.stringify({ expected_updated_at: expectedUpdatedAt }) : undefined,
+  }, undefined, locale);
+}
+
+/** Every snapshot of an entry, oldest first, with the versions that matter named. */
+export function listKnowledgeRevisions(
+  knowledgeId: number,
+  locale?: Locale,
+): Promise<KnowledgeRevisionList> {
+  return get(`/api/knowledge/${knowledgeId}/revisions`, locale);
+}
+
+/**
+ * One version against the entry as it stands now. `fromVersion` omitted means the server
+ * starts from the last version a person confirmed, which is the default the review step
+ * wants; naming one is the reader asking a different question.
+ */
+export function compareKnowledge(
+  knowledgeId: number,
+  fromVersion?: number,
+  locale?: Locale,
+): Promise<KnowledgeCompare> {
+  const query = fromVersion === undefined ? "" : `?from_version=${fromVersion}`;
+  return get(`/api/knowledge/${knowledgeId}/compare${query}`, locale);
+}
+
+/** One snapshot's full text, for reading a version on its own. */
+export function readKnowledgeRevision(
+  knowledgeId: number,
+  version: number,
+  locale?: Locale,
+): Promise<KnowledgeRevisionDetail> {
+  return get(`/api/knowledge/${knowledgeId}/revisions/${version}`, locale);
 }

@@ -21,7 +21,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app import days, fsrs, models
-from app.attempts import LESSON_QUIZ_SOURCE
+from app.attempts import LESSON_QUIZ_SOURCE, iso_utc
 from app.concepts import normalize_concept
 from app.rating import RATING_VERSION, CardRating, rating_v1
 
@@ -872,3 +872,29 @@ def weakest_concept(concepts: list[dict]) -> dict | None:
         ),
     )
     return weakest | {"reason": "lowest_stability"}
+
+
+def card_payload(
+    row: models.ReviewCard, item: models.QuizItem | None, now: datetime
+) -> dict:
+    """One queue entry: the card, the question to ask, and the four button intervals."""
+    return {
+        "card_id": row.id,
+        "concept_key": row.concept_key,
+        "concept_label": row.concept_label,
+        "state": row.state,
+        "due": iso_utc(row.due),
+        "lapses": row.lapses,
+        "retrievability": card_retrievability(row, now),
+        "preview": preview(row, now),
+        # No answer key: the learner has not answered yet, and the whole point of a
+        # review is that they retrieve it rather than recognize it.
+        "item": None
+        if item is None
+        else {
+            "id": item.id,
+            "question": item.question,
+            "kind": item.kind,
+            "options": item.options,
+        },
+    }

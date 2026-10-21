@@ -17,10 +17,12 @@
  * A fixed locale, so a date rendered on the server survives hydration unchanged.
  * Falls back to the raw ISO string rather than showing "Invalid Date".
  */
-export function formatDay(iso: string): string {
+import { createTranslator, type Locale, type Translator } from "./i18n";
+
+export function formatDay(iso: string, locale: Locale = "en"): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  return date.toLocaleDateString(locale === "en" ? "en-GB" : "zh-CN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
 /**
@@ -36,10 +38,10 @@ export function formatDay(iso: string): string {
  * The locale is fixed rather than inherited so the server render and the client render
  * produce the same string and hydration does not tear.
  */
-export function formatDayKey(key: string): string {
+export function formatDayKey(key: string, locale: Locale = "en"): string {
   const date = new Date(`${key}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return key;
-  return date.toLocaleDateString("en-GB", {
+  return date.toLocaleDateString(locale === "en" ? "en-GB" : "zh-CN", {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -58,8 +60,8 @@ export function formatDayKey(key: string): string {
  *
  * Returned without a trailing stop, so callers can carry the sentence on.
  */
-export function noLongerMissed(conceptLabel: string): string {
-  return `${conceptLabel} is no longer one of the concepts you keep missing`;
+export function noLongerMissed(conceptLabel: string, t: Translator = createTranslator("en")): string {
+  return t("{0} is no longer one of the concepts you keep missing", conceptLabel);
 }
 
 /**

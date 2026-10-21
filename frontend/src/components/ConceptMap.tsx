@@ -1,3 +1,4 @@
+import { createTranslator, DEFAULT_LOCALE, type Locale, type Translator } from "@/lib/i18n";
 import type { ConceptLesson, ConceptNode, MasteryBucket } from "@/lib/types";
 
 /**
@@ -194,7 +195,8 @@ function buildColumns(lessons: ConceptLesson[], concepts: ConceptNode[]): Column
   return columns;
 }
 
-function nodeDescription(concept: ConceptNode, lessonNumber: number): string {
+function nodeDescription(concept: ConceptNode, lessonNumber: number, t: Translator): string {
+  if (t.locale === "zh-CN") return t("{0}: {1}. Lesson {2}; {3} occurrences.", concept.concept_label, t(BUCKET_STYLES[bucketOf(concept.bucket)].label), lessonNumber, concept.occurrences);
   const bucket = BUCKET_STYLES[bucketOf(concept.bucket)].label;
   const times = concept.occurrences === 1 ? "once" : `${concept.occurrences} times`;
   return `${concept.concept_label}: ${bucket}. Taught in lesson ${lessonNumber}, comes up ${times}.`;
@@ -204,11 +206,14 @@ export function ConceptMap({
   lessons,
   concepts,
   courseTitle,
+  locale = DEFAULT_LOCALE,
 }: {
   lessons: ConceptLesson[];
   concepts: ConceptNode[];
   courseTitle: string;
+  locale?: Locale;
 }) {
+  const t = createTranslator(locale);
   const columns = buildColumns(lessons, concepts);
   const radiusOf = radiusScale(concepts);
 
@@ -229,10 +234,9 @@ export function ConceptMap({
     firstRowY + (rows - 1) * ROW_PITCH + BLOCK_BELOW_CENTER + BOTTOM_PADDING,
   );
 
-  const title = `Concept map for ${courseTitle}`;
+  const title = t("Concept map for {0}", courseTitle);
   const description =
-    `${concepts.length} concepts in ${columns.length} lessons, grouped by the lesson that ` +
-    "teaches them and coloured by mastery. No prerequisites are shown.";
+    t("{0} concepts in {1} lessons, grouped by the lesson that teaches them and coloured by mastery. No prerequisites are shown.", concepts.length, columns.length);
 
   return (
     <>
@@ -285,7 +289,7 @@ export function ConceptMap({
                     screen: the untruncated title is in the sr-only list below, which a
                     sighted reader never sees. */}
                 <g>
-                  <title>{`Lesson ${columnIndex + 1}: ${column.lesson.title}`}</title>
+                  <title>{t("Lesson {0}: {1}", columnIndex + 1, column.lesson.title)}</title>
                   <text
                     x={centerX}
                     y={COLUMN_LABEL_Y}
@@ -294,7 +298,7 @@ export function ConceptMap({
                     fontWeight={600}
                     fill="var(--concept-column-label)"
                   >
-                    {`Lesson ${columnIndex + 1}`}
+                    {t("Lesson {0}", columnIndex + 1)}
                   </text>
                   {sublabels[columnIndex].map((line, lineIndex) => (
                     <text
@@ -323,7 +327,7 @@ export function ConceptMap({
                   return (
                     <g key={concept.concept_key}>
                       {/* Hover text, carrying the full label in case the drawn one wrapped short. */}
-                      <title>{nodeDescription(concept, columnIndex + 1)}</title>
+                      <title>{nodeDescription(concept, columnIndex + 1, t)}</title>
                       <circle
                         cx={centerX}
                         cy={centerY}
@@ -357,7 +361,7 @@ export function ConceptMap({
                         fontSize={MASTERY_FONT}
                         fill="var(--concept-muted-text)"
                       >
-                        {style.short}
+                        {t(style.short)}
                       </text>
                     </g>
                   );
@@ -377,13 +381,13 @@ export function ConceptMap({
       <ul className="sr-only">
         {columns.map((column, columnIndex) => (
           <li key={column.lesson.id}>
-            {`Lesson ${columnIndex + 1}, ${column.lesson.title}: `}
+            {t("Lesson {0}: {1}", columnIndex + 1, column.lesson.title)}
             {column.concepts.length === 0 ? (
-              "no concepts."
+              t("no concepts.")
             ) : (
               <ul>
                 {column.concepts.map((concept) => (
-                  <li key={concept.concept_key}>{nodeDescription(concept, columnIndex + 1)}</li>
+                  <li key={concept.concept_key}>{nodeDescription(concept, columnIndex + 1, t)}</li>
                 ))}
               </ul>
             )}
@@ -395,7 +399,8 @@ export function ConceptMap({
 }
 
 /** The four buckets. There is no Locked entry because there is no locked state. */
-export function MasteryLegend() {
+export function MasteryLegend({ locale = DEFAULT_LOCALE }: { locale?: Locale }) {
+  const t = createTranslator(locale);
   return (
     <ul className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2">
       {LEGEND_ORDER.map((bucket) => {
@@ -413,7 +418,7 @@ export function MasteryLegend() {
                 border: style.border ? `1px solid ${style.border}` : undefined,
               }}
             />
-            {style.label}
+            {t(style.label)}
           </li>
         );
       })}

@@ -7,7 +7,7 @@
  * Same contract as the course and lesson pages: a genuine 404 still 404s, a non-numeric
  * id still 404s without the API being called, and everything else renders inline.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "./render";
 import { describe, expect, test, vi, beforeEach } from "vitest";
 
 import ConceptsPage from "@/app/courses/[courseId]/concepts/page";

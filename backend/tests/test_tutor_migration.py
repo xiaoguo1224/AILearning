@@ -447,7 +447,11 @@ def test_every_added_column_is_one_the_models_still_declare():
     rule that nothing enforces is a rule the next person discovers by breaking it.
     """
     from app import models  # noqa: F401  (register the mapped classes with Base.metadata)
+    from app.agent import models as agent_models  # noqa: F401
     from app.db import Base
+    from app.projects import models as project_models  # noqa: F401
+    from app.resources import models as resource_models  # noqa: F401
+    from app.submissions import models as submission_models  # noqa: F401
 
     for table, column, _ in ADDED_COLUMNS:
         assert table in Base.metadata.tables, (
@@ -495,7 +499,7 @@ def test_every_altered_table_is_seeded(databases):
         )
 
 
-def test_upgrade_adds_the_tutor_table_and_nothing_else(databases):
+def test_upgrade_adds_the_tutor_and_explicit_project_tables(databases):
     """Scoped to the pin that PREDATES the tutor, rather than weakened to pass at both.
 
     At d453f50 the base already has tutor_messages, so the first assertion below would be
@@ -513,7 +517,28 @@ def test_upgrade_adds_the_tutor_table_and_nothing_else(databases):
         f"forward past the change it is supposed to measure."
     )
     assert NEW_TABLE in databases.upgraded
-    assert set(databases.upgraded) - set(databases.base) == {NEW_TABLE}
+    # New independent P1 tables; keep the exact whitelist so accidental schema growth fails.
+    assert set(databases.upgraded) - set(databases.base) == {
+        NEW_TABLE,
+        "projects",
+        "project_courses",
+        "resources",
+        "project_resources",
+        "resource_chunks",
+        "submissions",
+        "submission_artifacts",
+        "code_reviews",
+        "variant_exercises",
+        "agent_sessions",
+        "agent_messages",
+        "knowledge_entries",
+        "project_knowledge",
+        "knowledge_relations",
+        "knowledge_revisions",
+        "error_causes",
+        "learning_suggestions",
+        "content_reviews",
+    }
     assert not set(databases.base) - set(databases.upgraded), "create_all cannot drop a table"
 
 
@@ -788,3 +813,70 @@ def test_the_deadline_columns_reach_an_upgraded_database(databases):
         assert nullable is True
         assert default == "None"
         assert primary_key is False
+
+
+def test_a_p2_era_database_gains_the_two_practice_columns(tmp_path, monkeypatch):
+    """The ADDED_COLUMNS entries for variant_exercises, exercised where they matter.
+
+    The pinned base predates P2, so it has no variant_exercises table at all and
+    create_all builds one with every column already in it. That means the two entries
+    added for practice are no-ops in every other test in this file: the case they exist
+    for is an install that already ran P2, which has the table and lacks the columns.
+
+    Built by hand rather than by advancing the pin, because advancing the pin would stop
+    the older comparison measuring what it was written to measure.
+    """
+    from sqlalchemy import create_engine, inspect, text
+
+    from app import db as db_module
+
+    path = tmp_path / "p2.sqlite3"
+    engine = create_engine(f"sqlite:///{path}")
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE variant_exercises (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    project_id INTEGER NOT NULL,
+                    source_submission_id INTEGER,
+                    title VARCHAR(200) NOT NULL,
+                    prompt TEXT NOT NULL,
+                    starter_code TEXT,
+                    acceptance TEXT NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+                    created_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO variant_exercises (project_id, title, prompt, acceptance, created_at) "
+                "VALUES (1, 'Kept', 'An exercise written before P3', '', '2026-10-20 00:00:00')"
+            )
+        )
+
+    monkeypatch.setattr(db_module, "engine", engine)
+    db_module.init_db()
+
+    columns = {column["name"]: column for column in inspect(engine).get_columns("variant_exercises")}
+    assert "session_id" in columns
+    assert "source_question" in columns
+    assert columns["session_id"]["nullable"] is True
+    assert columns["source_question"]["nullable"] is True
+
+    with engine.connect() as connection:
+        row = connection.execute(
+            text("SELECT title, session_id, source_question FROM variant_exercises")
+        ).one()
+    # The existing row survives, and the new columns backfill to NULL, which is the value
+    # that means "this one came from a submission".
+    assert row[0] == "Kept"
+    assert row[1] is None
+    assert row[2] is None
+
+    # And a second boot adds nothing, because the inspector check is what keeps this
+    # idempotent.
+    db_module.init_db()
+    engine.dispose()

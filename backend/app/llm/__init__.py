@@ -1,10 +1,10 @@
 import os
 
-from app.llm.base import LLMProvider
+from app.llm.base import LLMCallError, LLMProvider
 
 
 def get_provider() -> LLMProvider:
-    name = os.environ.get("STUDYFORGE_LLM_PROVIDER", "anthropic")
+    name = os.environ.get("STUDYFORGE_LLM_PROVIDER", os.environ.get("LLM_PROVIDER", "anthropic"))
     if name == "ollama":
         from app.llm.ollama_provider import OllamaProvider
 
@@ -13,6 +13,12 @@ def get_provider() -> LLMProvider:
         from app.llm.fake_provider import FakeProvider
 
         return FakeProvider()
-    from app.llm.anthropic_provider import AnthropicProvider
+    if name in ("gemini", "openai"):
+        from app.llm.openai_compatible import OpenAICompatibleProvider
 
-    return AnthropicProvider()
+        return OpenAICompatibleProvider(name=name)
+    if name == "anthropic":
+        from app.llm.anthropic_provider import AnthropicProvider
+
+        return AnthropicProvider()
+    raise LLMCallError("Unsupported LLM provider configuration.")

@@ -118,6 +118,22 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # means this row's course still exists, so its id may be resolved. Rows already in
     # the wild backfill to NULL and go on resolving exactly as they did.
     ("llm_calls", "course_title_at_deletion", "VARCHAR(300)"),
+    # P3-04: practice drafted from a free-exploration question. Both nullable with no
+    # default, because NULL is the meaningful value here rather than a placeholder: it
+    # says this exercise came from a submission instead, which is the older origin.
+    #
+    # NEITHER CARRIES A REFERENCES CLAUSE, and that is the ceiling talking rather than an
+    # oversight. SQLite cannot add a foreign key to an existing table, so an upgraded
+    # install would end up without a constraint a fresh one has — a divergence the
+    # upgraded == fresh comparison would not catch, because it compares type, nullability,
+    # default and primary-key membership. The model declares them as plain columns for the
+    # same reason; see the VariantExercise docstring.
+    ("variant_exercises", "session_id", "INTEGER"),
+    ("variant_exercises", "source_question", "TEXT"),
+    # The message that produced an exercise. Same two reasons as the pair above: no
+    # REFERENCES clause because SQLite cannot add one, and nothing cascades because the
+    # exercise outlives the conversation it was drafted in.
+    ("agent_messages", "exercise_id", "INTEGER"),
 )
 
 
@@ -173,12 +189,22 @@ def _add_missing_columns() -> None:
 
 def init_db() -> None:
     from app import models  # noqa: F401  (register models with Base)
+    from app.agent import models as agent_models  # noqa: F401
+    from app.content_reviews import models as content_review_models  # noqa: F401
+    from app.knowledge import models as knowledge_models  # noqa: F401
+    from app.projects import models as project_models  # noqa: F401
+    from app.resources import models as resource_models  # noqa: F401
+    from app.resources.service import init_fts
+    from app.submissions import models as submission_models  # noqa: F401
+    from app.suggestions import models as suggestion_models  # noqa: F401
 
     Base.metadata.create_all(engine)
     # AFTER create_all, and the order is load-bearing. create_all is what brings a brand
     # new table into existence; only then is it meaningful to ask an existing one which
     # columns it is missing.
     _add_missing_columns()
+    with SessionLocal() as session:
+        init_fts(session)
 
 
 def get_session():

@@ -44,6 +44,7 @@ from app.concepts import normalize_concept
 from app.db import Base, SessionLocal
 from app.llm.base import LLMResult
 from app.llm.fake_provider import FakeProvider
+from app.locale import teaching_system
 
 LESSON_CONTENT = (
     "# Stability\n\nStability is the number of days until recall of a concept drops to "
@@ -1051,7 +1052,10 @@ def test_a_request_with_no_mode_is_answered_exactly_as_it_was_before(client, mon
     assert body["mode"] == tutor.MODE_ANSWER
     assert body["reply"]["check"] == "What does it take in?"
     assert body["reply"]["ask"] is None
-    assert provider.systems[-1] == tutor.TUTOR_SYSTEM
+    # MeteredLLM appends the request's teaching-language instruction to every system
+    # prompt (ADR-014), so the promise under test is the tutor prompt body, not the
+    # absence of that suffix.
+    assert provider.systems[-1] == teaching_system(tutor.TUTOR_SYSTEM)
 
 
 @pytest.mark.parametrize("mode", ["socratic", "", "ANSWER", "guided ", "hint"])
@@ -1343,8 +1347,9 @@ def test_the_fade_advances_a_rung_per_turn(client, monkeypatch):
     _ask(client, key, "one", mode=tutor.MODE_GUIDED)
     _ask(client, key, "two", mode=tutor.MODE_GUIDED)
 
-    assert provider.systems[0] == tutor.guided_system(1)
-    assert provider.systems[1] == tutor.guided_system(2)
+    # Same language suffix as above; the rung is still the only difference.
+    assert provider.systems[0] == teaching_system(tutor.guided_system(1))
+    assert provider.systems[1] == teaching_system(tutor.guided_system(2))
     assert provider.systems[0] != provider.systems[1]
 
 

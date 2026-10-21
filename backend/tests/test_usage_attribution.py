@@ -19,10 +19,13 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from app import fsrs, generation, main, models, remediation, review, tutor
+from app.agent import practice as agent_practice
+from app.agent import router as agent_router
 from app.concepts import normalize_concept
 from app.db import Base, SessionLocal
 from app.llm.base import LLMCallError, LLMResult
 from app.llm.fake_provider import FakeProvider
+from app.submissions import llm_review, llm_variant
 
 # --------------------------------------------------------------------------
 # Stub providers
@@ -491,6 +494,98 @@ def test_only_generation_stages_are_covered_by_the_failed_run_sentence():
         assert main._unattributed_group(stage) == main.GROUP_FAILED_RUN
     assert main._unattributed_group(remediation.REMEDIATION_STAGE) == main.GROUP_REMEDIATION
     assert main._unattributed_group(tutor.TUTOR_STAGE) == main.GROUP_TUTOR
+    # P2's model-assisted surfaces: each has its own /usage group and sentence, so a
+    # review is never described as a failed generation run.
+    assert main._unattributed_group(llm_review.REVIEW_STAGE) == main.GROUP_CODE_REVIEW
+    assert main._unattributed_group(llm_variant.VARIANT_STAGE) == main.GROUP_VARIANT
+    # P3's free exploration: a conversation, which is a third thing again, so it gets a
+    # third sentence rather than borrowing the review's "pass" framing.
+    assert main._unattributed_group(agent_router.EXPLORE_STAGE) == main.GROUP_EXPLORE
+    assert main._unattributed_group(agent_practice.PRACTICE_STAGE) == main.GROUP_PRACTICE
+
+
+class _ReviewStageProvider:
+    name = "fake"
+    model = "review-stage-model"
+    is_paid = False
+
+    def generate(self, system: str, prompt: str, max_tokens: int = 64000):
+        return LLMResult(
+            text=json.dumps(
+                {
+                    "summary": "No provable hazard.",
+                    "findings": [],
+                    "hint_level_1": "Print the shapes.",
+                    "hint_level_2": "",
+                    "hint_level_3": "",
+                    "reference_solution": None,
+                }
+            ),
+            input_tokens=5,
+            output_tokens=5,
+        )
+
+
+class _VariantStageProvider:
+    name = "fake"
+    model = "variant-stage-model"
+    is_paid = False
+
+    def generate(self, system: str, prompt: str, max_tokens: int = 64000):
+        return LLMResult(
+            text=json.dumps(
+                {
+                    "title": "Variant",
+                    "prompt": "Do the same thing with different numbers.",
+                    "starter_code": None,
+                    "acceptance": "It runs locally.",
+                }
+            ),
+            input_tokens=5,
+            output_tokens=5,
+        )
+
+
+class _PracticeStageProvider:
+    name = "fake"
+    model = "practice-stage-model"
+    is_paid = False
+
+    def generate(self, system: str, prompt: str, max_tokens: int = 64000):
+        return LLMResult(
+            text=json.dumps(
+                {
+                    "explanation": "Broadcasting aligns trailing dimensions.",
+                    "beyond": None,
+                    "title": "Try it",
+                    "prompt": "Add a bias vector to a batch.",
+                    "starter_code": None,
+                    "acceptance": "The shapes match.",
+                }
+            ),
+            input_tokens=5,
+            output_tokens=5,
+        )
+
+
+class _ExploreStageProvider:
+    name = "fake"
+    model = "explore-stage-model"
+    is_paid = False
+
+    def generate(self, system: str, prompt: str, max_tokens: int = 64000):
+        return LLMResult(
+            text=json.dumps(
+                {
+                    "answer": "Broadcasting aligns the trailing dimensions.",
+                    "citations": [],
+                    "beyond": "The project material does not cover this.",
+                    "check": None,
+                }
+            ),
+            input_tokens=5,
+            output_tokens=5,
+        )
 
 
 def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monkeypatch):
@@ -512,13 +607,57 @@ def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monke
     key, _ = _seed_taught_concept(1)
     assert _ask_tutor(client, key).status_code == 200
 
+    # P2's two model-assisted surfaces. They reach the provider through their own
+    # modules, not through main, so each is patched where it looks it up.
+    monkeypatch.setattr(llm_review, "get_provider", lambda: _ReviewStageProvider())
+    monkeypatch.setattr(llm_variant, "get_provider", lambda: _VariantStageProvider())
+    project = client.post("/api/projects", json={"name": "Usage attribution QA"}).json()
+    submission = client.post(
+        f"/api/projects/{project['id']}/submissions",
+        json={"code_filename": "solution.py", "code_content": "x = 1\n"},
+    ).json()
+    assert (
+        client.post(f"/api/submissions/{submission['id']}/review", params={"use_llm": "true"})
+        .status_code
+        == 201
+    )
+    assert client.post(f"/api/submissions/{submission['id']}/variant").status_code == 201
+
+    # P3's free exploration, patched where its router looks the provider up.
+    monkeypatch.setattr(agent_router, "get_provider", lambda: _ExploreStageProvider())
+    session_id = client.post(
+        f"/api/projects/{project['id']}/sessions", json={"mode": "explore"}
+    ).json()["id"]
+    assert (
+        client.post(
+            f"/api/sessions/{session_id}/messages",
+            json={"body": "How does broadcasting align shapes?"},
+        ).status_code
+        == 201
+    )
+    # P3-04's practice set, same router, same patch point.
+    monkeypatch.setattr(agent_router, "get_provider", lambda: _PracticeStageProvider())
+    assert (
+        client.post(
+            f"/api/sessions/{session_id}/practice", json={"body": "How does broadcasting align?"}
+        ).status_code
+        == 201
+    )
+
     session = SessionLocal()
     try:
         recorded = {stage for (stage,) in session.query(models.LlmCall.stage).distinct()}
     finally:
         session.close()
 
-    explained = set(generation.STAGES) | {remediation.REMEDIATION_STAGE, tutor.TUTOR_STAGE}
+    explained = set(generation.STAGES) | {
+        remediation.REMEDIATION_STAGE,
+        tutor.TUTOR_STAGE,
+        llm_review.REVIEW_STAGE,
+        llm_variant.VARIANT_STAGE,
+        agent_router.EXPLORE_STAGE,
+        agent_practice.PRACTICE_STAGE,
+    }
     assert explained <= recorded, "the scenario above should exercise every known stage"
     assert recorded <= explained, f"stage with no /usage copy: {sorted(recorded - explained)}"
 

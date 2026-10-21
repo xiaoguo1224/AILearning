@@ -1,3 +1,9 @@
+"use client";
+
+
+
+import { useI18n } from "@/components/LocaleProvider";
+
 import Link from "next/link";
 
 export type CourseTab = "lessons" | "concepts" | "plan";
@@ -32,8 +38,9 @@ const DISABLED_CLASS = "border-transparent text-ink-subtle";
  * style, and copying it for a page that ships would be the wrong lesson to take.
  */
 export function CourseTabs({ courseId, active }: { courseId: number; active: CourseTab }) {
+  const { t } = useI18n();
   return (
-    <nav aria-label="Course views" className="mt-4 border-b border-line">
+    <nav aria-label={t("Course views")} className="mt-4 border-b border-line">
       <ul className="flex items-center gap-6">
         <li>
           <Link
@@ -41,8 +48,7 @@ export function CourseTabs({ courseId, active }: { courseId: number; active: Cou
             aria-current={active === "lessons" ? "page" : undefined}
             className={`${TAB_CLASS} block ${active === "lessons" ? ACTIVE_CLASS : INACTIVE_CLASS}`}
           >
-            Lessons
-          </Link>
+            {t("Lessons")}</Link>
         </li>
         <li>
           <Link
@@ -50,26 +56,16 @@ export function CourseTabs({ courseId, active }: { courseId: number; active: Cou
             aria-current={active === "concepts" ? "page" : undefined}
             className={`${TAB_CLASS} block ${active === "concepts" ? ACTIVE_CLASS : INACTIVE_CLASS}`}
           >
-            Concept map
-          </Link>
+            {t("Concept map")}</Link>
         </li>
-        <li>
-          <Link
-            href={`/courses/${courseId}/plan`}
-            aria-current={active === "plan" ? "page" : undefined}
-            className={`${TAB_CLASS} block ${active === "plan" ? ACTIVE_CLASS : INACTIVE_CLASS}`}
-          >
-            Plan
-          </Link>
-        </li>
+
         <li>
           <span
             aria-disabled="true"
-            title="Not built yet"
+            title={t("Not built yet")}
             className={`${TAB_CLASS} block cursor-not-allowed ${DISABLED_CLASS}`}
           >
-            History
-          </span>
+            {t("History")}</span>
         </li>
       </ul>
     </nav>

@@ -21,7 +21,7 @@
  * replacement role would still pass against the broken version; passing `undefined`
  * explicitly is the only case that distinguishes them.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "./render";
 import { describe, expect, test, vi } from "vitest";
 
 import { Button } from "@/components/ui/Button";

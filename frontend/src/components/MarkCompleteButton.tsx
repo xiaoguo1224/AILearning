@@ -1,5 +1,9 @@
 "use client";
 
+
+
+import { useI18n } from "@/components/LocaleProvider";
+
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
@@ -13,6 +17,7 @@ export function MarkCompleteButton({
   lessonId: number;
   completed: boolean;
 }) {
+  const { t } = useI18n();
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [refreshing, startTransition] = useTransition();
@@ -40,7 +45,7 @@ export function MarkCompleteButton({
       // A state update after await is not automatically part of a transition.
       startTransition(() => router.refresh());
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not reach the server.");
+      setError(err instanceof ApiError ? err.message : t("Could not reach the server."));
     } finally {
       setSaving(false);
     }
@@ -54,7 +59,7 @@ export function MarkCompleteButton({
           ref={buttonRef}
           onClick={() => void run(() => uncompleteLesson(lessonId))}
           disabled={pending}
-          aria-label="Mark this lesson as not complete"
+          aria-label={t("Mark this lesson as not complete")}
           /*
             Hand-rolled rather than Button: none of its variants is a success-tinted
             fill (primary's `fill` token is deliberately neutral, not accent and not a
@@ -101,13 +106,11 @@ export function MarkCompleteButton({
           className="group rounded-control bg-success-surface px-4 py-2 text-ui font-medium text-success transition-colors duration-fast ease-standard hover:bg-success-surface-hover disabled:opacity-60"
         >
           {pending ? (
-            "Reopening…"
+            t("Reopening…")
           ) : (
             <>
-              ✓ Completed
-              <span className="ml-2 text-small font-normal opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                Undo
-              </span>
+              {t("✓ Completed")}<span className="ml-2 text-small font-normal opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+                {t("Undo")}</span>
             </>
           )}
         </button>
@@ -118,7 +121,7 @@ export function MarkCompleteButton({
           onClick={() => void run(() => completeLesson(lessonId))}
           disabled={pending}
         >
-          {pending ? "Saving…" : "Mark complete"}
+          {pending ? t("Saving…") : t("Mark complete")}
         </Button>
       )}
       {error && <p className="text-small text-danger">{error}</p>}

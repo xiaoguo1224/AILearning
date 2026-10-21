@@ -1,4 +1,5 @@
 import { forwardRef } from "react";
+import { LocalizedText } from "@/components/LocaleProvider";
 import type { HTMLAttributes, ReactNode } from "react";
 
 export interface ErrorStateProps extends HTMLAttributes<HTMLDivElement> {
@@ -29,8 +30,8 @@ export const ErrorState = forwardRef<HTMLDivElement, ErrorStateProps>(function E
     .join(" ");
   return (
     <div ref={ref} role="alert" className={classes} {...props}>
-      {title && <p className="text-ui font-medium">{title}</p>}
-      <p className="mt-1 text-ui">{message}</p>
+      {title && <p className="text-ui font-medium"><LocalizedText text={title} /></p>}
+      <p className="mt-1 text-ui">{typeof message === "string" ? <LocalizedText text={message} /> : message}</p>
       {action && <div className="mt-3">{action}</div>}
     </div>
   );

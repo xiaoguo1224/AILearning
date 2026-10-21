@@ -29,7 +29,7 @@
  * a real rule into the shipped CSS. The two class names that do appear in comments here
  * are ones the component genuinely uses, which costs nothing.
  */
-import { render, screen } from "@testing-library/react";
+import { render, screen } from "./render";
 import { describe, expect, test, vi } from "vitest";
 
 import { MarkCompleteButton } from "@/components/MarkCompleteButton";

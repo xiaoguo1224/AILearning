@@ -15,6 +15,7 @@ from app import models
 from app.costs import estimate_cost
 from app.db import SessionLocal
 from app.llm.base import LLMCallError, LLMProvider
+from app.locale import teaching_system
 
 logger = logging.getLogger("studyforge.usage")
 
@@ -28,6 +29,26 @@ class CostLimitExceeded(Exception):
         super().__init__(f"LLM spend limit ${limit_usd:.2f} reached (spent ${spent_usd:.2f})")
         self.limit_usd = limit_usd
         self.spent_usd = spent_usd
+
+
+COST_LIMIT_MESSAGE = "LLM spend limit reached"
+
+
+def cost_limit_detail(exc: CostLimitExceeded) -> dict:
+    """The 402 body every metered surface answers a reached cap with.
+
+    ONE function, because there are four surfaces now and each of them used to spell this
+    dict out itself. The client branches on `error` and reads both figures, so a surface
+    that answered with the code and the message but dropped `limit_usd` and `spent_usd`
+    would fail nowhere: the learner would be told the cap was reached and not what it was
+    or how close they are. That is the drift this function exists to make impossible.
+    """
+    return {
+        "error": "cost_limit_exceeded",
+        "message": COST_LIMIT_MESSAGE,
+        "limit_usd": exc.limit_usd,
+        "spent_usd": exc.spent_usd,
+    }
 
 
 def total_spend(session) -> float:
@@ -93,7 +114,7 @@ class MeteredLLM:
     def generate(self, stage: str, system: str, prompt: str, max_tokens: int = 64000) -> str:
         self._check_cap()
         try:
-            result = self.provider.generate(system, prompt, max_tokens)
+            result = self.provider.generate(teaching_system(system), prompt, max_tokens)
         except LLMCallError as exc:
             self._record(stage, exc.input_tokens, exc.output_tokens)
             raise

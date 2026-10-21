@@ -1,3 +1,7 @@
+
+
+
+import { getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 
 import { ReviewSession } from "@/components/ReviewSession";
@@ -15,15 +19,16 @@ export const metadata = {
 const QUEUE_LIMIT = 50;
 
 export default async function ReviewPage() {
+  const t = await getTranslator();
   let queue: ReviewQueue;
   try {
-    queue = await getReviewQueue(QUEUE_LIMIT);
+    queue = await getReviewQueue(QUEUE_LIMIT, t.locale);
   } catch (err) {
     const message =
-      err instanceof ApiError ? err.message : "Could not reach the server. Is the backend running?";
+      err instanceof ApiError ? err.message : t("Could not reach the server. Is the backend running?");
     return (
       <main className="mx-auto w-full max-w-[720px] flex-1 px-6 py-14">
-        <h1 className="text-xl font-semibold">Review session</h1>
+        <h1 className="text-xl font-semibold">{t("Review session")}</h1>
         {/* title="" suppresses ErrorState's default "Something went wrong" heading: this
             screen only ever showed the one message, and the restyle must not add text
             that was not there before. */}
@@ -32,8 +37,7 @@ export default async function ReviewPage() {
           href="/"
           className="mt-6 inline-block text-small text-ink-muted transition-colors duration-fast ease-standard hover:text-ink"
         >
-          &larr; Back to Today
-        </Link>
+          {t("← Back to Today")}</Link>
       </main>
     );
   }
