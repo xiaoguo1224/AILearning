@@ -32,9 +32,12 @@ def extract_concepts_job(course_id: int, db: Session = Depends(get_db)):
     if not db.get(m.Course, course_id):
         raise HTTPException(404, "Course not found")
     job = jobs.create_job(
+        db,
         job_type="concept_extract",
         ref_type="course",
         ref_id=course_id,
     )
-    jobs.run_in_background(_run_extraction, job.id, course_id)
+    def _run(jid: str):
+        _run_extraction(jid, course_id)
+    jobs.run_in_background(job.id, _run)
     return {"job_id": job.id}

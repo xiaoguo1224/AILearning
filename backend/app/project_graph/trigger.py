@@ -9,13 +9,21 @@ def trigger_graph_extract(project_id: int) -> None:
     Best-effort: never raises, so it can't break the caller's operation.
     """
     try:
+        from app.db import SessionLocal
         from app.project_graph.router import _run_extraction
 
-        job = jobs.create_job(
-            job_type="project_graph_extract",
-            ref_type="project",
-            ref_id=project_id,
-        )
-        jobs.run_in_background(_run_extraction, job.id, project_id)
+        db = SessionLocal()
+        try:
+            job = jobs.create_job(
+                db,
+                job_type="project_graph_extract",
+                ref_type="project",
+                ref_id=project_id,
+            )
+        finally:
+            db.close()
+        def _run(jid: str):
+            _run_extraction(jid, project_id)
+        jobs.run_in_background(job.id, _run)
     except Exception:
         pass

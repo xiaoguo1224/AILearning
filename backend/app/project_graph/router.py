@@ -98,9 +98,12 @@ def extract_graph_job(project_id: int, db: Session = Depends(get_db)):
     if not db.get(Project, project_id):
         raise HTTPException(404, "Project not found")
     job = jobs.create_job(
+        db,
         job_type="project_graph_extract",
         ref_type="project",
         ref_id=project_id,
     )
-    jobs.run_in_background(_run_extraction, job.id, project_id)
+    def _run(jid: str):
+        _run_extraction(jid, project_id)
+    jobs.run_in_background(job.id, _run)
     return {"job_id": job.id}

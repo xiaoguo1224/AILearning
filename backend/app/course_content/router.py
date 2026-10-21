@@ -75,11 +75,14 @@ def import_course(body: ImportRequest, session: Db):
         from app.jobs import service as jobs
         from app.concept_extract.router import _run_extraction
         job = jobs.create_job(
+            session,
             job_type="concept_extract",
             ref_type="course",
             ref_id=course.id,
         )
-        jobs.run_in_background(_run_extraction, job.id, course.id)
+        def _run(jid: str):
+            _run_extraction(jid, course.id)
+        jobs.run_in_background(job.id, _run)
     except Exception:
         pass
     return ImportResult(
