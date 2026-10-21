@@ -38,6 +38,13 @@ import type {
   ExploreSession,
   ExploreSessionDetail,
   ExploreSessionList,
+  KnowledgeCompare,
+  KnowledgeDetail,
+  KnowledgeKind,
+  KnowledgeList,
+  KnowledgeRevisionDetail,
+  KnowledgeRevisionList,
+  KnowledgeStatus,
   RemediationConflict,
   RemediationNote,
   ReviewAnswerResult,
@@ -1036,4 +1043,103 @@ export function createExplorePractice(
     { body: body ?? null },
     COST_LIMIT_CONSEQUENCE.practice,
   );
+}
+
+export interface ListKnowledgeOptions {
+  status?: KnowledgeStatus;
+  kind?: KnowledgeKind;
+  /** Only the kinds that must be confirmed before they are presented as settled. */
+  core?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * One page of a project's knowledge, most recently changed first. Costs nothing.
+ *
+ * `core` is sent only when it is true. The server's parameter defaults to false and a
+ * `core=false` would mean the same thing, but an absent filter is the honest way to say
+ * "no filter": it keeps the URL a reader sees in the address bar equal to the one the
+ * page is actually asking for.
+ */
+export function listProjectKnowledge(
+  projectId: number,
+  params: ListKnowledgeOptions = {},
+  locale?: Locale,
+): Promise<KnowledgeList> {
+  const query = new URLSearchParams();
+  if (params.status) query.set("status", params.status);
+  if (params.kind) query.set("kind", params.kind);
+  if (params.core) query.set("core", "true");
+  query.set("limit", String(params.limit ?? 50));
+  query.set("offset", String(params.offset ?? 0));
+  return get(`/api/projects/${projectId}/knowledge?${query.toString()}`, locale);
+}
+
+/** One entry with its body, provenance and relations. 404 when the id is unknown. */
+export function getKnowledge(knowledgeId: number, locale?: Locale): Promise<KnowledgeDetail> {
+  return get(`/api/knowledge/${knowledgeId}`, locale);
+}
+
+/**
+ * Edit an entry. Absent fields are left alone, so a caller may send only what changed.
+ *
+ * THE RESPONSE'S `sent_back_for_review` IS THE POINT. Editing a confirmed entry puts it
+ * back into `pending_review`, and the response says so on the one request that caused it.
+ * A caller that discards the response and only refreshes shows a badge changing colour
+ * with nothing to explain it, which is exactly what the review step exists to prevent.
+ */
+export function updateKnowledge(
+  knowledgeId: number,
+  patch: { title?: string; body?: string; kind?: KnowledgeKind; concept_key?: string; expected_updated_at?: string },
+  locale?: Locale,
+): Promise<KnowledgeDetail> {
+  return request(
+    `/api/knowledge/${knowledgeId}`,
+    { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch) },
+    undefined,
+    locale,
+  );
+}
+
+/**
+ * Confirm an entry, which is a separate act from editing it. Idempotent: confirming an
+ * already-confirmed entry succeeds and writes nothing that changes what it says.
+ */
+export function confirmKnowledge(knowledgeId: number, locale?: Locale, expectedUpdatedAt?: string): Promise<KnowledgeDetail> {
+  return request(`/api/knowledge/${knowledgeId}/confirm`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: expectedUpdatedAt ? JSON.stringify({ expected_updated_at: expectedUpdatedAt }) : undefined,
+  }, undefined, locale);
+}
+
+/** Every snapshot of an entry, oldest first, with the versions that matter named. */
+export function listKnowledgeRevisions(
+  knowledgeId: number,
+  locale?: Locale,
+): Promise<KnowledgeRevisionList> {
+  return get(`/api/knowledge/${knowledgeId}/revisions`, locale);
+}
+
+/**
+ * One version against the entry as it stands now. `fromVersion` omitted means the server
+ * starts from the last version a person confirmed, which is the default the review step
+ * wants; naming one is the reader asking a different question.
+ */
+export function compareKnowledge(
+  knowledgeId: number,
+  fromVersion?: number,
+  locale?: Locale,
+): Promise<KnowledgeCompare> {
+  const query = fromVersion === undefined ? "" : `?from_version=${fromVersion}`;
+  return get(`/api/knowledge/${knowledgeId}/compare${query}`, locale);
+}
+
+/** One snapshot's full text, for reading a version on its own. */
+export function readKnowledgeRevision(
+  knowledgeId: number,
+  version: number,
+  locale?: Locale,
+): Promise<KnowledgeRevisionDetail> {
+  return get(`/api/knowledge/${knowledgeId}/revisions/${version}`, locale);
 }

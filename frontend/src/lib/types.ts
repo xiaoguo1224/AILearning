@@ -1212,3 +1212,146 @@ export interface CreateSessionPayload {
   mode: "explore";
   title?: string | null;
 }
+
+/**
+ * How far an entry has got through the review step.
+ *
+ * `draft` is an ordinary note the assistant saved in passing and is usable at once.
+ * `pending_review` and `confirmed` only ever belong to the core kinds (a definition or a
+ * standard answer), because those are the ones another entry will be checked against.
+ * Nothing moves from pending to confirmed on its own: only a person confirming does.
+ */
+export type KnowledgeStatus = "draft" | "pending_review" | "confirmed";
+
+/**
+ * `note` is scratch material. `definition` and `standard_answer` are the core kinds,
+ * which must be confirmed before they are presented as settled.
+ */
+export type KnowledgeKind = "note" | "definition" | "standard_answer";
+
+export type KnowledgeSourceKind = "manual" | "exploration" | "resource" | "submission";
+
+/**
+ * One thing an entry came from, as it stood when the entry was written.
+ *
+ * Every field is optional because a manual entry has no origin to name, and the server
+ * drops the fields an item does not use rather than sending them as null. A renderer
+ * therefore reads the fields that are present and never assumes the rest.
+ */
+export interface KnowledgeProvenanceItem {
+  kind?: string;
+  resource_id?: number;
+  chunk_id?: number;
+  filename?: string;
+  locator?: string;
+  session_id?: number;
+  message_id?: number;
+  submission_id?: number;
+  question?: string;
+}
+
+/** A project that points at an entry. An entry can be shared, so this is not just its owner. */
+export interface KnowledgeProjectRef {
+  project_id: number;
+  name: string;
+}
+
+/**
+ * One edge between two entries. `prerequisite` is the only directed reading the UI
+ * shows; `related` and `extends` are the same shape and are drawn as plain connections.
+ */
+export interface KnowledgeRelationRef {
+  from_id: number;
+  to_id: number;
+  kind: "prerequisite" | "related" | "extends";
+}
+
+export interface KnowledgeSummary {
+  id: number;
+  /** The owning project, or null for an entry that no single project owns. */
+  project_id: number | null;
+  title: string;
+  kind: KnowledgeKind;
+  status: KnowledgeStatus;
+  concept_key: string;
+  source_kind: string;
+  created_at: string;
+  updated_at: string;
+  confirmed_at: string | null;
+}
+
+export interface KnowledgeDetail extends KnowledgeSummary {
+  body: string;
+  provenance: KnowledgeProvenanceItem[];
+  projects: KnowledgeProjectRef[];
+  prerequisites: KnowledgeRelationRef[];
+  related: KnowledgeRelationRef[];
+  /**
+   * True only on a PATCH response that took a confirmed entry back to `pending_review`.
+   * The edit succeeded, so this is not an error: it is the fact the screen has to state
+   * instead of letting the badge change under the reader. A GET never sets it, which is
+   * why the component that made the edit is the one that shows the notice.
+   */
+  sent_back_for_review: boolean;
+}
+
+export interface KnowledgeList {
+  items: KnowledgeSummary[];
+  total: number;
+}
+
+/**
+ * One snapshot, without its text. A version is written for every act that can change
+ * what the entry says, confirmation included, so `reason` is what tells them apart.
+ */
+export interface KnowledgeRevisionSummary {
+  version: number;
+  title: string;
+  kind: KnowledgeKind;
+  status: KnowledgeStatus;
+  reason: "created" | "edited" | "confirmed";
+  body_chars: number;
+  created_at: string;
+}
+
+export interface KnowledgeRevisionDetail extends KnowledgeRevisionSummary {
+  body: string;
+  concept_key: string;
+}
+
+export interface KnowledgeRevisionList {
+  items: KnowledgeRevisionSummary[];
+  total: number;
+  /** The version a person last confirmed, or null when nothing ever was. */
+  confirmed_version: number | null;
+  /** The newest version, which is the entry as it stands now. */
+  current_version: number;
+}
+
+/**
+ * One line of a bounded line diff. `gap` is an elided run of unchanged text and is
+ * decoration, not a paragraph the entry actually contains, so it must not be read out.
+ */
+export interface KnowledgeDiffLine {
+  op: "equal" | "delete" | "insert" | "gap";
+  text: string;
+}
+
+/**
+ * One version against the entry as it stands now — never two historical versions.
+ *
+ * The endpoint's default start is the last version a person confirmed, because that is
+ * the question the review step exists to answer: is the text still the text I signed?
+ */
+export interface KnowledgeCompare {
+  from_version: number;
+  from_title: string;
+  from_kind: string;
+  from_status: string;
+  to_title: string;
+  to_kind: string;
+  to_status: string;
+  changed: boolean;
+  truncated: boolean;
+  lines: KnowledgeDiffLine[];
+}

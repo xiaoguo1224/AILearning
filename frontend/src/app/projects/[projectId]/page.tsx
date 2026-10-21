@@ -45,6 +45,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
         <p className="text-small text-ink-muted">{t("Ask questions against this project's own material.")}</p>
         <Link href={`/projects/${project.id}/explore`} className="text-small text-accent underline">{t("Open free exploration")}</Link>
       </section>
+      <section className="space-y-2 rounded-surface border border-line p-6">
+        <h2 className="text-title">{t("Knowledge")}</h2>
+        <p className="text-small text-ink-muted">{t("What this project has settled, and what is still waiting for your confirmation.")}</p>
+        <Link href={`/projects/${project.id}/knowledge`} className="text-small text-accent underline">{t("Open knowledge review")}</Link>
+      </section>
     </div>}
   </main>;
 }
