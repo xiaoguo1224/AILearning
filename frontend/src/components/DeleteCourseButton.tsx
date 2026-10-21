@@ -14,7 +14,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "antd";
+import { Button, Modal } from "antd";
 
 import { ApiError, deleteCourse, getDeletionPreview } from "@/lib/api";
 import type { CourseDeletion } from "@/lib/types";
@@ -508,90 +508,60 @@ export function DeleteCourseButton({
     );
   }
 
+  function handleCancel() {
+    generationRef.current++;
+    wantsTriggerFocus.current = true;
+    setOpen(false);
+    setPreview(null);
+    setError(null);
+    setBusy(false);
+    setLoadingPreview(false);
+  }
+
   return (
-    <div className="mt-3 rounded-lg border border-zinc-200 bg-zinc-50 px-4 py-3.5 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-[13px] font-medium"><LocalizedText text={"Delete “"} />{title}&rdquo;?</p>
-      {error ? (
-        <p
-          id={consequenceId}
-          role="alert"
-          className="mt-1.5 text-[13px] text-red-700 dark:text-red-400"
+    <Modal
+      open={open}
+      onCancel={handleCancel}
+      title={<span><LocalizedText text={"Delete “"} />{title}&rdquo;?</span>}
+      footer={[
+        <Button
+          key="cancel"
+          ref={cancelRef}
+          onClick={handleCancel}
+          disabled={busy && !loadingPreview}
         >
+          <LocalizedText text={" Cancel "} />
+        </Button>,
+        <Button
+          key="delete"
+          ref={confirmRef}
+          danger
+          type="primary"
+          loading={busy && !loadingPreview}
+          disabled={loadingPreview}
+          onClick={() => void confirmDelete()}
+        >
+          {t("Delete permanently")}
+        </Button>,
+      ]}
+    >
+      {error ? (
+        <p role="alert" style={{ color: "#f5222d", fontSize: 13 }}>
           {error}
         </p>
       ) : preview ? (
-        <div
-          id={consequenceId}
-          className="mt-1.5 text-[13px] leading-relaxed text-zinc-600 dark:text-zinc-400"
-        >
+        <div style={{ fontSize: 13, lineHeight: 1.7, color: "#666" }}>
           {previewLines(preview, t).map((line) => (
-            <p key={line} className="mt-1 first:mt-0">
+            <p key={line} style={{ margin: "4px 0" }}>
               {line}
             </p>
           ))}
         </div>
       ) : (
-        // aria-live so a screen reader user learns something is happening: with the
-        // confirming button disabled and focus still on the body at this point (the
-        // effect above declines for as long as the preview is loading, whichever way it
-        // ends up going), nothing else here speaks.
-        <p
-          id={consequenceId}
-          aria-live="polite"
-          className="mt-1.5 text-[13px] text-zinc-500 dark:text-zinc-400"
-        ><LocalizedText text={" Checking what this would delete… "} /></p>
+        <p style={{ fontSize: 13, color: "#999" }}>
+          <LocalizedText text={" Checking what this would delete… "} />
+        </p>
       )}
-      <div className="mt-3.5 flex flex-wrap items-center gap-3">
-        <Button
-          ref={cancelRef}
-          aria-describedby={consequenceId}
-          size="small"
-          onClick={() => {
-            // Invalidates the in-flight preview fetch (see generationRef above) so its
-            // response cannot resurface after this closes the loading window: without
-            // this, clearing busy/loadingPreview here would let a press that reopens
-            // the panel start a second preview that the first one's `finally` could
-            // still clobber.
-            generationRef.current++;
-            wantsTriggerFocus.current = true;
-            setOpen(false);
-            setPreview(null);
-            setError(null);
-            // Cleared here, not left for the abandoned fetch's `finally`: that finally
-            // is now a no-op for a stale generation, and without clearing these the
-            // trigger's `if (pending) return` would swallow the very next press for as
-            // long as the abandoned fetch happens to take, with no feedback on screen.
-            setBusy(false);
-            setLoadingPreview(false);
-          }}
-          // Enabled during the preview load (a slow preview must stay cancellable) and
-          // once it lands, disabled only while the delete itself is running: cancelling
-          // then would park focus on this row's own trigger (see wantsTriggerFocus)
-          // while the delete is still in flight, and that trigger's `if (pending)
-          // return` would swallow the press with no feedback. `!loadingPreview` is the
-          // same "am I mid-delete" test the confirming button's disabled prop is not
-          // allowed to use (see confirmDelete's comment), stated the other way round.
-          disabled={busy && !loadingPreview}
-        ><LocalizedText text={" Cancel "} /></Button>
-        <Button
-          ref={confirmRef}
-          aria-describedby={consequenceId}
-          danger
-          size="small"
-          onClick={() => void confirmDelete()}
-          /*
-           * Disabled ONLY while the preview loads. Until it lands this button cannot
-           * honour a press (confirmDelete returns early on `pending`), and it used to
-           * say "Delete permanently" throughout that window and drop the click in
-           * silence: no delete, no error, nothing on screen. It is never disabled
-           * during the delete itself, because by then it holds focus and disabling a
-           * focused control blurs it to the body.
-           */
-          disabled={loadingPreview}
-        >
-          {busy && !loadingPreview ? t("Deleting…") : t("Delete permanently")}
-        </Button>
-      </div>
-    </div>
+    </Modal>
   );
 }
