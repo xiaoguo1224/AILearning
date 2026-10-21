@@ -10,10 +10,17 @@ interface ConceptTreemapProps {
 }
 
 const BUCKET_COLORS: Record<string, string> = {
-  mastered: "#1fae54",
-  solid: "#7dd3a8",
-  shaky: "#f5a623",
-  not_started: "#e0e0e0",
+  mastered: "#10b981",
+  solid: "#6ee7b7",
+  shaky: "#fbbf24",
+  not_started: "#e5e7eb",
+};
+
+const BUCKET_TEXT_COLORS: Record<string, string> = {
+  mastered: "#ffffff",
+  solid: "#065f46",
+  shaky: "#92400e",
+  not_started: "#6b7280",
 };
 
 /**
@@ -40,7 +47,10 @@ export function ConceptTreemap({ lessons, concepts }: ConceptTreemapProps) {
         // Importance 1-5 scaled for visible size differences.
         value: (n as ConceptNode & { importance?: number }).importance ?? 3,
         itemStyle: {
-          color: BUCKET_COLORS[n.bucket] ?? "#e0e0e0",
+          color: BUCKET_COLORS[n.bucket] ?? "#e5e7eb",
+        },
+        label: {
+          color: BUCKET_TEXT_COLORS[n.bucket] ?? "#6b7280",
         },
       })),
     };
@@ -65,9 +75,11 @@ export function ConceptTreemap({ lessons, concepts }: ConceptTreemapProps) {
         },
         upperLabel: {
           show: true,
-          height: 30,
+          height: 32,
           color: "#fff",
-          backgroundColor: "#1fae54",
+          backgroundColor: "#059669",
+          fontSize: 13,
+          fontWeight: 500,
         },
         itemStyle: {
           borderColor: "#fff",
