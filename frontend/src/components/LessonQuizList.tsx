@@ -1,11 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import { Button } from "antd";
+import { useEffect, useState } from "react";
+import { Button, Spin } from "antd";
 
 import { useI18n } from "@/components/LocaleProvider";
 import { QuizSection } from "@/components/QuizSection";
-import { getJob, startQuizVariantJob, type QuizVariant } from "@/lib/api";
+import {
+  getJob,
+  getLesson,
+  startQuizGenerateJob,
+  startQuizVariantJob,
+  type QuizVariant,
+} from "@/lib/api";
 import type { QuizItem, QuizProgress } from "@/lib/types";
 
 function VariantButton({
@@ -54,17 +60,63 @@ function VariantButton({
  */
 export function LessonQuizList({
   courseId,
+  lessonId,
   initialQuiz,
   progress,
 }: {
   courseId: number;
+  lessonId: number;
   initialQuiz: QuizItem[];
   progress: QuizProgress;
 }) {
   const { t } = useI18n();
   const [quiz, setQuiz] = useState<QuizItem[]>(initialQuiz);
+  const [generating, setGenerating] = useState(false);
+
+  // Auto-generate questions when the lesson has none (e.g. imported courses).
+  useEffect(() => {
+    if (initialQuiz.length > 0) return;
+    let cancelled = false;
+    async function autoGenerate() {
+      setGenerating(true);
+      try {
+        const { job_id } = await startQuizGenerateJob(
+          courseId,
+          [{ kind: "single_choice", count: 5 }],
+          lessonId,
+        );
+        for (let i = 0; i < 60; i++) {
+          if (cancelled) return;
+          const job = await getJob(job_id);
+          if (job.status === "completed") break;
+          if (job.status === "failed" || job.status === "cancelled") break;
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+        if (!cancelled) {
+          const fresh = await getLesson(lessonId);
+          setQuiz(fresh.quiz);
+        }
+      } catch {
+        // Leave the empty state; user can retry manually.
+      } finally {
+        if (!cancelled) setGenerating(false);
+      }
+    }
+    void autoGenerate();
+    return () => {
+      cancelled = true;
+    };
+  }, [courseId, lessonId, initialQuiz.length]);
 
   if (quiz.length === 0) {
+    if (generating) {
+      return (
+        <div style={{ textAlign: "center", padding: 40 }}>
+          <Spin />
+          <p className="mt-3 text-small text-ink-muted">AI 正在生成题目…</p>
+        </div>
+      );
+    }
     return (
       <p className="text-small text-ink-muted">{t("No questions for this lesson yet.")}</p>
     );

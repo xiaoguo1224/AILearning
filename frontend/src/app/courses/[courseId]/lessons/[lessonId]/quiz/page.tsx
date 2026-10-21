@@ -45,6 +45,7 @@ export default async function LessonQuizPage({
       <div className="mt-8">
         <LessonQuizList
           courseId={courseId}
+          lessonId={lessonId}
           initialQuiz={lesson.quiz}
           progress={lesson.quiz_progress}
         />

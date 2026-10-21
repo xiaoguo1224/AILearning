@@ -70,6 +70,18 @@ def import_course(body: ImportRequest, session: Db):
         len(tree["modules"]),
         lesson_count,
     )
+    # Auto-extract concepts via AI in the background.
+    try:
+        from app.jobs import service as jobs
+        from app.concept_extract.router import _run_extraction
+        job = jobs.create_job(
+            job_type="concept_extract",
+            ref_type="course",
+            ref_id=course.id,
+        )
+        jobs.run_in_background(_run_extraction, job.id, course.id)
+    except Exception:
+        pass
     return ImportResult(
         id=course.id, title=title, modules=len(tree["modules"]), lessons=lesson_count
     )

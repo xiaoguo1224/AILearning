@@ -336,8 +336,34 @@ def list_project_submissions(
     limit: int = Query(50, ge=1, le=100),
     offset: int = Query(0, ge=0, le=2_147_483_647),
 ):
+    from app import models as m
+    from app.projects.models import ProjectCourse
+
     get_project(session, project_id)
-    query = session.query(Submission).filter(Submission.project_id == project_id)
+    # Project-scoped submissions.
+    project_query = session.query(Submission).filter(Submission.project_id == project_id)
+    # Quiz-question submissions from all courses in this project.
+    course_ids = [
+        r[0]
+        for r in session.query(ProjectCourse.course_id)
+        .filter_by(project_id=project_id)
+        .all()
+    ]
+    quiz_item_ids: list[int] = []
+    if course_ids:
+        quiz_item_ids = [
+            r[0]
+            for r in session.query(m.QuizBankItem.id)
+            .filter(m.QuizBankItem.course_id.in_(course_ids))
+            .all()
+        ]
+    if quiz_item_ids:
+        query = session.query(Submission).filter(
+            (Submission.project_id == project_id)
+            | (Submission.quiz_item_id.in_(quiz_item_ids))
+        )
+    else:
+        query = project_query
     if exercise_id:
         query = query.filter(Submission.exercise_id == exercise_id)
     total = query.count()

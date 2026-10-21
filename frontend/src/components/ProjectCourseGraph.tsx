@@ -164,7 +164,24 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
           links,
           categories: [{ name: "课程" }, { name: "章节" }],
           roam: true,
-          label: { show: true, position: "right", fontSize: 11 },
+          label: {
+            show: true,
+            position: "right",
+            formatter: "{b}",
+            fontSize: 11,
+          },
+          // Auto-hide overlapped labels (echarts official graph-label-overlap example).
+          labelLayout: {
+            hideOverlap: true,
+          },
+          scaleLimit: {
+            min: 0.4,
+            max: 2,
+          },
+          lineStyle: {
+            color: "source",
+            curveness: 0.3,
+          },
           force: { repulsion: 300, edgeLength: 140 },
           emphasis: { focus: "adjacency", lineStyle: { width: 4 } },
           edgeSymbol: ["none", "arrow"],
