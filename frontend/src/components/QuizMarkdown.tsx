@@ -16,7 +16,77 @@ import { MermaidBlock } from "@/components/MermaidBlock";
  */
 export function QuizMarkdown({ content }: { content: string }) {
   return (
-    <div className="quiz-markdown min-w-0 break-words [&_a]:text-accent [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-line-strong [&_blockquote]:pl-4 [&_blockquote]:text-ink-muted [&_code]:break-all [&_code]:rounded [&_code]:bg-surface-sunken [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-small [&_pre]:max-w-full [&_pre]:overflow-x-auto [&_pre]:rounded-control [&_pre]:bg-surface-sunken [&_pre]:p-3 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:w-full [&_td]:border [&_td]:border-line [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-line [&_th]:px-2 [&_th]:py-1 [&_th]:text-left [&_ul]:list-disc [&_ol]:list-decimal [&_li]:ml-5">
+    <div
+      className="quiz-markdown min-w-0 break-words"
+      style={{
+        fontSize: 14,
+        lineHeight: 1.8,
+        color: "var(--ink)",
+      }}
+    >
+      <style>{`
+        .quiz-markdown h1, .quiz-markdown h2, .quiz-markdown h3, .quiz-markdown h4 {
+          font-weight: 600;
+          margin: 20px 0 10px;
+          line-height: 1.4;
+        }
+        .quiz-markdown h1 { font-size: 18px; }
+        .quiz-markdown h2 { font-size: 16px; padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+        .quiz-markdown h3 { font-size: 15px; }
+        .quiz-markdown p { margin: 10px 0; }
+        .quiz-markdown ul, .quiz-markdown ol { margin: 10px 0; padding-left: 24px; }
+        .quiz-markdown ul { list-style: disc; }
+        .quiz-markdown ol { list-style: decimal; }
+        .quiz-markdown li { margin: 6px 0; }
+        .quiz-markdown li::marker { color: var(--accent); font-weight: 600; }
+        .quiz-markdown code {
+          font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+          font-size: 13px;
+          background: color-mix(in srgb, var(--accent) 8%, transparent);
+          color: var(--accent);
+          padding: 2px 6px;
+          border-radius: 4px;
+          word-break: break-all;
+        }
+        .quiz-markdown pre {
+          background: #1e1e1e;
+          border-radius: 10px;
+          padding: 16px;
+          margin: 14px 0;
+          overflow-x: auto;
+          max-width: 100%;
+        }
+        .quiz-markdown pre code {
+          background: transparent;
+          color: #d4d4d4;
+          padding: 0;
+          font-size: 13px;
+          line-height: 1.6;
+        }
+        .quiz-markdown blockquote {
+          border-left: 3px solid var(--accent);
+          padding: 8px 16px;
+          margin: 12px 0;
+          color: var(--ink-muted);
+          background: var(--surface);
+          border-radius: 0 8px 8px 0;
+        }
+        .quiz-markdown table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+        .quiz-markdown th, .quiz-markdown td {
+          border: 1px solid var(--line);
+          padding: 8px 12px;
+          text-align: left;
+          font-size: 13px;
+        }
+        .quiz-markdown th { background: var(--surface); font-weight: 600; }
+        .quiz-markdown hr {
+          border: none;
+          border-top: 1px solid var(--line);
+          margin: 20px 0;
+        }
+        .quiz-markdown a { color: var(--accent); text-decoration: underline; }
+        .quiz-markdown strong { font-weight: 600; }
+      `}</style>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
