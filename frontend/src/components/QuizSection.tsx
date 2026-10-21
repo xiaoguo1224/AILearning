@@ -10,7 +10,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { ApiError, answerQuiz } from "@/lib/api";
+import { ApiError, answerQuiz, getQuizHint } from "@/lib/api";
+import type { QuizHint } from "@/lib/api";
 import type { AttemptState, QuizItem, QuizProgress } from "@/lib/types";
 
 interface Feedback {
@@ -35,6 +36,9 @@ type ErrorKind = "validation" | "server";
 interface ItemState {
   answer: string;
   feedback: Feedback | null;
+  /** Progressive hints fetched for a wrong code answer, in level order. */
+  hints: QuizHint[];
+  hintLoading: boolean;
   attemptState: AttemptState;
   submitting: boolean;
   error: string | null;
@@ -66,6 +70,8 @@ function restored(item: QuizItem): ItemState {
       latest === null
         ? null
         : { correct: latest.correct, expected: latest.expected, aiFeedback: null },
+    hints: [],
+    hintLoading: false,
     attemptState: item.attempt_state,
     submitting: false,
     error: null,
@@ -87,7 +93,16 @@ function elapsedSince(shownAt: Map<number, number>, itemId: number): number | un
   return Number.isFinite(ms) && ms >= 0 ? ms : undefined;
 }
 
-export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: QuizProgress }) {
+export function QuizSection({
+  quiz,
+  progress,
+  renderItemAction,
+}: {
+  quiz: QuizItem[];
+  progress: QuizProgress;
+  /** Extra control per question, e.g. the course bank's variant button. */
+  renderItemAction?: (item: QuizItem) => React.ReactNode;
+}) {
   const { t } = useI18n();
   const [answers, setAnswers] = useState<Record<number, ItemState>>({});
   /** When each item became answerable, for the elapsed_ms timing signal. */
@@ -173,6 +188,24 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
   ).length;
   const answeredCount = progress.answered + newlyAnswered;
 
+  async function requestHint(item: QuizItem) {
+    const state = stateOf(item);
+    const level = state.hints.length + 1;
+    if (level > 3 || state.hintLoading) return;
+    patch(item, { hintLoading: true });
+    try {
+      const hint = await getQuizHint(item.id, level);
+      patch(item, (prev) => ({ hints: [...prev.hints, hint], hintLoading: false }));
+    } catch (err) {
+      patch(item, (prev) => ({
+        error: err instanceof ApiError ? err.message : t("Could not reach the server."),
+        errorKind: "server" as const,
+        errorNonce: prev.errorNonce + 1,
+        hintLoading: false,
+      }));
+    }
+  }
+
   async function submit(item: QuizItem) {
     const { answer } = stateOf(item);
     if (!answer.trim()) {
@@ -244,10 +277,13 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
                   contributes nothing to it, while JSX drops the newline between the two.
                   Without the space a screen reader says "1.Which orbit shape".
                 */}
-                <p id={`quiz-question-${item.id}`} className="text-ui font-medium">
-                  <span className="mr-2 text-ink-subtle">{index + 1}.</span>{" "}
-                  {item.question}
-                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <p id={`quiz-question-${item.id}`} className="text-ui font-medium">
+                    <span className="mr-2 text-ink-subtle">{index + 1}.</span>{" "}
+                    {item.question}
+                  </p>
+                  {renderItemAction?.(item)}
+                </div>
                 {item.concept && (
                   /*
                     text-small, not text-micro: "Concept: X" is a sentence-case caption
@@ -505,6 +541,35 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
                       <span className="font-medium">{t("AI verdict: ")}</span>
                       {state.feedback.aiFeedback}
                     </p>
+                  )}
+                  {item.kind === "code" && state.feedback && !state.feedback.correct && (
+                    <div className="mt-3">
+                      {state.hints.map((h) => (
+                        <p
+                          key={h.level}
+                          className="mb-2 rounded-control border border-line bg-surface-sunken px-3 py-2 text-small"
+                        >
+                          <span className="font-medium">
+                            {t("Hint {0}: ", h.level)}
+                          </span>
+                          {h.hint}
+                        </p>
+                      ))}
+                      {state.hints.length < 3 && !solved && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={state.hintLoading}
+                          onClick={() => void requestHint(item)}
+                        >
+                          {state.hintLoading
+                            ? t("Loading hint…")
+                            : state.hints.length === 0
+                              ? t("Get a hint")
+                              : t("Get hint {0}", state.hints.length + 1)}
+                        </Button>
+                      )}
+                    </div>
                   )}
                 </div>
 

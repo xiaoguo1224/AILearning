@@ -187,6 +187,58 @@ def generate_quiz_questions(course_id: CourseId, body: QuizGenerateInput, sessio
     )
 
 
+@router.post(
+    "/courses/{course_id}/quiz/{item_id}/variant",
+    status_code=201,
+    dependencies=MUTATION,
+)
+def create_variant(course_id: CourseId, item_id: int, session: Db):
+    """One variant of a question, saved into the same lesson's bank.
+
+    Same kind and knowledge point, different surface form — for when the
+    learner wants another rep on the idea they just missed.
+    """
+    course = _course_or_404(session, course_id)
+    item = session.get(models.QuizItem, item_id)
+    if not item:
+        raise HTTPException(404, "Quiz item not found")
+    module_ids = {m.id for m in course.modules}
+    lesson = session.get(models.Lesson, item.lesson_id)
+    if not lesson or lesson.module_id not in module_ids:
+        raise HTTPException(422, "Question does not belong to this course.")
+
+    prompt = quizgen.build_variant_prompt(item)
+    run_id = uuid.uuid4().hex
+    meter = MeteredLLM(get_provider(), run_id, course_id=course.id)
+    try:
+        raw = meter.generate(quizgen.VARIANT_STAGE, _quizgen_system(), prompt)
+    except CostLimitExceeded as exc:
+        from app.metering import cost_limit_detail
+
+        raise HTTPException(402, detail=cost_limit_detail(exc)) from exc
+    except LLMCallError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    parsed = quizgen.parse_items(raw, [(item.kind, 1)])
+    if not parsed:
+        raise HTTPException(502, "The model did not return a usable variant.")
+    entry = parsed[0]
+    row = models.QuizItem(
+        lesson_id=lesson.id,
+        question=entry["question"],
+        kind=entry["kind"],
+        options=entry["options"],
+        answer=entry["answer"],
+        concept=entry["concept"],
+    )
+    session.add(row)
+    session.commit()
+    session.refresh(row)
+    return QuizBankItem(
+        id=row.id, question=row.question, kind=row.kind,
+        options=row.options or [], concept=row.concept or "",
+    )
+
+
 def _first_lesson(course: models.Course) -> models.Lesson:
     for module in sorted(course.modules, key=lambda m: (m.position, m.id)):
         lessons = sorted(module.lessons, key=lambda l: (l.position, l.id))

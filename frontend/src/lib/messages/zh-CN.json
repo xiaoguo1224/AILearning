@@ -851,5 +851,12 @@
   "Title cannot be empty.": "标题不能为空。",
   "Could not save.": "保存失败。",
   "Contents": "目录",
-  "AI verdict: ": "AI 判分："
+  "AI verdict: ": "AI 判分：",
+  "Hint {0}: ": "提示 {0}：",
+  "Get a hint": "获取提示",
+  "Get hint {0}": "获取提示 {0}",
+  "Loading hint…": "提示加载中…",
+  "Variant": "变式",
+  "Creating…": "生成中…",
+  "Create a variant of this question": "为这道题生成一道变式题"
 }

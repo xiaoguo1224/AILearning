@@ -25,6 +25,7 @@ from app.concepts import normalize_concept
 from app.course_quiz import quizgen
 from app.course_quiz import router as quiz_router
 from app import code_grade
+from app import quiz_hint
 from app.db import Base, SessionLocal
 from app.llm.base import LLMCallError, LLMResult
 from app.llm.fake_provider import FakeProvider
@@ -607,6 +608,42 @@ class _CodeGradeStageProvider:
         )
 
 
+class _QuizHintStageProvider:
+    name = "fake"
+    model = "quizhint-stage-model"
+    is_paid = False
+
+    def generate(self, system, prompt, max_tokens=64000):
+        return LLMResult(
+            text=json.dumps({"hint": "看看 return 那一行。"}),
+            input_tokens=5,
+            output_tokens=5,
+        )
+
+
+class _QuizVariantStageProvider:
+    name = "fake"
+    model = "quizvariant-stage-model"
+    is_paid = False
+
+    def generate(self, system, prompt, max_tokens=64000):
+        return LLMResult(
+            text=json.dumps(
+                [
+                    {
+                        "question": "实现 sub(a, b)",
+                        "kind": "code",
+                        "options": [],
+                        "answer": "def sub(a, b):\n    return a - b",
+                        "concept": "函数",
+                    }
+                ]
+            ),
+            input_tokens=5,
+            output_tokens=5,
+        )
+
+
 class _ExploreStageProvider:
     name = "fake"
     model = "explore-stage-model"
@@ -730,6 +767,18 @@ def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monke
         == 200
     )
 
+    # A hint for that wrong-answered code question, and a variant of it.
+    monkeypatch.setattr(main, "get_provider", lambda: _QuizHintStageProvider())
+    assert (
+        client.post(f"/quiz/{code_item_id}/hints", json={"level": 1}).status_code
+        == 200
+    )
+    monkeypatch.setattr(quiz_router, "get_provider", lambda: _QuizVariantStageProvider())
+    assert (
+        client.post(f"/api/courses/{generated_course_id}/quiz/{code_item_id}/variant").status_code
+        == 201
+    )
+
     session = SessionLocal()
     try:
         recorded = {stage for (stage,) in session.query(models.LlmCall.stage).distinct()}
@@ -744,7 +793,9 @@ def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monke
         agent_router.EXPLORE_STAGE,
         agent_practice.PRACTICE_STAGE,
         quizgen.QUIZGEN_STAGE,
+        quizgen.VARIANT_STAGE,
         code_grade.CODE_GRADE_STAGE,
+        quiz_hint.HINT_STAGE,
     }
     assert explained <= recorded, "the scenario above should exercise every known stage"
     assert recorded <= explained, f"stage with no /usage copy: {sorted(recorded - explained)}"

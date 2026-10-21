@@ -161,3 +161,55 @@ def test_parse_verdict_rejects_junk(raw):
 def test_parse_verdict_accepts_shape():
     assert code_grade.parse_verdict(json.dumps({"correct": False, "feedback": "错了。"})
     ) == (False, "错了。")
+
+
+def _hint_grader(monkeypatch, text):
+    from app import main
+
+    grader = _Grader(text)
+    monkeypatch.setattr(main, "get_provider", lambda: grader)
+    return grader
+
+
+def test_quiz_hint_levels_are_progressive(client, monkeypatch):
+    import json as _json
+
+    item_id = _seed_code_item(client)
+    # Answer wrong first so the hint can react to the submission.
+    _patch_grader(
+        monkeypatch, _json.dumps({"correct": False, "feedback": "返回的是差值。"})
+    )
+    assert (
+        client.post(f"/quiz/{item_id}/answer", json={"answer": "def add(a, b):\n    return a-b"}).status_code
+        == 200
+    )
+    for level, hint_text in [(1, "看看 return 那一行用的运算符。"), (2, "加法不是减法。")]:
+        _hint_grader(monkeypatch, _json.dumps({"hint": hint_text}))
+        response = client.post(f"/quiz/{item_id}/hints", json={"level": level})
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["level"] == level
+        assert body["hint"] == hint_text
+
+
+def test_quiz_hint_rejects_bad_level_and_kind(client, monkeypatch):
+    item_id = _seed_code_item(client)
+    assert client.post(f"/quiz/{item_id}/hints", json={"level": 4}).status_code == 422
+    assert client.post("/quiz/999999/hints", json={"level": 1}).status_code == 404
+
+    from app import models
+    from app.db import SessionLocal
+
+    session = SessionLocal()
+    try:
+        session.get(models.QuizItem, item_id).kind = "short"
+        session.commit()
+    finally:
+        session.close()
+    assert client.post(f"/quiz/{item_id}/hints", json={"level": 1}).status_code == 422
+
+
+def test_quiz_hint_unparseable_is_502(client, monkeypatch):
+    item_id = _seed_code_item(client)
+    _hint_grader(monkeypatch, "junk")
+    assert client.post(f"/quiz/{item_id}/hints", json={"level": 1}).status_code == 502

@@ -374,3 +374,10 @@
 - 验证：后端 **1381 passed, 2 skipped**；前端 **28 files / 190 passed**，tsc/eslint clean，next build 成功；真机联调（fake）导入/题库/问答两轮/patch/课时页截图全过。测试记录：`docs/test-reports/2026-10-21-course-features.md`。
 - 修了两个测试污染：`_seed_course` 直接赋值 `main.get_provider` 改为 monkeypatch（曾致 openai 测试在全量中失败）；usage pin 测试补 `quiz_generate`/`code_grade` 双 stage 驱动。
 - 待用户拍板：项目提问跨课程检索、代码题提示下放、变式题下放（三选一已给出选项）。
+
+### 2026-10-21 — 产品模型落地：跨课程提问、代码题提示、变式题（用户拍板三块都做）
+
+- **项目提问跨课程**：`app/agent/retrieval.py` 新增 `_lesson_hits`，经 `project_courses` 检索项目关联课程的课时（CJK 二元词 LIKE，按命中词数排序）；`retrieve()` 把资源 chunks 与课时按去停用词后的词表命中数统一评分合并，取前 5。课时引用 `resource_id=0`、`filename`=课程名，前端 `[S1] 课程名 · 课时名` 直接渲染。未关联课程的课时不泄露（测试覆盖）。
+- **代码题提示下放**：`POST /quiz/{item_id}/hints`（level 1–3），`app/quiz_hint.py` 新 stage `quiz_hint`；阶梯为位置线索→原理→关键修正，永不给完整解法；带最近一次提交进 prompt；仅 code 题。前端 QuizSection 答错后出"获取提示"按钮逐级取。
+- **变式题下放**：`POST /api/courses/{course_id}/quiz/{item_id}/variant` → 201，新 stage `quiz_variant`；同题型同知识点、换场景表述，存入原题所在课时题库。前端题库每题旁"变式"按钮，生成后刷新。
+- 验证：后端 **1389 passed**；前端 **193 passed**，tsc/eslint clean；usage pin 补两 stage 并驱动；真机联调跨课程检索命中正确，hints/variant 在 fake 下受控 502。记录：`docs/test-reports/2026-10-21-course-model-3.md`。

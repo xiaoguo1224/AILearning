@@ -58,6 +58,7 @@ from app.llm.base import LLMCallError
 from app.locale import TeachingLocaleMiddleware
 from app.metering import CostLimitExceeded, MeteredLLM, acknowledge_alert, alert_state
 from app import code_grade
+from app import quiz_hint
 from app.projects.router import router as projects_router
 from app.rating import rating_v1
 from app.resources.router import router as resources_router
@@ -1343,6 +1344,42 @@ def answer_quiz(item_id: int, body: QuizAnswer, session: Session = Depends(get_s
         "attempt_no": attempt.attempt_no,
         "attempt_state": _attempt_state(_attempts_for_item(session, item.id)),
     }
+
+
+class QuizHintRequest(BaseModel):
+    level: int
+
+
+@app.post("/quiz/{item_id}/hints")
+def quiz_hints(item_id: int, body: QuizHintRequest, session: Session = Depends(get_session)):
+    """A progressive hint for one code question, scoped to that question.
+
+    Levels 1→3: location clue, principle, key correction — never the full
+    solution. The learner's latest submitted code goes into the prompt when
+    they have one, so the hint reacts to what they actually wrote.
+    """
+    item = session.get(models.QuizItem, item_id)
+    if not item:
+        raise HTTPException(404, "Quiz item not found")
+    if item.kind != "code":
+        raise HTTPException(422, "Hints are only available for code questions.")
+    if body.level not in (1, 2, 3):
+        raise HTTPException(422, "Hint level must be 1, 2 or 3.")
+
+    attempts = _attempts_for_item(session, item.id)
+    latest_submitted = attempts[-1].submitted_answer if attempts else None
+
+    run_id = uuid.uuid4().hex
+    meter = MeteredLLM(get_provider(), run_id)
+    try:
+        hint = quiz_hint.hint_for(
+            meter, item.question, item.answer, latest_submitted, body.level
+        )
+    except CostLimitExceeded as exc:
+        raise _cost_limit_exceeded(exc) from exc
+    except quiz_hint.HintParseError as exc:
+        raise HTTPException(502, "AI 提示生成失败，请重试一次。") from exc
+    return {"level": body.level, "hint": hint}
 
 
 def _completion_state(lesson: models.Lesson) -> dict:

@@ -701,6 +701,27 @@ export function answerQuiz(
   return postJson(`/quiz/${itemId}/answer`, body);
 }
 
+export interface QuizHint {
+  level: number;
+  hint: string;
+}
+
+export function getQuizHint(itemId: number, level: number): Promise<QuizHint> {
+  return postJson(`/quiz/${itemId}/hints`, { level });
+}
+
+export interface QuizVariant {
+  id: number;
+  question: string;
+  kind: string;
+  options: string[];
+  concept: string;
+}
+
+export function createQuizVariant(courseId: number, itemId: number): Promise<QuizVariant> {
+  return postJson(`/api/courses/${courseId}/quiz/${itemId}/variant`, {});
+}
+
 export function completeLesson(id: number): Promise<CompleteResult> {
   return request(`/lessons/${id}/complete`, { method: "POST" });
 }

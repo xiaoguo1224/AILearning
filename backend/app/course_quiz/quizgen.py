@@ -12,6 +12,7 @@ import re
 from app.course_quiz.schemas import QUIZ_KINDS
 
 QUIZGEN_STAGE = "quiz_generate"
+VARIANT_STAGE = "quiz_variant"
 MAX_TOTAL_ITEMS = 20
 MAX_MATERIAL_CHARS = 12000
 
@@ -114,3 +115,21 @@ def parse_items(raw: str, requests: list[tuple[str, int]]) -> list[dict]:
             }
         )
     return items
+
+
+def build_variant_prompt(item) -> str:
+    """One variant of an existing quiz item: same kind and knowledge point,
+    different surface form, so repeating the old answer does not solve it."""
+    spec = _KIND_SPECS[item.kind]
+    return (
+        "你是编程课程的出题老师。根据下面这道题，出一道变式题："
+        "考察同一个知识点、同一种题型，但换场景、换数字、换表述，"
+        "背下原题答案的人做不对变式题。\n\n"
+        f"原题（{item.kind}）：{item.question}\n"
+        f"原题答案（只作参考，不要照抄）：{item.answer}\n"
+        f"题型要求：{item.kind}（{spec}）\n\n"
+        "只返回 JSON 数组，不要解释，恰好 1 道题：\n"
+        '[{"question": str, "kind": "' + item.kind + '", '
+        '"options": [str]（仅 mcq/truefalse 需要；truefalse 固定为["正确","错误"]）, '
+        '"answer": str, "concept": str}]'
+    )

@@ -1,8 +1,11 @@
 """Project-scoped source retrieval for free exploration.
 
-The retriever is deliberately narrow: only chunks that belong to the current project,
-never the whole library. A citation is a promise that this project's material said
-something, and widening the search would break that promise quietly.
+The retriever is deliberately narrow: only material that belongs to the current
+project, never the whole library. That is the project's uploaded resources plus
+the lessons of every course linked to the project — a project is an aggregation
+of courses, so asking at project level sees all of them. A citation is a promise
+that this project's material said something, and widening the search beyond the
+project would break that promise quietly.
 """
 
 import re
@@ -18,6 +21,13 @@ MAX_CHUNK_CHARS = 1_200
 MAX_CONTEXT_CHARS = 6_000
 MIN_TERM_CHARS = 2
 MAX_FALLBACK_TERMS = 3
+# Only for ranking merged candidates, never for the WHERE clause: "what"/"是"
+# match everything and would drown the real keywords.
+_RANK_STOPWORDS = frozenset(
+    "what which who whom whose when where why how is are was were be been being "
+    "do does did have has had the a an of to in on for and or as at by with from "
+    "that this it its 是 的 了 在 和 与 或 什么 怎么 为什么 如何 吗 呢".split()
+)
 # An unbroken CJK run this long is a sentence/question, not a keyword: FTS5 and
 # LIKE have no Chinese word segmentation, so searching it verbatim matches
 # nothing. Splitting it into overlapping bigrams approximates keyword search.
@@ -131,6 +141,49 @@ def _like_fallback(
     return [(row[0], row[1], row[2], row[3], row[4]) for row in rows]
 
 
+def _lesson_hits(
+    session: Session, project_id: int, query: str
+) -> list[tuple[int, str, str, str]]:
+    """Lessons of the project's linked courses matching the query.
+
+    A project aggregates courses (project_courses), so project-level questions
+    see every course, not just uploaded resources. Returns
+    (lesson_id, course_title, lesson_title, content); callers rank these against
+    resource chunks by shared vocabulary.
+    """
+    terms = _terms(query)
+    if not terms:
+        return []
+    clauses = " OR ".join(
+        f"(l.title LIKE :term{index} OR l.content LIKE :term{index})"
+        for index in range(len(terms))
+    )
+    score = " + ".join(
+        f"(CASE WHEN l.title LIKE :term{index} OR l.content LIKE :term{index} "
+        f"THEN 1 ELSE 0 END)"
+        for index in range(len(terms))
+    )
+    params = {f"term{index}": f"%{term}%" for index, term in enumerate(terms)}
+    params["pid"] = project_id
+    params["limit"] = MAX_SOURCES
+    rows = session.execute(
+        text(
+            f"""
+            SELECT l.id, c.title, l.title, l.content
+            FROM lessons l
+            JOIN modules m ON m.id = l.module_id
+            JOIN courses c ON c.id = m.course_id
+            JOIN project_courses pc ON pc.course_id = c.id
+            WHERE pc.project_id = :pid AND ({clauses})
+            ORDER BY ({score}) DESC, l.id
+            LIMIT :limit
+            """
+        ),
+        params,
+    ).fetchall()
+    return [(row[0], row[1], row[2], row[3] or "") for row in rows]
+
+
 def retrieve(session: Session, project_id: int, query: str) -> list[Source]:
     """Return at most MAX_SOURCES sources, in retrieval order, marked S1..Sn."""
     hits = search_resources_fts(session, query, project_id=project_id, limit=MAX_SOURCES)
@@ -161,9 +214,44 @@ def retrieve(session: Session, project_id: int, query: str) -> list[Source]:
     if not rows:
         rows = _like_fallback(session, project_id, query)
 
+    # Rank resource chunks and course lessons by shared vocabulary, then take the
+    # best of both. Lessons carry (lesson_id, course_title, lesson_title); they
+    # ride resource_id 0 so a reader can tell a course citation from an upload.
+    terms = _terms(query)
+
+    def _score(text_value: str) -> int:
+        lowered = (text_value or "").lower()
+        return sum(
+            1
+            for term in terms
+            if term.lower() not in _RANK_STOPWORDS and term.lower() in lowered
+        )
+
+    candidates: list[tuple[int, str, int, int, str, str, str]] = [
+        (_score(body), "resource", chunk_id, resource_id, filename, locator or "", body or "")
+        for chunk_id, resource_id, filename, locator, body in rows
+    ]
+    candidates += [
+        (
+            _score(f"{lesson_title} {content}"),
+            "lesson",
+            lesson_id,
+            0,
+            course_title,
+            lesson_title,
+            content,
+        )
+        for lesson_id, course_title, lesson_title, content in _lesson_hits(
+            session, project_id, query
+        )
+    ]
+    # Python's sort is stable: equal scores keep resource-then-lesson order, and
+    # the pre-existing resource order inside each group.
+    candidates.sort(key=lambda candidate: -candidate[0])
+
     sources: list[Source] = []
     budget = MAX_CONTEXT_CHARS
-    for index, (chunk_id, resource_id, filename, locator, body) in enumerate(rows, start=1):
+    for _, kind, chunk_id, resource_id, filename, locator, body in candidates:
         if budget <= 0 or len(sources) >= MAX_SOURCES:
             break
         excerpt = _clip(body or "", min(MAX_CHUNK_CHARS, budget))
@@ -176,7 +264,7 @@ def retrieve(session: Session, project_id: int, query: str) -> list[Source]:
                 chunk_id=chunk_id,
                 resource_id=resource_id,
                 filename=filename,
-                locator=locator or "",
+                locator=locator,
                 text=excerpt,
             )
         )

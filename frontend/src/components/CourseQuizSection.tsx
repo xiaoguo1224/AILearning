@@ -6,6 +6,7 @@ import { QuizSection } from "@/components/QuizSection";
 import { useI18n } from "@/components/LocaleProvider";
 import {
   ApiError,
+  createQuizVariant,
   generateQuizQuestions,
   getCourseQuiz,
   type QuizBank,
@@ -159,6 +160,38 @@ function QuizGenerateDialog({
   );
 }
 
+function VariantButton({
+  courseId,
+  itemId,
+  onCreated,
+}: {
+  courseId: number;
+  itemId: number;
+  onCreated: () => void;
+}) {
+  const { t } = useI18n();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          await createQuizVariant(courseId, itemId);
+          onCreated();
+        } finally {
+          setBusy(false);
+        }
+      }}
+      title={t("Create a variant of this question")}
+      className="shrink-0 rounded-control border border-line px-2 py-1 text-small text-ink-muted transition-colors hover:text-accent disabled:opacity-50"
+    >
+      {busy ? t("Creating…") : t("Variant")}
+    </button>
+  );
+}
+
 /**
  * The course's question bank, laid out as a section of the course page.
  * Collapsed to a header row until opened: a full bank is long, and the header
@@ -240,7 +273,17 @@ export function CourseQuizSection({ courseId }: { courseId: number }) {
                 lesson.items.length > 0 ? (
                   <div key={lesson.id} className="mt-4">
                     <h4 className="text-small font-medium text-ink-muted">{lesson.title}</h4>
-                    <QuizSection quiz={lesson.items.map(toQuizItem)} progress={progress} />
+                    <QuizSection
+                      quiz={lesson.items.map(toQuizItem)}
+                      progress={progress}
+                      renderItemAction={(item) => (
+                        <VariantButton
+                          courseId={bank.course_id}
+                          itemId={item.id}
+                          onCreated={() => void load()}
+                        />
+                      )}
+                    />
                   </div>
                 ) : null,
               )}
