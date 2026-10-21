@@ -105,7 +105,7 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
       // horizontally, each course's lessons in a grid below it.
       let cx: number | undefined, cy: number | undefined;
       if (cpos) {
-        cx = cpos.x; cy = cpos.y;
+        cx = cpos.x * 10; cy = cpos.y * 10;
       } else if (!hasPositions) {
         cx = 150 + (courseCount > 1 ? (courseIdx * 900) / (courseCount - 1) : 450);
         cy = 120;
@@ -127,7 +127,7 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
           const lpos = positions[lid];
           let lx: number | undefined, ly: number | undefined;
           if (lpos) {
-            lx = lpos.x; ly = lpos.y;
+            lx = lpos.x * 10; ly = lpos.y * 10;
           } else if (!hasPositions && cx !== undefined) {
             lx = cx - 120 + (lessonIdx % 4) * 80;
             ly = 220 + Math.floor(lessonIdx / 4) * 70;
@@ -246,7 +246,7 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
       )}
       <ReactECharts
         option={option}
-        style={{ height: 600, width: "100%" }}
+        style={{ height: 900, width: "100%" }}
         onEvents={{
           click: (params: { data?: { id?: string; value?: number } }) => {
             const id = params.data?.id ?? "";
