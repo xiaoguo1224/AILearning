@@ -49,9 +49,9 @@ def get_graph(project_id: int, db: Session = Depends(get_db)):
 
 def _course_payload(db: Session, project_id: int) -> list[dict]:
     """Build the course/chapter payload the extractor needs."""
-    from app import models as m
+    from app.projects.models import Project
 
-    project = db.get(m.Project, project_id)
+    project = db.get(Project, project_id)
     if not project:
         raise HTTPException(404, "Project not found")
     courses = []
@@ -93,9 +93,9 @@ def _run_extraction(job_id: str, project_id: int):
 
 @router.post("/extract/job", status_code=202)
 def extract_graph_job(project_id: int, db: Session = Depends(get_db)):
-    from app import models as m
+    from app.projects.models import Project
 
-    if not db.get(m.Project, project_id):
+    if not db.get(Project, project_id):
         raise HTTPException(404, "Project not found")
     job = jobs.create_job(
         job_type="project_graph_extract",
