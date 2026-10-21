@@ -119,6 +119,7 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
 
   const option = useMemo(() => {
     const nodes: any[] = [];
+    const links: any[] = [];
     const nodeIds = new Set<string>();
     const categories = curriculum.courses.map((c) => ({ name: c.title }));
 
@@ -192,10 +193,10 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
     });
 
     // AI edges; fall back to teaching sequence if none.
-    let links: any[];
     if (edges && edges.length > 0) {
-      links = edges
-        .filter(
+      links.push(
+        ...edges
+          .filter(
           (e) =>
             nodeIds.has(`${e.from_type}-${e.from_id}`) &&
             nodeIds.has(`${e.to_type}-${e.to_id}`),
@@ -219,9 +220,9 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
             edgeSymbol: e.kind === "contains" ? ["none", "none"] : ["none", "arrow"],
             tooltip: { formatter: e.reason },
           };
-        });
+        }),
+      );
     } else {
-      links = [];
       let prev: string | null = null;
       curriculum.courses.forEach((course) => {
         const cid = `course-${course.id}`;

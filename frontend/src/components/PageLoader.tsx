@@ -17,7 +17,8 @@ export function PageLoader({ tip = "加载中…" }: { tip?: string }) {
         gap: 16,
       }}
     >
-      <Spin size="large" tip={tip} />
+      <Spin size="large" />
+      <span style={{ color: "var(--ink-muted)", fontSize: 14 }}>{tip}</span>
     </div>
   );
 }
