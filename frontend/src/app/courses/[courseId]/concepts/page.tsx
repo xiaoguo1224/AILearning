@@ -6,6 +6,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { ConceptStats, MasteryLegend } from "@/components/ConceptMapECharts";
+import { ExtractConceptsButton } from "@/components/ExtractConceptsButton";
 import { CourseTabs } from "@/components/CourseTabs";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -28,9 +29,12 @@ function weakestExplanation(weakest: WeakestConcept, t: Translator): string {
   return `This is the concept in the course most worth your attention right now. ${taught}`;
 }
 
-function ConceptsEmptyState() {
+function ConceptsEmptyState({ courseId }: { courseId: number }) {
   return (
-    <p className="mt-5 rounded-surface border border-line px-4 py-6 text-ui text-ink-muted"><LocalizedText text={" This course has no concepts to map yet. Concepts are listed by each lesson when the course is generated, so a map appears here as soon as its lessons name any. "} /></p>
+    <div>
+      <p className="mt-5 rounded-surface border border-line px-4 py-6 text-ui text-ink-muted"><LocalizedText text={" This course has no concepts to map yet. Concepts are listed by each lesson when the course is generated, so a map appears here as soon as its lessons name any. "} /></p>
+      <ExtractConceptsButton courseId={courseId} />
+    </div>
   );
 }
 
@@ -107,7 +111,7 @@ export default async function CourseConceptsPage(
       <p className="mt-5 max-w-xl text-ui text-ink-muted"><LocalizedText text={" Concepts grouped by the lesson that teaches them, sized by how often they come up and filled by your current mastery. Reading left to right is the order the course teaches them. "} /></p>
 
       {concepts.length === 0 || lessons.length === 0 ? (
-        <ConceptsEmptyState />
+        <ConceptsEmptyState courseId={data.course_id} />
       ) : (
         <>
           {/*

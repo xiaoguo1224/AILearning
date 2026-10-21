@@ -93,12 +93,17 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
 
     // All courses and lessons as nodes. Each course is its own category so the
     // legend lists course names; lessons take their parent course's category.
-    // When AI positions exist, use them with layout 'none'.
+    // When AI positions exist, use them with layout 'none'. Otherwise, compute
+    // a simple layered fallback so nodes don't all pile up at the center.
     const hasPositions = Object.keys(positions).length > 0;
+    const courseCount = curriculum.courses.length;
     curriculum.courses.forEach((course, courseIdx) => {
       const cid = `course-${course.id}`;
       nodeIds.add(cid);
       const cpos = positions[cid];
+      // Fallback: courses spread horizontally across the top.
+      const fx = hasPositions || !cpos ? undefined : 150 + (courseIdx * 900) / Math.max(1, courseCount - 1 || 1);
+      const fy = hasPositions || !cpos ? undefined : 120;
       nodes.push({
         id: cid,
         name: course.title,
@@ -106,21 +111,26 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
         category: courseIdx,
         symbolSize: 56,
         itemStyle: { color: "#1fae54" },
-        ...(cpos ? { x: cpos.x, y: cpos.y } : {}),
+        ...(cpos ? { x: cpos.x, y: cpos.y } : fx !== undefined ? { x: fx, y: fy } : {}),
       });
+      let lessonIdx = 0;
       for (const m of course.modules) {
         for (const l of m.lessons) {
           const lid = `lesson-${l.id}`;
           nodeIds.add(lid);
           const lpos = positions[lid];
+          // Fallback: lessons in a grid below their course.
+          const lx = hasPositions || !lpos ? undefined : fx !== undefined ? fx - 120 + (lessonIdx % 4) * 80 : undefined;
+          const ly = hasPositions || !lpos ? undefined : 220 + Math.floor(lessonIdx / 4) * 70;
           nodes.push({
             id: lid,
             name: l.title,
             value: l.id,
             category: courseIdx,
             symbolSize: 28,
-            ...(lpos ? { x: lpos.x, y: lpos.y } : {}),
+            ...(lpos ? { x: lpos.x, y: lpos.y } : lx !== undefined ? { x: lx, y: ly } : {}),
           });
+          lessonIdx++;
         }
       }
     });
