@@ -98,7 +98,7 @@ export default async function LessonPage(
   if (lesson.course_id !== course) notFound();
 
   return (
-    <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
+    <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-12">
       {backToCourseLink(courseId, t)}
 
       {/*
@@ -149,8 +149,8 @@ export default async function LessonPage(
         </ul>
       )}
 
-      <div className="mt-8 grid items-start gap-6 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <aside aria-label={t("Questions")} className="space-y-6 lg:sticky lg:top-6">
+      <div className="mt-8 grid items-start gap-6 lg:grid-cols-[260px_minmax(0,1fr)_300px]">
+        <aside aria-label={t("Questions")} className="min-w-0 space-y-6 lg:sticky lg:top-6">
           <LessonToc content={lesson.content} />
           <LessonQuizPanel
             courseId={course}
@@ -163,7 +163,7 @@ export default async function LessonPage(
           <p className="mb-4 rounded-surface border border-line p-4 text-small text-ink-muted">{t("AI-generated explanations, formulas and examples require review before being treated as authoritative. Textbook extensions are not verified course facts.")}</p>
           <LessonMarkdown content={lesson.content} title={lesson.title} />
         </div>
-        <aside aria-label={t("Q&A")} className="space-y-6 lg:sticky lg:top-6">
+        <aside aria-label={t("Q&A")} className="min-w-0 space-y-6 lg:sticky lg:top-6">
           <LessonQaSection lessonId={lesson.id} lessonTitle={lesson.title} />
         </aside>
       </div>
