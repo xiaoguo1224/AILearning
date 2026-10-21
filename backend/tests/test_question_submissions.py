@@ -64,6 +64,35 @@ def test_question_submission_validates(client):
     )
 
 
+def test_question_submission_accepts_log_and_upload(client):
+    item_id = _seed_code_question()
+    # Pasted code + pasted log.
+    body = client.post(
+        f"/api/quiz/{item_id}/submissions",
+        json={"code": "def add(a, b):\n    return a + b", "log_content": "ok"},
+    ).json()
+    assert body["version"] == 1
+    detail = client.get(f"/api/submissions/{body['id']}").json()
+    kinds = sorted(a["kind"] for a in detail["artifacts"])
+    assert kinds == ["code", "log"]
+
+    # File upload: code file + log file.
+    response = client.post(
+        f"/api/quiz/{item_id}/submissions/upload",
+        files={
+            "code_file": ("answer.py", b"def add(a, b):\n    return a + b", "text/x-python"),
+            "log_file": ("run.log", b"Traceback: boom", "text/plain"),
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["version"] == 2
+    assert body["quiz_item_id"] == item_id
+    detail = client.get(f"/api/submissions/{body['id']}").json()
+    kinds = sorted(a["kind"] for a in detail["artifacts"])
+    assert kinds == ["code", "log"]
+
+
 def test_question_review_runs_without_project(client):
     item_id = _seed_code_question()
     submission_id = client.post(

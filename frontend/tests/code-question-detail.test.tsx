@@ -75,10 +75,11 @@ describe("CodeQuestionDetail", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Submit for review" }));
 
-    expect(vi.mocked(createQuestionSubmission)).toHaveBeenCalledWith(
-      11,
-      "def add(a, b):\n    return a + b",
-    );
+    expect(vi.mocked(createQuestionSubmission)).toHaveBeenCalledWith(11, {
+      code: "def add(a, b):\n    return a + b",
+      log_content: undefined,
+      user_note: undefined,
+    });
     await waitFor(() => expect(screen.getByTestId("review-21")).toBeTruthy());
   });
 

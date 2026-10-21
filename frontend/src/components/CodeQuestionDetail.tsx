@@ -15,6 +15,7 @@ import {
   createQuestionSubmission,
   getSubmission,
   listQuestionSubmissions,
+  uploadQuestionSubmission,
 } from "@/lib/api";
 import type { QuizBankItem } from "@/lib/api";
 import type { SubmissionDetail, SubmissionSummary } from "@/lib/types";
@@ -35,7 +36,12 @@ export function CodeQuestionDetail({
 }) {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("question");
+  const [mode, setMode] = useState<"paste" | "upload">("paste");
   const [code, setCode] = useState("");
+  const [log, setLog] = useState("");
+  const [note, setNote] = useState("");
+  const [codeFile, setCodeFile] = useState<File | null>(null);
+  const [logFile, setLogFile] = useState<File | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [history, setHistory] = useState<SubmissionSummary[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -80,12 +86,32 @@ export function CodeQuestionDetail({
   }, [item.id]);
 
   async function submit() {
-    if (!code.trim() || submitting) return;
+    if (submitting) return;
+    const hasPasteInput = code.trim() || log.trim();
+    const hasUploadInput = codeFile || logFile;
+    if (mode === "paste" ? !hasPasteInput : !hasUploadInput) return;
     setSubmitting(true);
     setError(null);
     try {
-      const detail = await createQuestionSubmission(item.id, code);
+      let detail: SubmissionDetail;
+      if (mode === "paste") {
+        detail = await createQuestionSubmission(item.id, {
+          code: code.trim() || undefined,
+          log_content: log.trim() || undefined,
+          user_note: note.trim() || undefined,
+        });
+      } else {
+        const form = new FormData();
+        if (codeFile) form.append("code_file", codeFile);
+        if (logFile) form.append("log_file", logFile);
+        if (note.trim()) form.append("user_note", note.trim());
+        detail = await uploadQuestionSubmission(item.id, form);
+      }
       setCode("");
+      setLog("");
+      setNote("");
+      setCodeFile(null);
+      setLogFile(null);
       await refreshHistory(detail.id);
       setTab("review");
     } catch (err) {
@@ -146,17 +172,89 @@ export function CodeQuestionDetail({
       {tab === "answer" && (
         <section className="space-y-4">
           {error && <ErrorState message={error} />}
-          <textarea
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-            rows={14}
-            disabled={submitting}
-            placeholder={t("Write your code here…")}
-            aria-label={t("Your code")}
-            className="block w-full rounded-control border border-line-strong bg-surface px-3 py-2 font-mono text-small"
-          />
+          <div role="tablist" aria-label={t("Submission method")} className="flex gap-1">
+            {(["paste", "upload"] as const).map((m) => (
+              <button
+                key={m}
+                role="tab"
+                aria-selected={mode === m}
+                onClick={() => setMode(m)}
+                className={`rounded-control px-3 py-1.5 text-small font-medium transition-colors ${
+                  mode === m
+                    ? "bg-surface-sunken text-ink"
+                    : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                {t(m === "paste" ? "Paste" : "Upload files")}
+              </button>
+            ))}
+          </div>
+          {mode === "paste" ? (
+            <>
+              <label className="block text-small font-medium">
+                {t("Your code")}
+                <textarea
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
+                  rows={12}
+                  disabled={submitting}
+                  placeholder={t("Write your code here…")}
+                  className="mt-1 block w-full rounded-control border border-line-strong bg-surface px-3 py-2 font-mono text-small"
+                />
+              </label>
+              <label className="block text-small font-medium">
+                {t("Run log (optional)")}
+                <textarea
+                  value={log}
+                  onChange={(e) => setLog(e.target.value)}
+                  rows={6}
+                  disabled={submitting}
+                  placeholder={t("Paste the log from running your code locally…")}
+                  className="mt-1 block w-full rounded-control border border-line-strong bg-surface px-3 py-2 font-mono text-small"
+                />
+              </label>
+            </>
+          ) : (
+            <>
+              <label className="block text-small font-medium">
+                {t("Code file (.py or .zip)")}
+                <input
+                  type="file"
+                  accept=".py,.zip,.txt"
+                  disabled={submitting}
+                  onChange={(e) => setCodeFile(e.target.files?.[0] ?? null)}
+                  className="mt-1 block w-full text-small"
+                />
+              </label>
+              <label className="block text-small font-medium">
+                {t("Log file (optional)")}
+                <input
+                  type="file"
+                  accept=".log,.txt"
+                  disabled={submitting}
+                  onChange={(e) => setLogFile(e.target.files?.[0] ?? null)}
+                  className="mt-1 block w-full text-small"
+                />
+              </label>
+            </>
+          )}
+          <label className="block text-small font-medium">
+            {t("Note (optional)")}
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              disabled={submitting}
+              placeholder={t("What did you try? What failed?")}
+              className="mt-1 block w-full rounded-control border border-line bg-surface px-3 py-2 text-small"
+            />
+          </label>
           <div className="flex justify-end">
-            <Button disabled={submitting || !code.trim()} onClick={() => void submit()}>
+            <Button
+              disabled={
+                submitting || (mode === "paste" ? !(code.trim() || log.trim()) : !(codeFile || logFile))
+              }
+              onClick={() => void submit()}
+            >
               {submitting ? t("Submitting…") : t("Submit for review")}
             </Button>
           </div>

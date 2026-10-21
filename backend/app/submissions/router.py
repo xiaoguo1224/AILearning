@@ -148,12 +148,15 @@ def _summary(submission: Submission) -> SubmissionSummaryOut:
 
 class QuestionSubmissionInput(BaseModel):
     """Code answering one quiz question. The question IS the exercise, so no
-    exercise_id, no log, no project — just the code."""
+    exercise_id and no project — but the full submission shape otherwise:
+    pasted code plus an optional run log, like the project form."""
 
     model_config = {"extra": "forbid"}
 
-    code: str = Field(min_length=1, max_length=200_000)
+    code: str | None = Field(default=None, max_length=200_000)
     code_filename: str = Field(default="answer.py", max_length=200)
+    log_content: str | None = Field(default=None, max_length=200_000)
+    log_filename: str = Field(default="run.log", max_length=200)
     user_note: str | None = Field(default=None, max_length=2000)
 
 
@@ -180,11 +183,11 @@ def create_question_submission(item_id: int, body: QuestionSubmissionInput, sess
     artifacts = text_artifacts(
         code_filename=body.code_filename or "answer.py",
         code_content=body.code,
-        log_filename=None,
-        log_content=None,
+        log_filename=body.log_filename or "run.log",
+        log_content=body.log_content,
     )
     if not artifacts:
-        raise HTTPException(422, "Provide code.")
+        raise HTTPException(422, "Provide code, a log, or both.")
 
     latest = (
         session.query(Submission.version)
@@ -222,6 +225,84 @@ def create_question_submission(item_id: int, body: QuestionSubmissionInput, sess
         item_id,
         submission.id,
         version,
+    )
+    return _detail(session, submission)
+
+
+@router.post(
+    "/quiz/{item_id}/submissions/upload",
+    response_model=SubmissionDetail,
+    status_code=201,
+)
+async def upload_question_submission(
+    item_id: int,
+    session: Db,
+    code_file: UploadFile | None = File(None),
+    log_file: UploadFile | None = File(None),
+    user_note: str = "",
+):
+    """Upload code and/or a run log answering one code question.
+
+    Mirrors the project upload (single code file or .zip, plus log file) but
+    scoped to the question: project_id NULL, version counted per question.
+    """
+    from app.models import QuizItem
+
+    item = session.get(QuizItem, item_id)
+    if not item:
+        raise HTTPException(404, "Quiz item not found")
+    if item.kind != "code":
+        raise HTTPException(422, "Only code questions accept code submissions")
+
+    artifacts: list[tuple[str, str, str]] = []
+    if code_file is not None and code_file.filename:
+        raw = await code_file.read()
+        if Path(code_file.filename).suffix.lower() == ".zip":
+            artifacts.extend(zip_artifacts(raw, code_file.filename))
+        else:
+            artifacts.append(file_artifact(raw, code_file.filename, "code"))
+    if log_file is not None and log_file.filename:
+        artifacts.append(file_artifact(await log_file.read(), log_file.filename, "log"))
+    if not artifacts:
+        raise HTTPException(422, "Provide code, a log, or both.")
+
+    latest = (
+        session.query(Submission.version)
+        .filter_by(quiz_item_id=item_id)
+        .order_by(Submission.version.desc())
+        .first()
+    )
+    version = (latest[0] + 1) if latest else 1
+
+    submission = Submission(
+        project_id=None,
+        quiz_item_id=item_id,
+        exercise_id=None,
+        version=version,
+        user_note=user_note.strip() or None,
+        status="submitted",
+    )
+    session.add(submission)
+    session.flush()
+    for filename, kind, content in artifacts:
+        session.add(
+            SubmissionArtifact(
+                submission_id=submission.id,
+                filename=filename,
+                kind=kind,
+                content=content,
+                size_bytes=len(content.encode("utf-8")),
+                sha256=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+            )
+        )
+    session.commit()
+    session.refresh(submission)
+    logger.info(
+        "question_submission_uploaded item_id=%s submission_id=%s version=%s artifacts=%s",
+        item_id,
+        submission.id,
+        version,
+        len(artifacts),
     )
     return _detail(session, submission)
 

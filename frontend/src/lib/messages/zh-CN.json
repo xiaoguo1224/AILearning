@@ -909,5 +909,12 @@
   "Submit for review": "提交评审",
   "The AI reviews your code against this question. Nothing runs on the server.": "AI 对照题目评审你的代码，服务器不运行代码。",
   "No submissions yet. Write your code on the Answer tab.": "还没有提交，去「作答」页写代码。",
-  "No submissions yet.": "还没有提交。"
+  "No submissions yet.": "还没有提交。",
+  "Paste": "粘贴",
+  "Run log (optional)": "运行日志（可选）",
+  "Paste the log from running your code locally…": "粘贴本地运行代码的日志…",
+  "Code file (.py or .zip)": "代码文件（.py 或 .zip）",
+  "Log file (optional)": "日志文件（可选）",
+  "Note (optional)": "备注（可选）",
+  "What did you try? What failed?": "你试了什么？哪里失败了？"
 }

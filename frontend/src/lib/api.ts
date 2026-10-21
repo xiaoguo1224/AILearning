@@ -1328,11 +1328,29 @@ export function getQuizItem(itemId: number, locale?: Locale): Promise<QuizBankIt
   return get(`/api/quiz/${itemId}`, locale);
 }
 
+export interface QuestionSubmissionInput {
+  code?: string;
+  code_filename?: string;
+  log_content?: string;
+  log_filename?: string;
+  user_note?: string;
+}
+
 export function createQuestionSubmission(
   itemId: number,
-  code: string,
+  input: QuestionSubmissionInput,
 ): Promise<SubmissionDetail> {
-  return postJson(`/api/quiz/${itemId}/submissions`, { code });
+  return postJson(`/api/quiz/${itemId}/submissions`, input);
+}
+
+export function uploadQuestionSubmission(
+  itemId: number,
+  form: FormData,
+): Promise<SubmissionDetail> {
+  return request(`/api/quiz/${itemId}/submissions/upload`, {
+    method: "POST",
+    body: form,
+  });
 }
 
 export function listQuestionSubmissions(itemId: number, locale?: Locale): Promise<SubmissionList> {
