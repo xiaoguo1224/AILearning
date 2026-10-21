@@ -99,26 +99,46 @@ export function CourseList({ courses }: { courses: CourseSummary[] }) {
         {filtered.map((course) => (
           <li key={course.id} style={{ minWidth: 0 }}>
             <article
+              className="course-card"
               style={{
                 overflow: "hidden",
-                borderRadius: 16,
-                background: "var(--surface)",
-                boxShadow: "0 2px 12px rgba(0,0,0,0.06)",
-                transition: "transform 0.2s",
+                borderRadius: 20,
+                background: "#fff",
+                border: "1px solid #f0f0f0",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                cursor: "pointer",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-4px)";
+                e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.1)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)";
               }}
             >
               <Link href={`/courses/${course.id}`} style={{ display: "block" }}>
                 <div
                   style={{
                     position: "relative",
-                    aspectRatio: "16/9",
+                    aspectRatio: "16/8",
                     background: coverFor(course),
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    padding: 24,
+                    padding: 28,
+                    overflow: "hidden",
                   }}
                 >
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background:
+                        "radial-gradient(circle at 80% 20%, rgba(255,255,255,0.15) 0%, transparent 50%)",
+                    }}
+                  />
                   <span
                     style={{
                       color: "#fff",
