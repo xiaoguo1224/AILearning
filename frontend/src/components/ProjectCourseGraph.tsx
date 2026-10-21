@@ -8,6 +8,7 @@ import { useI18n } from "@/components/LocaleProvider";
 import {
   getJob,
   getProjectGraph,
+  listJobs,
   startGraphExtractJob,
   type ProjectGraph,
   type ProjectGraphEdge,
@@ -47,6 +48,30 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
   const edges = graph?.edges ?? null;
   const positions = graph?.positions ?? {};
   const [extracting, setExtracting] = useState(false);
+
+  // On mount, check if an extraction is already running (survives refresh).
+  useEffect(() => {
+    let cancelled = false;
+    listJobs()
+      .then(({ items }) => {
+        if (cancelled) return;
+        const running = items.find(
+          (j) =>
+            j.type === "project_graph_extract" &&
+            (j.status === "pending" || j.status === "running") &&
+            j.ref_id === projectId,
+        );
+        if (running) {
+          setExtracting(true);
+          void pollJob(running.id);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
   const [extractError, setExtractError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -63,25 +88,31 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
     };
   }, [projectId]);
 
+  async function pollJob(jobId: string) {
+    for (let i = 0; i < 120; i++) {
+      const job = await getJob(jobId);
+      if (job.status === "completed") {
+        setGraph(await getProjectGraph(projectId));
+        break;
+      }
+      if (job.status === "failed" || job.status === "cancelled") {
+        setExtractError(job.error || "提取失败");
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    setExtracting(false);
+  }
+
   async function reExtract() {
+    if (extracting) return;
     setExtracting(true);
     setExtractError(null);
     try {
       const { job_id } = await startGraphExtractJob(projectId);
-      for (let i = 0; i < 60; i++) {
-        const job = await getJob(job_id);
-        if (job.status === "completed") {
-          setGraph(await getProjectGraph(projectId));
-          break;
-        }
-        if (job.status === "failed" || job.status === "cancelled") break;
-        await new Promise((r) => setTimeout(r, 2000));
-      }
+      await pollJob(job_id);
     } catch (e) {
-      setExtractError(
-        e instanceof Error ? e.message : "提取失败，请确认后端已更新并运行。"
-      );
-    } finally {
+      setExtractError(e instanceof Error ? e.message : "提取失败");
       setExtracting(false);
     }
   }

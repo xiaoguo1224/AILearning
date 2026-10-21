@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Alert, Button, Modal } from "antd";
 
 import { useI18n } from "@/components/LocaleProvider";
@@ -9,6 +9,7 @@ import {
   ApiError,
   getJob,
   getLesson,
+  listJobs,
   startQuizGenerateJob,
   startQuizVariantJob,
   type QuizKindCount,
@@ -272,6 +273,42 @@ export function LessonQuizList({
   const [generating, setGenerating] = useState(false);
   const [showDialog, setShowDialog] = useState(false);
 
+  // Resume loading state if a quiz generation is already running (survives refresh).
+  useEffect(() => {
+    let cancelled = false;
+    listJobs()
+      .then(({ items }) => {
+        if (cancelled) return;
+        const running = items.find(
+          (j) =>
+            j.type === "quiz_generate" &&
+            (j.status === "pending" || j.status === "running") &&
+            j.ref_id === courseId,
+        );
+        if (running) {
+          setGenerating(true);
+          void (async () => {
+            for (let i = 0; i < 60; i++) {
+              if (cancelled) return;
+              const job = await getJob(running.id);
+              if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") break;
+              await new Promise((r) => setTimeout(r, 2000));
+            }
+            if (!cancelled) {
+              const fresh = await getLesson(lessonId);
+              setQuiz(fresh.quiz);
+              setGenerating(false);
+            }
+          })();
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseId, lessonId]);
+
   if (quiz.length === 0) {
     return (
       <div style={{ textAlign: "center", padding: 40 }}>
@@ -294,7 +331,11 @@ export function LessonQuizList({
   return (
     <div>
       <div style={{ marginBottom: 16, textAlign: "right" }}>
-        <Button onClick={() => setShowDialog(true)}>
+        <Button
+          onClick={() => setShowDialog(true)}
+          loading={generating}
+          disabled={generating}
+        >
           AI 出题
         </Button>
       </div>
