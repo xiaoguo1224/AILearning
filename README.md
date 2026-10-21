@@ -76,6 +76,8 @@ node node_modules/next/dist/bin/next dev --hostname 127.0.0.1
 
 从错因卡片选择「建议到其他项目复习」，选择目标项目后保存为待确认建议；在「跨项目建议」页可接受或拒绝。只有接受才会添加目标项目复习任务，拒绝不改目标学习数据。页面保留来源证据和决定状态，接受后可直接打开目标任务。
 
+「课程知识树」入口 `/projects/:id/learn` 展示已关联课程的 Module → Lesson → 知识点、章节完成与正式作答证据。可随时打开任意课时；先修知识仅提供建议。已核实的 PyTorch 基础主题链接《动手学深度学习》中文版章节，未映射内容明确标记。点击「准备学习提问」会打开可编辑草稿，确认发送后才调用模型。
+
 ## 许可证与上游
 
 现有根 `.env` 的 `LLM_PROVIDER=gemini`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY` 可直接用于 OpenAI 兼容网关；后端自动加载，密钥只用于后端请求。显式 `STUDYFORGE_LLM_PROVIDER` 优先（测试可设 `fake`）；不要用 backend/.env 中默认的 anthropic 覆盖想使用的网关。网关须启用 HTTPS，已有环境变量优先于 backend/.env，后者优先于根 .env。默认不自动降级到其他供应商，连接失败返回受控错误。
