@@ -195,6 +195,7 @@ def init_db() -> None:
     from app.resources import models as resource_models  # noqa: F401
     from app.resources.service import init_fts
     from app.submissions import models as submission_models  # noqa: F401
+    from app.suggestions import models as suggestion_models  # noqa: F401
 
     Base.metadata.create_all(engine)
     # AFTER create_all, and the order is load-bearing. create_all is what brings a brand

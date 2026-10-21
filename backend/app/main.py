@@ -56,6 +56,7 @@ from app.rating import rating_v1
 from app.resources.router import router as resources_router
 from app.submissions import llm_review, llm_variant
 from app.submissions.router import router as submissions_router
+from app.suggestions.router import router as suggestions_router
 
 logger = logging.getLogger("studyforge.api")
 
@@ -67,6 +68,7 @@ app.include_router(submissions_router)
 app.include_router(agent_router)
 app.include_router(knowledge_router)
 app.include_router(knowledge_errors_router)
+app.include_router(suggestions_router)
 
 _cors_origins = os.environ.get("STUDYFORGE_CORS_ORIGINS", "http://localhost:3000")
 app.add_middleware(

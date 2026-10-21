@@ -682,6 +682,15 @@ export interface ProjectReviewTask {
 }
 export interface ProjectReviewTasks { items: ProjectReviewTask[]; total: number }
 
+export interface LearningSuggestion {
+  id: number; source_project_id: number; target_project_id: number;
+  source_name: string; target_name: string; source_error_id: number;
+  concept_key: string; concept_label: string; cause: DiagnosisCause; evidence: string;
+  state: "pending" | "accepted" | "rejected"; target_error_id: number | null;
+  created_at: string; decided_at: string | null;
+}
+export interface SuggestionList { items: LearningSuggestion[]; total: number }
+
 export interface ReviewAnswerResult {
   correct: boolean;
   /** The reference answer, shown beside the learner's own for them to judge. */

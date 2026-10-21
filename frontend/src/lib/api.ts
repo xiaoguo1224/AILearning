@@ -51,6 +51,8 @@ import type {
   ReviewQueue,
   ProjectReviewTasks,
   DiagnosisCause,
+  LearningSuggestion,
+  SuggestionList,
   ReviewRatingResult,
   ReviewToday,
   SourceFailure,
@@ -83,6 +85,16 @@ export function recordDiagnosis(projectId: number, data: { concept_key: string; 
 
 export function dismissDiagnosis(errorId: number): Promise<{ id: number }> {
   return request(`/api/errors/${errorId}/dismiss`, { method: "POST" });
+}
+
+export function listSuggestions(projectId: number, offset = 0, locale?: Locale): Promise<SuggestionList> {
+  return get(`/api/projects/${projectId}/suggestions?offset=${offset}`, locale);
+}
+export function createSuggestion(projectId: number, sourceErrorId: number, targetProjectId: number): Promise<LearningSuggestion> {
+  return request(`/api/projects/${projectId}/suggestions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source_error_id: sourceErrorId, target_project_id: targetProjectId }) });
+}
+export function decideSuggestion(id: number, decision: "accepted" | "rejected"): Promise<LearningSuggestion> {
+  return request(`/api/suggestions/${id}/decision`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision }) });
 }
 
 /** A shared request boundary for browser calls and explicit server locale forwarding. */

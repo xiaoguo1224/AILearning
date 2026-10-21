@@ -130,6 +130,7 @@ def record(
     source_id: int | None = None,
     detail: str = "",
     _validated_source: bool = False,
+    commit: bool = True,
 ) -> ErrorCause:
     """Record one diagnosis. Writes no review card, by design — see the module docstring."""
     resolved_source = normalize_source(source_kind)
@@ -171,7 +172,10 @@ def record(
         detail=(detail or "").strip()[:MAX_DETAIL_CHARS],
     )
     session.add(row)
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     session.refresh(row)
     logger.info(
         "error_cause_recorded project_id=%s error_id=%s concept=%s cause=%s mapped=%s",
@@ -320,6 +324,11 @@ def _latest_review(session: Session, concept_keys: list[str]) -> dict[str, datet
     for key, moment in rows:
         latest.setdefault(key, moment)
     return latest
+
+
+def is_open(session: Session, row: ErrorCause) -> bool:
+    reviewed = _latest_review(session, [row.concept_key]).get(row.concept_key)
+    return row.dismissed_at is None and (reviewed is None or row.created_at.replace(tzinfo=None) > reviewed)
 
 
 def _card_summary(session: Session, concept_keys: list[str]) -> dict[str, ReviewCard]:

@@ -37,6 +37,7 @@ export function ProjectReviewTasks({ projectId, tasks, archived }: { projectId: 
       <div className="flex flex-wrap items-center gap-4 text-accent underline">
         {task.knowledge_id && <Link href={`/projects/${projectId}/knowledge?entry=${task.knowledge_id}`}>{task.knowledge_title ?? t("Knowledge")}</Link>}
         {!archived && <Link href={`/projects/${projectId}/review-tasks?concept=${encodeURIComponent(task.concept_key)}`}>{t("Practise this concept")}</Link>}
+        {!archived && <Link href={`/projects/${projectId}/suggestions?error=${task.latest_error_id}`}>{t("Suggest review in another project")}</Link>}
         <Link href={`/projects/${projectId}/explore`}>{t("Open free exploration")}</Link>
         {!archived && <Button variant="ghost" disabled={busy} onClick={() => void dismiss(task.latest_error_id)}>{t("Dismiss latest diagnosis")}</Button>}
       </div>

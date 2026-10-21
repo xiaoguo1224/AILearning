@@ -53,6 +53,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
       <section className="space-y-2 rounded-surface border border-line p-6">
         <h2 className="text-title">{t("Mistakes and review")}</h2>
         <Link href={`/projects/${project.id}/review-tasks`} className="text-small text-accent underline">{t("Open review suggestions")}</Link>
+        <Link href={`/projects/${project.id}/suggestions`} className="block text-small text-accent underline">{t("Cross-project suggestions")}</Link>
       </section>
     </div>}
   </main>;
