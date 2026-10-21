@@ -10,6 +10,7 @@ import Link from "next/link";
 import { useI18n } from "@/components/LocaleProvider";
 
 import { useEffect, useRef, useState } from "react";
+import { Pagination } from "antd";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -110,6 +111,11 @@ export function QuizSection({
   /** When set, code questions link to their detail page instead of answering inline. */
   courseId?: number;
 }) {
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 5;
+  const totalPages = Math.ceil(quiz.length / PAGE_SIZE);
+  const pagedQuiz = quiz.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
   const { t } = useI18n();
   const [answers, setAnswers] = useState<Record<number, ItemState>>({});
   /** When each item became answerable, for the elapsed_ms timing signal. */
@@ -277,7 +283,7 @@ export function QuizSection({
       </div>
 
       <ol className="mt-4 flex flex-col gap-6">
-        {quiz.map((item, index) => {
+        {pagedQuiz.map((item, index) => {
           const state = stateOf(item);
           // ever_correct spans every attempt, so an item solved earlier stays solved.
           const solved = state.attemptState.ever_correct;
@@ -526,6 +532,17 @@ export function QuizSection({
           );
         })}
       </ol>
+      {totalPages > 1 && (
+        <div style={{ marginTop: 24, textAlign: "center" }}>
+          <Pagination
+            current={page}
+            total={quiz.length}
+            pageSize={PAGE_SIZE}
+            onChange={(p) => setPage(p)}
+            showSizeChanger={false}
+          />
+        </div>
+      )}
     </section>
   );
 }

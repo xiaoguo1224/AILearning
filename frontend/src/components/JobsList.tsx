@@ -1,6 +1,6 @@
 "use client";
 
-import { Collapse } from "antd";
+import { Badge as AntBadge, Table } from "antd";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
@@ -74,48 +74,77 @@ export function JobsList() {
     );
   }
 
-  return (
-    <Collapse>
-      {jobs.map((job) => {
+  const columns = [
+    {
+      title: t("Type"),
+      dataIndex: "type",
+      key: "type",
+      render: (type: string) => t(TYPE_LABELS[type] ?? type),
+    },
+    {
+      title: t("Status"),
+      dataIndex: "status",
+      key: "status",
+      width: 120,
+      render: (status: string) => (
+        <AntBadge
+          status={
+            status === "completed" ? "success" : status === "failed" ? "error" : "processing"
+          }
+          text={t(status)}
+        />
+      ),
+    },
+    {
+      title: t("Created"),
+      dataIndex: "created_at",
+      key: "created_at",
+      width: 180,
+      render: (ts: string) => (
+        <span style={{ fontSize: 12, color: "#666" }}>
+          {new Date(ts).toLocaleString()}
+        </span>
+      ),
+    },
+    {
+      title: t("Action"),
+      key: "action",
+      width: 120,
+      render: (_: unknown, job: Job) => {
         const link = jobLink(job);
-        const label = TYPE_LABELS[job.type] ?? job.type;
-        const statusTone = job.status === "completed" ? "success" : job.status === "failed" ? "danger" : "neutral";
         return (
-          <Collapse.Panel
-            key={job.id}
-            header={
-              <span>
-                {t(label)}{" "}
-                <Badge tone={statusTone}>{t(job.status)}</Badge>{" "}
-                <span style={{ color: "#888", fontSize: 12 }}>
-                  {new Date(job.created_at).toLocaleString()}
-                </span>
-              </span>
-            }
-          >
-            <div>
-              <JobProgressBar job={job} />
-            </div>
-            <div className="mt-3 flex items-center gap-2">
-              {["pending", "running"].includes(job.status) && (
-                <JobCancelButton
-                  jobId={job.id}
-                  onCancelled={() =>
-                    setJobs((prev) =>
-                      prev.map((j) => (j.id === job.id ? { ...j, status: "cancelled" } : j)),
-                    )
-                  }
-                />
-              )}
-              {link && (
-                <Link
-                  href={link}
-                  className="rounded-control border border-line px-2 py-1 text-small text-ink-muted hover:text-ink"
-                >
-                  {t("Open")}
-                </Link>
-              )}
-            </div>
+          <span style={{ display: "flex", gap: 8 }}>
+            {["pending", "running"].includes(job.status) && (
+              <JobCancelButton
+                jobId={job.id}
+                onCancelled={() =>
+                  setJobs((prev) =>
+                    prev.map((j) => (j.id === job.id ? { ...j, status: "cancelled" } : j)),
+                  )
+                }
+              />
+            )}
+            {link && <Link href={link}>{t("Open")}</Link>}
+          </span>
+        );
+      },
+    },
+  ];
+
+  return (
+    <Table
+      dataSource={jobs}
+      columns={columns}
+      rowKey="id"
+      pagination={{
+        pageSize: 10,
+        showSizeChanger: true,
+        showTotal: (total) => `共 ${total} 条`,
+      }}
+      expandable={{
+        expandedRowRender: (job: Job) => (
+          <div style={{ padding: "8px 0" }}>
+            <JobProgressBar job={job} />
             {job.error && (
               <div style={{ marginTop: 12, color: "red" }}>
                 <strong>Error:</strong> {job.error}
@@ -129,9 +158,9 @@ export function JobsList() {
                 </pre>
               </details>
             )}
-          </Collapse.Panel>
-        );
-      })}
-    </Collapse>
+          </div>
+        ),
+      }}
+    />
   );
 }

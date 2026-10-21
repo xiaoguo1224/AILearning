@@ -20,6 +20,7 @@ class OpenAICompatibleProvider:
         self.model = os.environ.get("LLM_MODEL", "").strip()
         self.base_url = os.environ.get("LLM_BASE_URL", "").strip().rstrip("/")
         self.api_key = os.environ.get("LLM_API_KEY", "").strip()
+        self.timeout = 120
 
     def generate(self, system: str, prompt: str, max_tokens: int = 64000) -> LLMResult:
         try:

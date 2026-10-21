@@ -60,7 +60,11 @@ export function UsageTables({ perCourse, recentCalls, locale }: UsageTablesProps
         <Table
           dataSource={perCourse}
           rowKey={rowKey}
-          pagination={false}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showTotal: (total) => `共 ${total} 条`,
+          }}
           columns={[
             {
               title: <LocalizedText text={" Attributed to "} />,
@@ -105,7 +109,11 @@ export function UsageTables({ perCourse, recentCalls, locale }: UsageTablesProps
         <Table
           dataSource={recentCalls}
           rowKey="id"
-          pagination={false}
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showTotal: (total) => `共 ${total} 条`,
+          }}
           style={{ marginTop: 24 }}
           columns={[
             {
