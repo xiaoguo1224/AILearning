@@ -192,10 +192,10 @@ export function SubmissionForm({
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="space-y-1">
-            <span className={LABEL}>{t("Code file (.py, .txt, .md)")}</span>
+            <span className={LABEL}>{t("Code file (.py, .txt, .md, .zip)")}</span>
             <input
               type="file"
-              accept=".py,.txt,.md,.json,.yaml,.yml"
+              accept=".py,.txt,.md,.json,.yaml,.yml,.zip"
               onChange={(event) => setCodeFile(event.target.files?.[0] ?? null)}
               className="text-small"
             />
@@ -210,7 +210,7 @@ export function SubmissionForm({
             />
           </label>
           <p className="text-micro text-ink-muted sm:col-span-2">
-            {t("Code up to 512 KB, logs up to 2 MB. Text only; archives and binaries are refused.")}
+            {t("Code up to 512 KB, logs up to 2 MB. A .zip is unpacked into one code file per member (max 50 files, 2 MB total); binaries are refused.")}
           </p>
         </div>
       )}

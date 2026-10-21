@@ -1,4 +1,5 @@
 import logging
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -35,6 +36,7 @@ from app.submissions.service import (
     file_artifact,
     privacy_warnings,
     text_artifacts,
+    zip_artifacts,
 )
 from app.submissions.static_check import (
     analyze_python_code,
@@ -211,7 +213,11 @@ async def upload_submission(
     project = writable_project(session, project_id)
     artifacts: list[tuple[str, str, str]] = []
     if code_file is not None and code_file.filename:
-        artifacts.append(file_artifact(await code_file.read(), code_file.filename, "code"))
+        raw = await code_file.read()
+        if Path(code_file.filename).suffix.lower() == ".zip":
+            artifacts.extend(zip_artifacts(raw, code_file.filename))
+        else:
+            artifacts.append(file_artifact(raw, code_file.filename, "code"))
     if log_file is not None and log_file.filename:
         artifacts.append(file_artifact(await log_file.read(), log_file.filename, "log"))
     submission = build_submission(

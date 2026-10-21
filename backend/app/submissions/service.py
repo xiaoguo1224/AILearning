@@ -6,7 +6,9 @@ module is therefore about refusing the input that cannot be treated as plain tex
 """
 
 import hashlib
+import io
 import re
+import zipfile
 from pathlib import Path
 
 from sqlalchemy.orm import Session
@@ -23,6 +25,13 @@ MAX_FILENAME_CHARS = 120
 
 CODE_SUFFIXES = {".py", ".txt", ".md", ".json", ".yaml", ".yml"}
 LOG_SUFFIXES = {".log", ".txt", ".out", ".err", ".md"}
+ZIP_SUFFIXES = {".zip"}
+
+# A zip is a project, not a file: it may hold several modules, so the caps are
+# looser than a single pasted file but still bounded against zip bombs.
+MAX_ZIP_BYTES = 5 * 1024 * 1024
+MAX_ZIP_FILES = 50
+MAX_ZIP_TOTAL_BYTES = 2 * 1024 * 1024
 
 # Ordered patterns are matched against the decoded text, never against the raw bytes,
 # and the match is never echoed back: a warning that quotes the secret would leak it
@@ -245,3 +254,80 @@ def file_artifact(data: bytes, filename: str | None, kind: str) -> tuple[str, st
     limit = MAX_CODE_BYTES if kind == "code" else MAX_LOG_BYTES
     _check_suffix(name, allowed, kind)
     return (name, kind, _decode(data, name, limit, kind))
+
+
+def zip_artifacts(data: bytes, filename: str | None) -> list[tuple[str, str, str]]:
+    """Unpack an uploaded .zip into one code artifact per text file inside.
+
+    Multi-file projects cannot be pasted as one file, so the archive is expanded
+    server-side and each member is validated exactly like an uploaded code file.
+    Refused outright: non-zip bytes, encrypted members, absolute paths and
+    ".." traversal, members whose suffix is not an accepted code type, and
+    archives that exceed the file-count or total-size caps (zip-bomb guard).
+    Directories, __MACOSX noise and .DS_Store files are skipped silently.
+    """
+    name = _clean_filename(filename, "project.zip")
+    _check_suffix(name, ZIP_SUFFIXES, "code")
+    if not data:
+        raise project_error(422, "empty_file", f"{name} is empty.")
+    if len(data) > MAX_ZIP_BYTES:
+        raise project_error(
+            422,
+            "file_too_large",
+            f"{name} exceeds the {MAX_ZIP_BYTES // 1024 // 1024} MB limit for zip uploads.",
+        )
+    try:
+        archive = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile:
+        raise project_error(
+            422, "invalid_archive", f"{name} is not a readable zip archive."
+        ) from None
+
+    artifacts: list[tuple[str, str, str]] = []
+    seen: set[str] = set()
+    total = 0
+    for info in archive.infolist():
+        raw = info.filename
+        if info.is_dir() or raw.endswith("/"):
+            continue
+        base = Path(raw).name
+        if base in {"", ".DS_Store"} or raw.startswith("__MACOSX/"):
+            continue
+        if info.flag_bits & 0x1:
+            raise project_error(
+                422, "encrypted_archive", f"{name}: {base} is encrypted; upload an unencrypted zip."
+            )
+        # Zip Slip guard: reject anything that is not a plain relative path.
+        if raw.startswith("/") or "\\" in raw or ".." in Path(raw).parts:
+            raise project_error(
+                422, "invalid_archive", f"{name}: {raw} is not a safe path inside the zip."
+            )
+        _check_suffix(base, CODE_SUFFIXES, "code")
+        if len(artifacts) >= MAX_ZIP_FILES:
+            raise project_error(
+                422,
+                "archive_too_large",
+                f"{name} holds more than {MAX_ZIP_FILES} files.",
+            )
+        member = archive.read(info.filename)
+        total += len(member)
+        if total > MAX_ZIP_TOTAL_BYTES:
+            raise project_error(
+                422,
+                "archive_too_large",
+                f"{name} unpacks to more than {MAX_ZIP_TOTAL_BYTES // 1024} KB of text.",
+            )
+        clean = _clean_filename(base, "file.py")
+        stem, suffix = Path(clean).stem, Path(clean).suffix
+        deduped, n = clean, 2
+        while deduped in seen:
+            deduped = _clean_filename(f"{stem}_{n}{suffix}", "file.py")
+            n += 1
+        seen.add(deduped)
+        artifacts.append((deduped, "code", _decode(member, deduped, MAX_CODE_BYTES, "code")))
+    archive.close()
+    if not artifacts:
+        raise project_error(
+            422, "empty_archive", f"{name} contains no accepted code files."
+        )
+    return artifacts

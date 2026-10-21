@@ -344,3 +344,9 @@
   6. `git diff --cached --check` 通过；本机执行，无 Docker，无个人数据库写入、真实模型调用、上传代码执行或远程推送。
 - 多 Agent：只读审查复核项目归属、解法门槛、原文一致性、确认与事务保护，无新交付阻塞。未来若支持知识删除，须同步处理内容审核引用。
 - 剩余：P5-02 仍需对张量广播、矩阵乘法/列轴保留等核心公式与示例/参考解法作实际来源核对和验证，记录审核证据；不应将“有审核工作流”写成“全部内容已审核”。之后继续 P5-03/04 端到端与最终质量门禁、P5-05 使用运维文档、P5-06 异常态双语与旧时间驱动页面整合。
+
+### 2026-10-21 — 课后代码题支持 zip 压缩包上传
+- 用户明确多文件项目需求，补上此前缺失的 zip 上传。后端 `app/submissions/service.py` 新增 `zip_artifacts()`：上传的 .zip 在服务端展开为"每个成员一个 code artifact"，评审/变体/提示链路无需改动（已按多文件设计）。
+- 安全边界：zip 本体 ≤5 MB；成员 ≤50 个、解包后 ≤2 MB（防 zip bomb）；拒绝加密成员、绝对路径/`..` 穿越、`__MACOSX`/`.DS_Store` 跳过；成员后缀必须在 CODE_SUFFIXES 内；同名 basename 自动去重（`model.py` → `model_2.py`）；空包拒绝。
+- 前端 `SubmissionForm.tsx`：code file input 增加 `.zip`，提示文案更新；`zh-CN.json` 同步中文。
+- 验证：`pytest tests/test_submissions.py` **18 passed**（新增 3 个 zip 测试：正常展开/坏成员+穿越+炸弹+非zip+空包拒绝/同名去重）；前端 vitest **24 files / 178 passed**，tsc clean；后端全量 **1341 passed, 2 skipped**。真实模型端到端：上传含 model.py/train.py/README.md 的 zip + 报错日志，LLM 评审正确跨文件定位 `train.py` 中 `x * net.weight` 应为 `net(x)` 的 bug。

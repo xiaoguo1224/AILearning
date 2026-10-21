@@ -381,3 +381,81 @@ def test_variant_from_another_project_is_refused(client, review_provider):
     )
     assert response.status_code == 422
     assert response.json()["detail"]["error"] == "variant_not_found"
+
+
+def _zip_bytes(members: dict[str, bytes]) -> bytes:
+    import zipfile
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as archive:
+        for name, content in members.items():
+            archive.writestr(name, content)
+    return buf.getvalue()
+
+
+def _upload_zip(client, project_id, filename, payload, **data):
+    return client.post(
+        f"/api/projects/{project_id}/submissions/upload",
+        files={"code_file": (filename, io.BytesIO(payload), "application/zip")},
+        data=data,
+    )
+
+
+def test_upload_expands_zip_into_one_code_artifact_per_file(client):
+    project_id = _project(client)
+    payload = _zip_bytes(
+        {
+            "model.py": b"import torch\n",
+            "train.py": b"print('train')\n",
+            "notes.md": b"# notes\n",
+        }
+    )
+    response = _upload_zip(client, project_id, "project.zip", payload)
+    assert response.status_code == 201
+    artifacts = response.json()["artifacts"]
+    assert {a["kind"] for a in artifacts} == {"code"}
+    assert sorted(a["filename"] for a in artifacts) == ["model.py", "notes.md", "train.py"]
+
+
+def test_upload_rejects_zip_with_bad_member_type_traversal_or_bomb(client):
+    project_id = _project(client)
+
+    bad_member = _upload_zip(
+        client, project_id, "project.zip", _zip_bytes({"evil.exe": b"MZ"})
+    )
+    assert bad_member.status_code == 422
+    assert bad_member.json()["detail"]["error"] == "unsupported_file_type"
+
+    traversal = _upload_zip(
+        client, project_id, "project.zip", _zip_bytes({"../evil.py": b"x = 1\n"})
+    )
+    assert traversal.status_code == 422
+    assert traversal.json()["detail"]["error"] == "invalid_archive"
+
+    bomb = _upload_zip(
+        client,
+        project_id,
+        "project.zip",
+        _zip_bytes({f"f{i}.py": b"x = 1\n" for i in range(60)}),
+    )
+    assert bomb.status_code == 422
+    assert bomb.json()["detail"]["error"] == "archive_too_large"
+
+    not_a_zip = _upload_zip(client, project_id, "project.zip", b"definitely not a zip")
+    assert not_a_zip.status_code == 422
+    assert not_a_zip.json()["detail"]["error"] == "invalid_archive"
+
+    empty = _upload_zip(client, project_id, "project.zip", _zip_bytes({}))
+    assert empty.status_code == 422
+    assert empty.json()["detail"]["error"] == "empty_archive"
+
+
+def test_upload_dedupes_zip_members_with_same_basename(client):
+    project_id = _project(client)
+    payload = _zip_bytes(
+        {"pkg_a/model.py": b"a = 1\n", "pkg_b/model.py": b"b = 2\n"},
+    )
+    response = _upload_zip(client, project_id, "project.zip", payload)
+    assert response.status_code == 201
+    names = sorted(a["filename"] for a in response.json()["artifacts"])
+    assert names == ["model.py", "model_2.py"]
