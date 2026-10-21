@@ -308,6 +308,7 @@ class GenerateRequest(BaseModel):
     sources: list[SourceInput] | None = None
     text: str | None = None
     url: str | None = None
+    difficulty: int | None = None  # 0=低, 1=中, 2=高
 
     @model_validator(mode="after")
     def _normalize_aliases(self) -> "GenerateRequest":
@@ -788,6 +789,16 @@ def generate_job(body: GenerateRequest, session: Session = Depends(get_session))
         for index, source in enumerate(body.sources or [])
     ]
     chunks, owners = _ingest_or_refuse(specs, legacy=not body.used_canonical_field(), stage="url")
+
+    # Prepend difficulty guidance so the model calibrates depth and volume.
+    _difficulty = body.difficulty if body.difficulty in (0, 1, 2) else 1
+    _difficulty_desc = {
+        0: "课程难度：入门级。要求内容精简易懂，侧重基础概念，每个章节篇幅较短，避免过于深入的细节。",
+        1: "课程难度：中等。要求内容全面，难度适中，覆盖主要知识点。",
+        2: "课程难度：高级。要求内容丰富深入，包含更多细节、示例、边界情况和扩展讨论，每个章节篇幅充实。",
+    }[_difficulty]
+    chunks = [_difficulty_desc] + chunks
+    owners = ["difficulty"] + owners
 
     job = create_job(session, "course_generate")
 

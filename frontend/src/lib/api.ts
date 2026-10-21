@@ -762,8 +762,11 @@ export interface Job {
   updated_at: string;
 }
 
-export function startCourseGenerateJob(sources: unknown[]): Promise<{ job_id: string }> {
-  return postJson("/courses/generate/job", { sources });
+export function startCourseGenerateJob(
+  sources: unknown[],
+  difficulty?: number,
+): Promise<{ job_id: string }> {
+  return postJson("/courses/generate/job", { sources, difficulty });
 }
 
 export function startCourseRegenJob(
