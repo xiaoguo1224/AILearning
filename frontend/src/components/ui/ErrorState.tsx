@@ -15,7 +15,7 @@ export const ErrorState = forwardRef<HTMLDivElement, ErrorStateProps>(function E
 ) {
   return (
     <div ref={ref} {...props}>
-      <Alert type="error" message={message ?? children} action={action} showIcon />
+      <Alert type="error" title={message ?? children} action={action} showIcon />
     </div>
   );
 });

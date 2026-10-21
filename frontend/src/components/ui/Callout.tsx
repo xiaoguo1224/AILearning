@@ -16,7 +16,7 @@ export const Callout = forwardRef<HTMLDivElement, CalloutProps>(function Callout
 ) {
   return (
     <div ref={ref} className={className} style={style} role={role} {...props}>
-      <Alert type={tone === "danger" ? "error" : tone} message={title} description={children} showIcon />
+      <Alert type={tone === "danger" ? "error" : tone} title={title} description={children} showIcon />
     </div>
   );
 });
