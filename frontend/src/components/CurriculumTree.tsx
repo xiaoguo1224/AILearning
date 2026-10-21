@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/Badge";
 import { NewExploreSessionButton } from "@/components/NewExploreSessionButton";
+import { ContentReviewButton } from "@/components/ContentReviewButton";
 import type { Translator } from "@/lib/i18n";
 import type { CurriculumPoint, ProjectCurriculum } from "@/lib/types";
 
@@ -22,6 +23,7 @@ export function CurriculumTree({ data, archived, t }: { data: ProjectCurriculum;
         <h3 className="font-medium">{module.title}</h3>
         <ul className="space-y-3">{module.lessons.map(lesson => <li key={lesson.id}>
           <Link className="text-accent underline" href={`/courses/${course.id}/lessons/${lesson.id}`}>{lesson.title}</Link>{" "}<Badge>{t(lesson.completed ? "Completed" : "Not completed")}</Badge>
+          {!archived && <ContentReviewButton projectId={data.project_id} kind="lesson" sourceId={lesson.id} />}
           <ul className="flex flex-wrap gap-3 text-small">{lesson.concept_keys.map(key => <li key={key}><Link className="text-accent underline" href={`#point-${indexes.get(key)}`}>{data.points[indexes.get(key) ?? 0]?.label ?? key}</Link></li>)}</ul>
         </li>)}</ul>
       </div>)}

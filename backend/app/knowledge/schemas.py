@@ -23,6 +23,9 @@ class ProvenanceItem(BaseModel):
     locator: str | None = Field(default=None, max_length=120)
     session_id: int | None = None
     message_id: int | None = None
+    lesson_id: int | None = None
+    review_id: int | None = None
+    source_hash: str | None = Field(default=None, max_length=64)
     submission_id: int | None = None
     question: str | None = Field(default=None, max_length=2_000)
 

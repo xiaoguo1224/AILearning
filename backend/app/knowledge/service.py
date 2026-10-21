@@ -64,6 +64,9 @@ _PROVENANCE_KEYS = (
     "message_id",
     "submission_id",
     "question",
+    "lesson_id",
+    "review_id",
+    "source_hash",
 )
 
 
@@ -118,6 +121,7 @@ def create_entry(
     source_kind: str | None = None,
     provenance: list[dict] | None = None,
     link_project: bool = True,
+    commit: bool = True,
 ) -> KnowledgeEntry:
     """Create one entry, optionally owned by and linked to a project.
 
@@ -154,7 +158,10 @@ def create_entry(
     history.record(session, entry, reason=REASON_CREATED)
     if project_id is not None and link_project:
         session.add(ProjectKnowledge(project_id=project_id, knowledge_id=entry.id))
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     session.refresh(entry)
     return entry
 

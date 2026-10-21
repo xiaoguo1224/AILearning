@@ -43,6 +43,7 @@ from app.attempts import (
     iso_utc,
 )
 from app.concepts import normalize_concept
+from app.content_reviews.router import router as content_reviews_router
 from app.costs import is_priced
 from app.curriculum.router import router as curriculum_router
 from app.db import SessionLocal, get_session, init_db
@@ -71,6 +72,7 @@ app.include_router(knowledge_router)
 app.include_router(knowledge_errors_router)
 app.include_router(suggestions_router)
 app.include_router(curriculum_router)
+app.include_router(content_reviews_router)
 
 _cors_origins = os.environ.get("STUDYFORGE_CORS_ORIGINS", "http://localhost:3000")
 app.add_middleware(

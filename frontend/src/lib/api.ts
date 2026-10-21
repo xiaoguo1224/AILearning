@@ -54,6 +54,7 @@ import type {
   LearningSuggestion,
   SuggestionList,
   ProjectCurriculum,
+  ContentReview,
   ReviewRatingResult,
   ReviewToday,
   SourceFailure,
@@ -94,6 +95,13 @@ export function listSuggestions(projectId: number, offset = 0, locale?: Locale):
 
 export function getProjectCurriculum(projectId: number, locale?: Locale): Promise<ProjectCurriculum> {
   return get(`/api/projects/${projectId}/curriculum`, locale);
+}
+
+export function requestContentReview(projectId: number, kind: "lesson" | "solution", sourceId: number): Promise<ContentReview> {
+  return request(`/api/projects/${projectId}/content-reviews`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source_kind: kind, source_id: sourceId }) });
+}
+export function listContentReviews(projectId: number, offset = 0, locale?: Locale): Promise<{ items: ContentReview[]; total: number }> {
+  return get(`/api/projects/${projectId}/content-reviews?offset=${offset}`, locale);
 }
 export function createSuggestion(projectId: number, sourceErrorId: number, targetProjectId: number): Promise<LearningSuggestion> {
   return request(`/api/projects/${projectId}/suggestions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ source_error_id: sourceErrorId, target_project_id: targetProjectId }) });

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { DiagnosisForm } from "@/components/DiagnosisForm";
+import { ContentReviewButton } from "@/components/ContentReviewButton";
 import {
   revealReviewHint,
   revealReviewSolution,
@@ -230,6 +231,7 @@ export function SubmissionReviewPanel({
                 <pre className="overflow-x-auto rounded-control bg-surface-sunken p-3 text-small">
                   {solutions[review.id].reference_solution}
                 </pre>
+                {projectId && <ContentReviewButton projectId={projectId} kind="solution" sourceId={review.id} />}
               </div>
             ) : confirmSolution ? (
               <div className="space-y-2">

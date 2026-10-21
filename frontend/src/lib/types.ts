@@ -707,6 +707,12 @@ export interface ProjectCurriculum {
   pathway: { id: string; title: string; prerequisites: string[]; reading: CurriculumReading | null }[];
 }
 
+export interface ContentReview {
+  id: number; project_id: number; source_kind: "lesson" | "solution"; source_id: number;
+  source_hash: string; knowledge_id: number; knowledge_status: KnowledgeStatus;
+  source_unchanged: boolean; matches_source: boolean; approved: boolean;
+}
+
 export interface ReviewAnswerResult {
   correct: boolean;
   /** The reference answer, shown beside the learner's own for them to judge. */
@@ -1279,6 +1285,9 @@ export type KnowledgeSourceKind = "manual" | "exploration" | "resource" | "submi
  * therefore reads the fields that are present and never assumes the rest.
  */
 export interface KnowledgeProvenanceItem {
+  lesson_id?: number;
+  review_id?: number;
+  source_hash?: string;
   kind?: string;
   resource_id?: number;
   chunk_id?: number;

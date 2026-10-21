@@ -135,6 +135,7 @@ export default async function LessonPage(
       )}
 
       <div className="mt-8">
+        <p className="mb-4 rounded-surface border border-line p-4 text-small text-ink-muted">{t("AI-generated explanations, formulas and examples require review before being treated as authoritative. Textbook extensions are not verified course facts.")}</p>
         <LessonMarkdown content={lesson.content} title={lesson.title} />
       </div>
 

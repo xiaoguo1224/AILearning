@@ -83,6 +83,8 @@ export function knowledgeRevisionReasonLabel(reason: string, t: Translator): str
  * and "somewhere in this project" is still more useful than `{"kind":"resource"}`.
  */
 export function knowledgeProvenanceLine(item: KnowledgeProvenanceItem, t: Translator): string {
+  if (item.lesson_id !== undefined) return t("Lesson {0} · source version {1}", item.lesson_id, item.source_hash?.slice(0, 12) ?? "?");
+  if (item.review_id !== undefined) return t("Reference review {0} · source version {1}", item.review_id, item.source_hash?.slice(0, 12) ?? "?");
   if (item.filename) {
     return item.locator ? `${item.filename} · ${item.locator}` : item.filename;
   }
