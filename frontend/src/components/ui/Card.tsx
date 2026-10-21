@@ -14,17 +14,16 @@ const PADDING_CLASSES: Record<CardPadding, string> = {
 };
 
 /**
- * The app's one card shape: a border on a flat surface, never a lighter fill. There
- * is no elevated variant that swaps in a shadow, because --shadow-raise resolves to
- * `none` in dark mode; a caller that wants elevation adds `shadow-raise` itself and
- * gets nothing extra in dark mode, which is the point.
+ * The app's one card shape: a warm paper surface, a 1px border, and a whisper
+ * of shadow. --shadow-raise resolves to `none` in dark mode, where depth is
+ * expressed with borders instead.
  */
 export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
   { padding = 5, className, ...props },
   ref,
 ) {
   const classes = [
-    "rounded-surface border border-line bg-surface",
+    "rounded-surface border border-line bg-surface shadow-raise",
     PADDING_CLASSES[padding],
     className,
   ]

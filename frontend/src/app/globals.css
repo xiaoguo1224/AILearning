@@ -30,10 +30,12 @@
    * only have handed downstream authors two undocumented synonyms.
    */
 
-  /* Surfaces. Cards are border-defined, not fill-defined: there is no separate
-     "raised" surface, only a sunken one for recessed strips and panels. */
-  --sf-surface: #ffffff;
-  --sf-surface-sunken: oklch(98.5% 0 none); /* zinc-50 */
+  /* Surfaces. Warm paper, not stark white: the app is a reading and writing
+     tool, and a faint warmth reads as designed rather than default. Cards are
+     border-defined with a whisper of shadow; there is a sunken tone for
+     recessed strips, panels, and the sidebar. */
+  --sf-surface: #fbfaf7;
+  --sf-surface-sunken: #f4f1ea;
 
   /* Borders ("line", not "border": see the note above on Tailwind's own
      `border-*` utility prefix, which "border-line" reads better against than
@@ -155,6 +157,9 @@
   --shadow-overlay: var(--sf-shadow-overlay);
 
   --font-sans: var(--font-geist-sans), var(--font-noto-sans-sc), system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  /* Editorial serif for page titles and display headings. CJK falls through to
+     Noto Serif SC, then Songti; Latin falls back to Geist serif-less stack. */
+  --font-display: var(--font-noto-serif-sc), "Songti SC", "STSong", Georgia, serif;
   --font-mono: var(--font-geist-mono);
 }
 
@@ -272,8 +277,8 @@
     --concept-surface: #101011;
     --concept-scroll-edge: rgba(255, 255, 255, 0.16);
 
-    --sf-surface: #0a0a0a;
-    --sf-surface-sunken: oklch(21% 0.006 285.885); /* zinc-900 */
+    --sf-surface: #100f0d;
+    --sf-surface-sunken: #1c1a16;
 
     --sf-line: oklch(27.4% 0.006 286.033); /* zinc-800 */
     --sf-line-strong: oklch(37% 0.013 285.805); /* zinc-700 */
