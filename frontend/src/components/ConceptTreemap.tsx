@@ -1,3 +1,5 @@
+"use client";
+
 import ReactECharts from "echarts-for-react";
 
 import type { ConceptLesson, ConceptNode } from "@/lib/types";
