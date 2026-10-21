@@ -101,9 +101,15 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
       const cid = `course-${course.id}`;
       nodeIds.add(cid);
       const cpos = positions[cid];
-      // Fallback: courses spread horizontally across the top.
-      const fx = hasPositions || !cpos ? undefined : 150 + (courseIdx * 900) / Math.max(1, courseCount - 1 || 1);
-      const fy = hasPositions || !cpos ? undefined : 120;
+      // Fallback layout when AI positions are unavailable: courses spread
+      // horizontally, each course's lessons in a grid below it.
+      let cx: number | undefined, cy: number | undefined;
+      if (cpos) {
+        cx = cpos.x; cy = cpos.y;
+      } else if (!hasPositions) {
+        cx = 150 + (courseCount > 1 ? (courseIdx * 900) / (courseCount - 1) : 450);
+        cy = 120;
+      }
       nodes.push({
         id: cid,
         name: course.title,
@@ -111,7 +117,7 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
         category: courseIdx,
         symbolSize: 56,
         itemStyle: { color: "#1fae54" },
-        ...(cpos ? { x: cpos.x, y: cpos.y } : fx !== undefined ? { x: fx, y: fy } : {}),
+        ...(cx !== undefined ? { x: cx, y: cy } : {}),
       });
       let lessonIdx = 0;
       for (const m of course.modules) {
@@ -119,16 +125,20 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
           const lid = `lesson-${l.id}`;
           nodeIds.add(lid);
           const lpos = positions[lid];
-          // Fallback: lessons in a grid below their course.
-          const lx = hasPositions || !lpos ? undefined : fx !== undefined ? fx - 120 + (lessonIdx % 4) * 80 : undefined;
-          const ly = hasPositions || !lpos ? undefined : 220 + Math.floor(lessonIdx / 4) * 70;
+          let lx: number | undefined, ly: number | undefined;
+          if (lpos) {
+            lx = lpos.x; ly = lpos.y;
+          } else if (!hasPositions && cx !== undefined) {
+            lx = cx - 120 + (lessonIdx % 4) * 80;
+            ly = 220 + Math.floor(lessonIdx / 4) * 70;
+          }
           nodes.push({
             id: lid,
             name: l.title,
             value: l.id,
             category: courseIdx,
             symbolSize: 28,
-            ...(lpos ? { x: lpos.x, y: lpos.y } : lx !== undefined ? { x: lx, y: ly } : {}),
+            ...(lx !== undefined ? { x: lx, y: ly } : {}),
           });
           lessonIdx++;
         }
