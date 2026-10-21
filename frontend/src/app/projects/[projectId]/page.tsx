@@ -26,11 +26,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     try { courses = await listCourses(t.locale); }
     catch { coursesError = t("Could not load course choices. Please retry."); }
   }
-  return <div className="max-w-5xl space-y-10">
+  return <div className="max-w-5xl">
     {error ? <ErrorState message={error} /> : project && <ProjectWorkspace key={project.id} project={project} courses={courses} coursesError={coursesError} />}
-    {project && <section className="space-y-4">
-      <h2 className="text-title">{t("Materials")}</h2>
-      <ProjectResourcesManager projectId={project.id} isArchived={project.status === 'archived'} />
+    {project && <section className="border-t border-line py-10">
+      <h2 className="text-lg font-medium tracking-tight">{t("Materials")}</h2>
+      <div className="mt-6">
+        <ProjectResourcesManager projectId={project.id} isArchived={project.status === 'archived'} />
+      </div>
     </section>}
   </div>;
 }
