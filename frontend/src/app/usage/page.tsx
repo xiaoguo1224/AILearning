@@ -158,11 +158,6 @@ export default async function UsagePage() {
             perCourse={usage.per_course}
             recentCalls={usage.recent_calls}
             locale={t.locale}
-            formatCount={formatCount}
-            formatUsd={formatUsd}
-            formatTimestamp={formatTimestamp}
-            rowKey={rowKey}
-            AttributedTo={AttributedTo}
           />
         </>
       )}
