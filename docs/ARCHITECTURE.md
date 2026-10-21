@@ -68,7 +68,9 @@ flowchart TD
 | CodeReview | id, submission_id, summary, evidence, model, created_at | 静态分析结果及证据等级 |
 | AgentSession | id, project_id, mode, title, updated_at | 项目级自由对话；会话不跨项目 |
 | AgentMessage | session_id, role, body, beyond, check_question, source_refs, grounded, model, run_id | 消息与出处快照（非外键，资料删除后仍可追溯） |
-| KnowledgeEntry | id, title, markdown_path, status, provenance | 草稿/待审/确认知识 |
+| KnowledgeEntry | id, project_id?, title, body, kind, concept_key, status, provenance, updated_at | 草稿/待审/确认知识，正文存 SQLite |
+| KnowledgeRevision | knowledge_id, version, title, body, kind, concept_key, status, reason | 创建、编辑和确认的不可变快照 |
+| ErrorCause | project_id, knowledge_id?, concept_key, cause, source_kind, source_id?, detail, dismissed_at | 错因证据与主动复习队列的来源，后端已实现，界面待集成 |
 | ProjectKnowledge | project_id, knowledge_id, relation | 知识与项目关联 |
 | KnowledgeRelation | from_id, to_id, kind | 前置依赖、相关、扩展 |
 | LearningSuggestion | id, from_project_id, to_project_id, action, state | 跨项目修改需确认 |
@@ -139,7 +141,13 @@ P1-01 已交付 Project 子集：GET/POST `/api/projects`、GET/PATCH `/api/proj
 
 ## 8. 资料与知识处理
 
-来源文件 → 文件类型/大小检查 → 安全解析 → 可定位 Chunk → AI 生成知识草稿 → 去重/关联建议 → 审核状态。最初使用 SQLite FTS5；向量检索、图数据库不是 MVP 依赖。Markdown 为知识正文的可读导出格式，SQLite 为索引、状态和关联的权威记录；两者修改需要保持一致。
+来源文件 → 文件类型/大小检查 → 安全解析 → 可定位 Chunk → AI 生成知识草稿 → 去重/关联建议 → 审核状态。使用 SQLite FTS5；向量检索、图数据库不是 MVP 依赖。当前知识正文、版本、状态、关联统一由 SQLite 保存，未实现独立 Markdown 文件导出，避免双写不一致。
+
+P4 已实现：项目自由问答和临时讲解在回答引用本项目资料时，以同一数据库事务自动保存 note/draft；只复制有来源正文和出处，不复制 beyond 扩展，不增加模型调用。同标题返回已有条目，相近标题只生成候选，不合并或覆盖。核心定义/标准答案初始待审核，修改确认稿退回待审核。
+
+浏览器编辑与确认携带 `expected_updated_at`；服务端在项目写锁后刷新条目并比较时间点，不匹配返回 409，前端保留未保存文字，需明确操作才载入保存内容。旧 API 调用方不传令牌时保留原有语义。版本差异有长度上限，界面明确提示省略和截断。知识确认状态与学习掌握状态独立。
+
+错因服务只写 `error_causes`，不写 ReviewCard/ReviewLog。手工诊断不能伪造 Attempt/Submission 证据；错题端点检查所属项目课程、答题是否错误并快照证据。复习任务按未解决错因聚合，用户忽略会保留记录；同概念后续有效自评（rating >= 2）关闭此前错因，Again 保持任务。前端入口和提交评审证据关联仍属于 P4-04 待办，不按到期日安排学习。
 
 来源清楚标记为「原文事实」「AI 整理」「AI 扩展」。网页不能默认全文重新分发；注意版权和抓取许可。外部资料中的命令和提示不得提升为系统权限。
 

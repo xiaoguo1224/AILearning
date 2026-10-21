@@ -4,13 +4,13 @@
 
 ## 当前状态
 
-- 当前里程碑：**P0/P1/P2/P3 已验收，下一步 P4 知识沉淀与跨项目建议**。
+- 当前里程碑：**P0/P1/P2/P3 及 P4-01/02/03 已验收；P4-04 后端已实现，下一步补齐错因/复习任务前端与提交证据关联**。本节与最新追加记录优先于下方历史状态。
 - 已确定：产品需求、单人本地运行边界、项目化、课程/自由学习、自动知识草稿与核心审核、跨项目确认。
 - 已准备：AGENTS、PRD、ARCHITECTURE、TASKS、DECISIONS、README 的目标文档草案。
 - 已有源码审查：通过 GitHub 阅读 StudyForge 目录、models、ingest、generation、tutor、remediation、db、部分 API 及依赖文件。
-- 当前运行：本机 FastAPI `http://localhost:8000`、Next.js `http://localhost:3000`；Docker 两服务已停止、卷保留。Fake QA 后端已停止并以根 `.env` 默认配置重新启动，正式教学使用 Gemini；自动测试仍使用独立临时库及确定性 provider。
+- 运行约定：本机 FastAPI `http://localhost:8000`、Next.js `http://localhost:3000`；日常开发不使用 Docker。上轮服务状态不代表本轮仍在线，本轮未重新核实常驻进程；自动测试使用独立临时库及确定性 provider。
 - 已完成：基线文档合并、容器/本机测试、浏览器课程/Quiz/Review/Tutor、SQLite 快照/恢复、Gemini adapter 和一次真实 Shape 教学。功能提交截至 `12419d0`（P3 收尾），本段之后为文档批次。
-- 已完成：P3 全部任务（项目级自由学习：会话、项目内检索、引文快照、教学策略单一所有者、临时讲解与练习草稿）；下一步 P4-01 KnowledgeEntry 等知识沉淀模型。旧初始化“未运行”表仅是历史记录。
+- 已完成：P3 全部任务与 P4 知识模型、自动草稿、核心审核及版本对照。最新功能提交 `25e5a06`、`f9916cc`；既有 P4 模型/版本提交见最新记录。旧初始化“未运行”表仅是历史记录。
 
 ## 上游静态审查主要观察
 
@@ -34,8 +34,8 @@
 ## 下次工作入口
 
 1. 核对当前状态和最新追加记录，保留用户既有文档删除；不要重新执行已通过的 P0 基线。
-2. 接续最靠前的 P1 未完成任务，先确认已有提交和工作区。
-3. 完成 Project 模型/API、项目页面，再实现 Resource 持久化；每项按改动范围验收。
+2. 从 P4-04 继续：复用 `knowledge/errors.py`、`errors_router.py`，补齐前端错因/主动复习入口与提交评审证据关联，不重复 P0~P3 基线。
+3. P4-04 验收后推进 P4-05/06 跨项目建议确认、拒绝不改变目标项目的回归，再进入 P5 知识驱动整合。
 
 
 ### 2026-10-20 — P1 完整验收与学习机制调整（取消时间驱动，转为知识掌握驱动）
@@ -194,3 +194,21 @@
 - 风险与阻塞：
 - 下一步：
 ```
+
+### 2026-10-21 — P4-01/02/03 验收与 P4-04 后端
+- 提交：既有 `644147b`/`223c265`（知识模型与测试）、`18ab791`/`d52070f`（草稿与边界）、`a17903b`/`0c921d3`（审核版本）；本轮 `25e5a06`（自动草稿事务、并发审核与错因后端）、`f9916cc`（知识审核工作台）。保留工作区原有 `.claude/agents/*`、CLAUDE.md、CONTRIBUTING.md 删除，不纳入功能提交。
+- 完成 P4-01：KnowledgeEntry / ProjectKnowledge / KnowledgeRelation，草稿、待审核、确认状态，来源快照，前置依赖防环及归档保护。
+- 完成 P4-02：有来源的自由回答与临时讲解和普通笔记在同一事务内保存；无引用不自动保存，beyond 不进入有来源正文，不增加模型调用。完全同标题复用，相近标题返回去重候选，不覆盖确认稿。
+- 完成 P4-03：项目知识入口、状态/核心类型筛选、列表分页、来源与关联、正文编辑、独立确认、不可变历史与版本差异，中英双语。差异省略/截断显式提示。浏览器发送 expected_updated_at；旧页面编辑/确认返回 409，本地文字保留，丢弃前有明确操作；等价时区时间戳不误报冲突。未关联当前项目的条目不展示正文/编辑器。
+- P4-04 进行中：新增 ErrorCause、手工诊断、项目内错题证据快照、知识映射与按概念聚合的主动复习任务 API。诊断、读取和忽略均不修改 FSRS。Again 不能关闭任务；后续 rating >= 2 的复习关闭此前错因，或用户主动忽略，记录保留。拒绝伪造 attempt/submission 来源及知识概念不一致。
+- 多 Agent：只读审查代理复核自动草稿事务和审核保护，隔离库发现同一时间的 +08:00 令牌误判，已修复并纳入回归。主 Agent 统一修改源码。
+- 实际执行（全部本机，无 Docker）：
+  1. 改动前相关基线：`uv run pytest tests/test_knowledge.py -q` 31 passed；`uv run pytest tests/test_errors.py -q` 16 passed；`npm test -- tests/knowledge-review.test.tsx` 6 passed。
+  2. 最终定向后端：`uv run pytest tests/test_knowledge.py tests/test_errors.py tests/test_agent.py -q` **74 passed**；2 条既有 FastAPI on_event 弃用警告。
+  3. 迁移：`uv run pytest tests/test_tutor_migration.py -q` **24 passed, 2 skipped**；两项既有有意跳过，未新增跳过。
+  4. `uv run ruff check app tests` 通过；此前定向 ruff --fix 仅整理导入。
+  5. `npm test -- tests/knowledge-review.test.tsx` **10 passed**；`node node_modules/typescript/bin/tsc --noEmit`、`npm run lint` 通过；`NODE_OPTIONS='' npm run build` 成功，路由清单含 `/projects/[projectId]/knowledge`（PowerShell 使用 `$env:NODE_OPTIONS=''`）。
+  6. 一次定位命令误写不存在的 `tests/test_knowledge_draft.py`，pytest 未收集任何测试；确认草稿测试实际在 test_knowledge.py，已由第 2 项全部执行通过。没有通过跳过失败用例推进。
+- 剩余问题与界限：P4-04 尚缺前端操作入口、代码评审证据专用关联与闭环验收，故不标完成。共享知识的所有者归档时后端拒绝写入，引用项目活跃时界面仍会展示按钮并收到 409；可补前端只读提示。旧 API 不传并发令牌保留兼容语义。Markdown 导出尚未实现，知识正文/版本由 SQLite 统一保存。
+- 未做：全量 pytest/Vitest、浏览器端到端或真实模型调用；本轮不改变模型推理路径且定向契约覆盖改动，按用户要求减少重复大测试。未操作个人学习库、删除历史、执行上传程序或推送远程。
+- 下一步：先完成 P4-04 用户界面和有效提交证据关联，验证用户主动复习闭环；再实现 P4-05/06 跨项目建议的确认、拒绝和变更留痕。P5 再集中核查旧 review/today 页面是否仍依赖到期日期筛选，并完成结构化课程知识驱动整合。
