@@ -13,7 +13,7 @@ import logging
 import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
+from copy import deepcopy
 
 from sqlalchemy.orm import Session
 
@@ -46,16 +46,19 @@ def create_job(
     return job
 
 
-def _set_status(job_id: str, status: str, **fields) -> None:
+def _set_status(job_id: str, status: str, **fields) -> bool:
     with SessionLocal() as session:
+        # Serialize with cancellation and review decisions before reading state.
+        session.query(Job).filter_by(id=job_id).update({Job.id: Job.id})
         job = session.get(Job, job_id)
-        if not job:
-            return
+        if not job or job.status in ("completed", "failed", "cancelled"):
+            return False
         job.status = status
         for key, value in fields.items():
             setattr(job, key, value)
         job.updated_at = utcnow()
         session.commit()
+        return True
 
 
 def update_progress(job_id: str, progress: dict) -> None:
@@ -65,11 +68,13 @@ def update_progress(job_id: str, progress: dict) -> None:
 def append_trace(job_id: str, entry: dict) -> None:
     """Append a trace entry (thinking step or tool call) to the job's trace log."""
     from app.db import SessionLocal as _SessionLocal
+
     with _SessionLocal() as session:
+        session.query(Job).filter_by(id=job_id).update({Job.id: Job.id})
         job = session.get(Job, job_id)
         if not job:
             return
-        trace = job.trace or {"entries": []}
+        trace = deepcopy(job.trace) if job.trace else {"entries": []}
         if "entries" not in trace:
             trace = {"entries": []}
         entry = dict(entry)
@@ -94,7 +99,8 @@ def run_in_background(job_id: str, fn) -> None:
     """Run `fn(job_id)` in the pool. `fn` must use its own DB sessions."""
 
     def _wrapper():
-        _set_status(job_id, "running")
+        if not _set_status(job_id, "running"):
+            return
         try:
             fn(job_id)
         except Exception as exc:  # noqa: BLE001 — a job must never kill the pool
@@ -114,11 +120,7 @@ def mark_interrupted_jobs() -> int:
 
     try:
         with SessionLocal() as session:
-            jobs = (
-                session.query(Job)
-                .filter(Job.status.in_(["pending", "running"]))
-                .all()
-            )
+            jobs = session.query(Job).filter(Job.status.in_(["pending", "running"])).all()
             for job in jobs:
                 job.status = "failed"
                 job.error = "Server restarted while this job was running. Please retry."

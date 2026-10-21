@@ -540,6 +540,8 @@ def test_upgrade_adds_the_tutor_and_explicit_project_tables(databases):
         "learning_suggestions",
         "content_reviews",
         "jobs",
+        "project_graph_edges",
+        "project_graph_layout",
     }
     assert not set(databases.base) - set(databases.upgraded), "create_all cannot drop a table"
 

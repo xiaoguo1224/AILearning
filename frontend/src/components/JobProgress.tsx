@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { useI18n } from "@/components/LocaleProvider";
-import { Button } from "@/components/ui/Button";
+import { Button, NoticeBar, Progress, Space, Typography } from "react-vant";
 import { cancelJob, getJob, type Job } from "@/lib/api";
 
 /**
@@ -14,16 +14,17 @@ import { cancelJob, getJob, type Job } from "@/lib/api";
 export function useJob(jobId: string | null) {
   const [job, setJob] = useState<Job | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    if (!jobId) {
-      setJob(null);
-      return;
-    }
+    if (!jobId) return;
     let cancelled = false;
+    let polling = false;
     let timer: ReturnType<typeof setInterval> | null = null;
 
     async function poll() {
+      if (polling) return;
+      polling = true;
       try {
         const next = await getJob(jobId as string);
         if (cancelled) return;
@@ -35,6 +36,8 @@ export function useJob(jobId: string | null) {
         }
       } catch {
         if (!cancelled) setError("Could not reach the server.");
+      } finally {
+        polling = false;
       }
     }
 
@@ -44,9 +47,9 @@ export function useJob(jobId: string | null) {
       cancelled = true;
       if (timer) clearInterval(timer);
     };
-  }, [jobId]);
+  }, [jobId, refreshKey]);
 
-  return { job, error };
+  return { job: job?.id === jobId ? job : null, error, refresh: () => setRefreshKey(key => key + 1) };
 }
 
 export function JobProgressBar({ job }: { job: Job }) {
@@ -55,56 +58,31 @@ export function JobProgressBar({ job }: { job: Job }) {
   const total = job.progress?.total ?? 0;
   const pct = total > 0 ? Math.round((done / total) * 100) : job.status === "completed" ? 100 : 0;
 
-  return (
-    <div className="space-y-2">
-      <div
-        role="progressbar"
-        aria-valuenow={pct}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-label={t("Progress")}
-        className="h-2 w-full overflow-hidden rounded-full bg-surface-sunken"
-      >
-        <div
-          className="h-full rounded-full bg-accent transition-all duration-500"
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-      <p className="text-small text-ink-muted">
-        {job.progress?.stage === "outline" && t("Planning the course outline…")}
-        {job.progress?.stage === "lessons" &&
-          total > 0 &&
-          t("{0} of {1} lessons", done, total)}
-        {job.progress?.stage === "generating" && t("Generating…")}
-        {job.status === "completed" && t("Done")}
-        {job.status === "failed" && (
-          <span className="text-danger">{job.error || t("Failed")}</span>
-        )}
-        {job.status === "cancelled" && t("Cancelled")}
-      </p>
-    </div>
-  );
+  return <Space direction="vertical" block>
+    <Progress percentage={pct} showPivot={false} />
+    <Typography.Text type="secondary">
+      {job.progress?.stage === "outline" && t("Planning the course outline…")}
+      {job.progress?.stage === "lessons" && total > 0 && t("{0} of {1} lessons", done, total)}
+      {job.progress?.stage === "generating" && t("Generating…")}
+      {job.status === "awaiting_review" && "等待用户审阅确认"}
+      {job.status === "completed" && t("Done")}
+      {job.status === "cancelled" && t("Cancelled")}
+    </Typography.Text>
+    {job.status === "failed" && <NoticeBar color="var(--danger)" text={job.error || t("Failed")} scrollable={false} wrapable />}
+  </Space>;
 }
 
 export function JobCancelButton({ jobId, onCancelled }: { jobId: string; onCancelled?: () => void }) {
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
-  return (
-    <Button
-      variant="secondary"
-      size="sm"
-      disabled={busy}
-      onClick={async () => {
-        setBusy(true);
-        try {
-          await cancelJob(jobId);
-          onCancelled?.();
-        } finally {
-          setBusy(false);
-        }
-      }}
-    >
-      {t("Cancel")}
-    </Button>
-  );
+  const [error, setError] = useState<string | null>(null);
+  return <Space direction="vertical">
+    <Button size="small" loading={busy} disabled={busy} onClick={async () => {
+      setBusy(true); setError(null);
+      try { await cancelJob(jobId); onCancelled?.(); }
+      catch (err) { setError(err instanceof Error ? err.message : t("Could not reach the server.")); }
+      finally { setBusy(false); }
+    }}>{t("Cancel")}</Button>
+    {error && <NoticeBar text={error} scrollable={false} wrapable />}
+  </Space>;
 }

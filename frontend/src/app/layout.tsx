@@ -4,9 +4,11 @@ import { Geist, Geist_Mono, Noto_Sans_SC } from "next/font/google";
 import { CostBanner } from "@/components/CostBanner";
 import { AppSidebar, MobileTopBar } from "@/components/AppSidebar";
 import { LocaleProvider } from "@/components/LocaleProvider";
+import { VantThemeProvider } from "@/components/VantThemeProvider";
 import { getTranslator } from "@/lib/locale-server";
 import "./globals.css";
 import "katex/dist/katex.min.css";
+import "react-vant/bundle/index.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -40,6 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     >
       <body className="min-h-full">
         <LocaleProvider locale={t.locale}>
+          <VantThemeProvider>
           <CostBanner />
           <div className="flex min-h-screen items-stretch">
             <AppSidebar />
@@ -48,6 +51,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               {children}
             </div>
           </div>
+          </VantThemeProvider>
         </LocaleProvider>
       </body>
     </html>

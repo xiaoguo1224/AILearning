@@ -208,7 +208,7 @@ def _balanced_objects(text: str) -> list[str]:
         elif char == "}" and depth > 0:
             depth -= 1
             if depth == 0 and start >= 0:
-                    spans.append(text[start : i + 1])
+                spans.append(text[start : i + 1])
     return sorted(spans, key=len, reverse=True)
 
 
@@ -378,9 +378,7 @@ def defuse_segment_labels(text: str) -> str:
     See the note on _SEGMENT_LABEL_FORGERY above for the full boundary, and why closing it
     means lifting tutor.py's prefix table into untrusted.py rather than copying it.
     """
-    return _SEGMENT_LABEL_FORGERY.sub(
-        lambda m: m.group("prefix") + NEUTRALIZED_LABEL, text or ""
-    )
+    return _SEGMENT_LABEL_FORGERY.sub(lambda m: m.group("prefix") + NEUTRALIZED_LABEL, text or "")
 
 
 def label_segments(
@@ -415,11 +413,22 @@ def label_segments(
     return "\n\n".join(parts)
 
 
+DIFFICULTY_GUIDANCE = {
+    0: "Target difficulty LOW: 2-4 focused introductory lessons, 600-1000 Chinese characters "
+    "per lesson. Use concrete basics and simple examples, no advanced prerequisites.",
+    1: "Target difficulty MEDIUM: 5-8 lessons, 1500-2500 Chinese characters per lesson. "
+    "Cover core principles, worked examples and practical exercises.",
+    2: "Target difficulty HIGH: 9-14 detailed lessons, 2500-4000 Chinese characters per lesson. "
+    "Include derivations, advanced examples, edge cases and integration exercises.",
+}
+
+
 def generate_outline(
     meter: Meter,
     chunks: list[str],
     owners: list[str] | None = None,
     feedback: str | None = None,
+    difficulty: int | None = None,
 ) -> dict:
     """The outline call. `owners` names the document each chunk came from, if several.
 
@@ -453,9 +462,13 @@ def generate_outline(
             f"and asks for these changes. Apply them to the outline and carry them "
             f"through the lessons:\n{feedback.strip()}"
         )
-    outline = generate_json(
-        meter, OUTLINE_STAGE, outline_system(len(chunks), source_count), prompt
-    )
+    system = outline_system(len(chunks), source_count)
+    if difficulty is not None:
+        system += (
+            "\nThe following overrides any earlier depth/length guidance:\n"
+            + DIFFICULTY_GUIDANCE[difficulty]
+        )
+    outline = generate_json(meter, OUTLINE_STAGE, system, prompt)
     if not outline.get("modules"):
         raise ValueError("Outline has no modules")
     return outline
@@ -569,6 +582,7 @@ def generate_lesson(
     chunks: list[str],
     segments: list[int] | None = None,
     owners: list[str] | None = None,
+    difficulty: int | None = None,
 ) -> dict:
     indexes = list(range(len(chunks))) if segments is None else segments
     prompt = (
@@ -576,7 +590,13 @@ def generate_lesson(
         f"Lesson summary: {lesson_summary}\n\n"
         f"Source material:\n\n{label_segments(chunks, indexes, owners)}"
     )
-    lesson = generate_json(meter, LESSON_STAGE, LESSON_SYSTEM, prompt)
+    system = LESSON_SYSTEM
+    if difficulty is not None:
+        system += (
+            "\nThe following overrides any earlier depth/length guidance:\n"
+            + DIFFICULTY_GUIDANCE[difficulty]
+        )
+    lesson = generate_json(meter, LESSON_STAGE, system, prompt)
     lesson["content"] = lesson.get("content") or ""
     lesson["concepts"] = _clean_concepts(lesson.get("concepts"))
     lesson["quiz"] = _clean_quiz(lesson.get("quiz"))
@@ -599,6 +619,7 @@ def generate_lesson_with_retry(
     segments: list[int] | None = None,
     owners: list[str] | None = None,
     attempts: int = LESSON_MAX_ATTEMPTS,
+    difficulty: int | None = None,
 ) -> tuple[dict, int]:
     """generate_lesson, retried up to `attempts` times. Returns (lesson, attempts_used).
 
@@ -610,12 +631,18 @@ def generate_lesson_with_retry(
     for _ in range(max(1, attempts)):
         used += 1
         try:
-            return generate_lesson(meter, lesson_title, lesson_summary, chunks, segments, owners), used
+            kwargs = {} if difficulty is None else {"difficulty": difficulty}
+            return generate_lesson(
+                meter, lesson_title, lesson_summary, chunks, segments, owners, **kwargs
+            ), used
         except ValueError as exc:
             last_error = exc
             logger.warning(
                 "lesson=%r: attempt %d/%d failed (%s)",
-                lesson_title, used, attempts, exc,
+                lesson_title,
+                used,
+                attempts,
+                exc,
             )
     assert last_error is not None
     raise last_error
@@ -667,8 +694,12 @@ def generate_course(meter: Meter, chunks: list[str], owners: list[str] | None = 
                     meter, title, lesson_stub.get("summary", ""), chunks, segments, owners
                 )
             except ValueError as exc:
-                logger.error("dropping lesson %r after %d attempts: %s", title, LESSON_MAX_ATTEMPTS, exc)
-                failures.append({"lesson": title, "error": str(exc), "attempts": LESSON_MAX_ATTEMPTS})
+                logger.error(
+                    "dropping lesson %r after %d attempts: %s", title, LESSON_MAX_ATTEMPTS, exc
+                )
+                failures.append(
+                    {"lesson": title, "error": str(exc), "attempts": LESSON_MAX_ATTEMPTS}
+                )
                 continue
             built["lessons"].append({"title": title, "segments": segments, **authored})
         # An empty module would render as a heading with nothing under it.

@@ -33,7 +33,7 @@ import { render } from "./render";
 import { describe, expect, test, vi, beforeEach } from "vitest";
 
 import CoursesPage from "@/app/courses/page";
-import { Button } from "@/components/ui/Button";
+import { Button } from "react-vant";
 import { listCourses } from "@/lib/api";
 import type { CourseSummary } from "@/lib/types";
 
@@ -119,13 +119,13 @@ describe("courses page primary link styling stays level with Button", () => {
 
     // Its own container: the rendered page already has a Delete button per row,
     // so a document-wide role query here would be ambiguous.
-    const { container } = render(<Button variant="primary" size="md" />);
+    const { container } = render(<Button type="primary" />);
     const button = container.querySelector("button") as HTMLButtonElement;
 
     const expected = new Set([...classSet(button)].filter((c) => !isButtonOnly(c)));
     expect(
       classSet(link as Element),
-      "PRIMARY_LINK_CLASSES is a hand-copy of Button's primary/md classes; when Button moves, this is what goes stale",
+      "The create-course anchor must use the same Vant component styling as its button",
     ).toEqual(expected);
   });
 });
