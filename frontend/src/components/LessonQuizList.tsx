@@ -108,6 +108,27 @@ export function LessonQuizList({
     };
   }, [courseId, lessonId, initialQuiz.length]);
 
+  async function manualGenerate() {
+    setGenerating(true);
+    try {
+      const { job_id } = await startQuizGenerateJob(
+        courseId,
+        [{ kind: "single_choice", count: 5 }],
+        lessonId,
+      );
+      for (let i = 0; i < 60; i++) {
+        const job = await getJob(job_id);
+        if (job.status === "completed") break;
+        if (job.status === "failed" || job.status === "cancelled") break;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+      const fresh = await getLesson(lessonId);
+      setQuiz(fresh.quiz);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
   if (quiz.length === 0) {
     if (generating) {
       return (
@@ -118,7 +139,12 @@ export function LessonQuizList({
       );
     }
     return (
-      <p className="text-small text-ink-muted">{t("No questions for this lesson yet.")}</p>
+      <div style={{ textAlign: "center", padding: 40 }}>
+        <p className="text-small text-ink-muted">{t("No questions for this lesson yet.")}</p>
+        <Button type="primary" onClick={() => void manualGenerate()} style={{ marginTop: 16 }}>
+          AI 出题
+        </Button>
+      </div>
     );
   }
 

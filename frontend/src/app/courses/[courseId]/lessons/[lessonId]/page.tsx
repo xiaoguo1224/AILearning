@@ -11,6 +11,7 @@ import { MarkCompleteButton } from "@/components/MarkCompleteButton";
 import { EditLessonButton } from "@/components/EditLessonButton";
 import { RegenerateLessonButton } from "@/components/RegenerateLessonButton";
 import { LessonLayout } from "@/components/LessonLayout";
+import { LessonNav } from "@/components/LessonNav";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, getLesson } from "@/lib/api";
@@ -157,6 +158,7 @@ export default async function LessonPage(
           quizProgress={lesson.quiz_progress}
           disclaimer={t("AI-generated explanations, formulas and examples require review before being treated as authoritative. Textbook extensions are not verified course facts.")}
         />
+        <LessonNav courseId={course} lessonId={lesson.id} />
       </div>
     </main>
   );
