@@ -97,6 +97,19 @@ def extract_graph_job(project_id: int, db: Session = Depends(get_db)):
 
     if not db.get(Project, project_id):
         raise HTTPException(404, "Project not found")
+    # Prevent duplicate: return existing running job if any.
+    existing = (
+        db.query(jobs.Job)
+        .filter(
+            jobs.Job.type == "project_graph_extract",
+            jobs.Job.ref_id == project_id,
+            jobs.Job.status.in_(["pending", "running"]),
+        )
+        .order_by(jobs.Job.created_at.desc())
+        .first()
+    )
+    if existing:
+        return {"job_id": existing.id, "resumed": True}
     job = jobs.create_job(
         db,
         job_type="project_graph_extract",
