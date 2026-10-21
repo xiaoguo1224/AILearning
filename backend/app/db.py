@@ -267,6 +267,7 @@ def init_db() -> None:
     from app.resources.service import init_fts
     from app.submissions import models as submission_models  # noqa: F401
     from app.jobs import models as job_models  # noqa: F401
+    from app.project_graph import models as project_graph_models  # noqa: F401
     from app.suggestions import models as suggestion_models  # noqa: F401
 
     Base.metadata.create_all(engine)

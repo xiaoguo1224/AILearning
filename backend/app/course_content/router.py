@@ -94,6 +94,17 @@ def patch_lesson(lesson_id: LessonId, body: LessonPatch, session: Db):
     if body.concepts is not None:
         lesson.concepts = [c.strip() for c in body.concepts if c.strip()][:20]
     session.commit()
+    # Auto re-extract project graphs containing this lesson's course.
+    try:
+        from app.project_graph.trigger import trigger_graph_extract
+        course_id = lesson.module.course_id if lesson.module else None
+        if course_id:
+            from app.projects.models import ProjectCourse
+            pids = [r[0] for r in session.query(ProjectCourse.project_id).filter_by(course_id=course_id).all()]
+            for pid in pids:
+                trigger_graph_extract(int(pid))
+    except Exception:
+        pass
     return {"id": lesson.id, "title": lesson.title}
 
 

@@ -1,69 +1,144 @@
 "use client";
 
+import { Button } from "antd";
 import ReactECharts from "echarts-for-react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { useI18n } from "@/components/LocaleProvider";
+import {
+  getJob,
+  getProjectGraph,
+  startGraphExtractJob,
+  type ProjectGraphEdge,
+} from "@/lib/api";
 import type { ProjectCurriculum } from "@/lib/types";
 
 interface ProjectCourseGraphProps {
   curriculum: ProjectCurriculum;
+  projectId: number;
   onNodeClick?: (courseId: number) => void;
 }
 
+const KIND_LABELS: Record<string, string> = {
+  prerequisite: "前置",
+  related: "相关",
+  sequence: "顺序",
+};
+
+const KIND_COLORS: Record<string, string> = {
+  prerequisite: "#f5222d",
+  related: "#1890ff",
+  sequence: "#52c41a",
+};
+
 /**
- * Project learning-order graph, derived automatically from the project's
- * courses and their chapters. Nodes are courses and chapters; edges follow
- * the teaching sequence, so the learner sees the cross-course learning
- * order without having to specify any relationships manually.
+ * Project learning graph with AI-extracted relationships.
+ * Edges come from the backend AI extraction; falls back to teaching
+ * sequence when no AI edges exist yet. Re-extract on demand.
  */
-export function ProjectCourseGraph({ curriculum, onNodeClick }: ProjectCourseGraphProps) {
+export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: ProjectCourseGraphProps) {
+  const { t } = useI18n();
+  const [edges, setEdges] = useState<ProjectGraphEdge[] | null>(null);
+  const [extracting, setExtracting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getProjectGraph(projectId)
+      .then((e) => {
+        if (!cancelled) setEdges(e);
+      })
+      .catch(() => {
+        if (!cancelled) setEdges([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  async function reExtract() {
+    setExtracting(true);
+    try {
+      const { job_id } = await startGraphExtractJob(projectId);
+      for (let i = 0; i < 60; i++) {
+        const job = await getJob(job_id);
+        if (job.status === "completed") {
+          setEdges(await getProjectGraph(projectId));
+          break;
+        }
+        if (job.status === "failed" || job.status === "cancelled") break;
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+    } finally {
+      setExtracting(false);
+    }
+  }
+
   const option = useMemo(() => {
     const nodes: any[] = [];
-    const links: any[] = [];
-    let prevId: string | null = null;
+    const nodeIds = new Set<string>();
 
-    curriculum.courses.forEach((course, courseIdx) => {
-      const courseNodeId = `course-${course.id}`;
+    // All courses and lessons as nodes.
+    curriculum.courses.forEach((course) => {
+      const cid = `course-${course.id}`;
+      nodeIds.add(cid);
       nodes.push({
-        id: courseNodeId,
+        id: cid,
         name: course.title,
         value: course.id,
         category: 0,
         symbolSize: 56,
       });
-      if (prevId) {
-        links.push({ source: prevId, target: courseNodeId });
-      }
-      prevId = courseNodeId;
-
-      // Chapters in teaching order within the course.
-      const lessons: { id: number; title: string }[] = [];
       for (const m of course.modules) {
         for (const l of m.lessons) {
-          lessons.push({ id: l.id, title: l.title });
+          const lid = `lesson-${l.id}`;
+          nodeIds.add(lid);
+          nodes.push({
+            id: lid,
+            name: l.title,
+            value: l.id,
+            category: 1,
+            symbolSize: 32,
+          });
         }
       }
-      lessons.forEach((lesson) => {
-        const lessonNodeId = `lesson-${lesson.id}`;
-        nodes.push({
-          id: lessonNodeId,
-          name: lesson.title,
-          value: lesson.id,
-          category: 1,
-          symbolSize: 32,
-        });
-        links.push({ source: prevId, target: lessonNodeId });
-        prevId = lessonNodeId;
-      });
     });
 
+    // AI edges; fall back to teaching sequence if none.
+    let links: any[];
+    if (edges && edges.length > 0) {
+      links = edges
+        .filter(
+          (e) =>
+            nodeIds.has(`${e.from_type}-${e.from_id}`) &&
+            nodeIds.has(`${e.to_type}-${e.to_id}`),
+        )
+        .map((e) => ({
+          source: `${e.from_type}-${e.from_id}`,
+          target: `${e.to_type}-${e.to_id}`,
+          label: { show: true, formatter: KIND_LABELS[e.kind] ?? e.kind, fontSize: 10 },
+          lineStyle: { color: KIND_COLORS[e.kind] ?? "#999", width: 2 },
+          tooltip: { formatter: e.reason },
+        }));
+    } else {
+      links = [];
+      let prev: string | null = null;
+      curriculum.courses.forEach((course) => {
+        const cid = `course-${course.id}`;
+        if (prev) links.push({ source: prev, target: cid });
+        prev = cid;
+        for (const m of course.modules) {
+          for (const l of m.lessons) {
+            const lid = `lesson-${l.id}`;
+            links.push({ source: prev, target: lid });
+            prev = lid;
+          }
+        }
+      });
+    }
+
     return {
-      tooltip: {
-        formatter: (params: any) => params.name,
-      },
-      legend: {
-        data: ["课程", "章节"],
-      },
+      tooltip: {},
+      legend: { data: ["课程", "章节"] },
       series: [
         {
           type: "graph",
@@ -80,20 +155,31 @@ export function ProjectCourseGraph({ curriculum, onNodeClick }: ProjectCourseGra
         },
       ],
     };
-  }, [curriculum]);
+  }, [curriculum, edges]);
 
   return (
-    <ReactECharts
-      option={option}
-      style={{ height: 600, width: "100%" }}
-      onEvents={{
-        click: (params: { data?: { value?: number; category?: number } }) => {
-          // Only course nodes navigate; chapter nodes carry lesson ids.
-          if (params.data?.category === 0 && params.data?.value && onNodeClick) {
-            onNodeClick(params.data.value);
-          }
-        },
-      }}
-    />
+    <div>
+      <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end" }}>
+        <Button loading={extracting} onClick={() => void reExtract()}>
+          {t("Re-extract with AI")}
+        </Button>
+      </div>
+      {edges && edges.length === 0 && (
+        <p style={{ color: "#888", marginBottom: 12 }}>
+          暂无 AI 提炼的关系，显示教学顺序。点击上方按钮用 AI 提炼。
+        </p>
+      )}
+      <ReactECharts
+        option={option}
+        style={{ height: 600, width: "100%" }}
+        onEvents={{
+          click: (params: { data?: { value?: number; category?: number } }) => {
+            if (params.data?.category === 0 && params.data?.value && onNodeClick) {
+              onNodeClick(params.data.value);
+            }
+          },
+        }}
+      />
+    </div>
   );
 }

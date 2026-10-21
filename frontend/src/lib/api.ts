@@ -1699,3 +1699,21 @@ export function readKnowledgeRevision(
 ): Promise<KnowledgeRevisionDetail> {
   return get(`/api/knowledge/${knowledgeId}/revisions/${version}`, locale);
 }
+
+export interface ProjectGraphEdge {
+  id: number;
+  from_type: "course" | "lesson";
+  from_id: number;
+  to_type: "course" | "lesson";
+  to_id: number;
+  kind: "prerequisite" | "related" | "sequence";
+  reason: string;
+}
+
+export function getProjectGraph(projectId: number): Promise<ProjectGraphEdge[]> {
+  return get(`/api/projects/${projectId}/graph`);
+}
+
+export function startGraphExtractJob(projectId: number): Promise<{ job_id: string }> {
+  return postJson(`/api/projects/${projectId}/graph/extract/job`, {});
+}

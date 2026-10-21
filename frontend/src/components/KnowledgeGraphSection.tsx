@@ -42,6 +42,7 @@ export function KnowledgeGraphSection({ curriculum, projectId }: KnowledgeGraphS
           </p>
           <ProjectCourseGraph
             curriculum={curriculum}
+            projectId={projectId}
             onNodeClick={(courseId) => {
               router.push(`/courses/${courseId}`);
             }}

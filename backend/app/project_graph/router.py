@@ -1,0 +1,96 @@
+"""Project learning-graph API: AI extraction as background job + edge listing."""
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.db import get_session as get_db
+from app.jobs import service as jobs
+from app.project_graph import service as graph_service
+
+router = APIRouter(prefix="/api/projects/{project_id}/graph", tags=["project-graph"])
+
+
+class EdgeOut(BaseModel):
+    id: int
+    from_type: str
+    from_id: int
+    to_type: str
+    to_id: int
+    kind: str
+    reason: str
+
+
+@router.get("", response_model=list[EdgeOut])
+def get_graph(project_id: int, db: Session = Depends(get_db)):
+    edges = graph_service.list_edges(db, project_id)
+    return [
+        EdgeOut(
+            id=e.id,
+            from_type=e.from_type,
+            from_id=e.from_id,
+            to_type=e.to_type,
+            to_id=e.to_id,
+            kind=e.kind,
+            reason=e.reason,
+        )
+        for e in edges
+    ]
+
+
+def _course_payload(db: Session, project_id: int) -> list[dict]:
+    """Build the course/chapter payload the extractor needs."""
+    from app import models as m
+
+    project = db.get(m.Project, project_id)
+    if not project:
+        raise HTTPException(404, "Project not found")
+    courses = []
+    for pc in project.courses:
+        course = pc.course
+        if not course:
+            continue
+        modules = []
+        for mod in course.modules:
+            lessons = []
+            for les in mod.lessons:
+                lessons.append(
+                    {
+                        "id": les.id,
+                        "title": les.title,
+                        "summary": (les.content or "")[:300],
+                    }
+                )
+            modules.append({"id": mod.id, "title": mod.title, "lessons": lessons})
+        courses.append({"id": course.id, "title": course.title, "modules": modules})
+    return courses
+
+
+def _run_extraction(job_id: str, project_id: int):
+    from app.db import SessionLocal
+
+    db = SessionLocal()
+    try:
+        courses = _course_payload(db, project_id)
+        jobs.update_progress(job_id, {"stage": "extracting", "courses": len(courses)})
+        edges = graph_service.extract_relationships(db, project_id, courses)
+        jobs.complete_job(job_id, {"project_id": project_id, "edges": len(edges)})
+    except Exception as exc:  # noqa: BLE001
+        jobs.fail_job(job_id, str(exc)[:500])
+    finally:
+        db.close()
+
+
+@router.post("/extract/job", status_code=202)
+def extract_graph_job(project_id: int, db: Session = Depends(get_db)):
+    from app import models as m
+
+    if not db.get(m.Project, project_id):
+        raise HTTPException(404, "Project not found")
+    job = jobs.create_job(
+        job_type="project_graph_extract",
+        ref_type="project",
+        ref_id=project_id,
+    )
+    jobs.run_in_background(_run_extraction, job.id, project_id)
+    return {"job_id": job.id}

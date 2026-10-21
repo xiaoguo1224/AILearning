@@ -107,6 +107,8 @@ def link_course(project_id: EntityId, course_id: EntityId, body: CourseLinkInput
     )
     session.commit()
     logger.info("project_course_linked project_id=%s course_id=%s", project_id, course_id)
+    from app.project_graph.trigger import trigger_graph_extract
+    trigger_graph_extract(int(project_id))
     return project_detail(session, project)
 
 
@@ -118,4 +120,6 @@ def unlink_course(project_id: EntityId, course_id: EntityId, session: Db):
     session.query(ProjectCourse).filter_by(project_id=project_id, course_id=course_id).delete()
     session.commit()
     logger.info("project_course_unlinked project_id=%s course_id=%s", project_id, course_id)
+    from app.project_graph.trigger import trigger_graph_extract
+    trigger_graph_extract(int(project_id))
     return project_detail(session, project)
