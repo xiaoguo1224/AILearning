@@ -111,6 +111,75 @@ def quiz_item(item_id: int, session: Db):
     return QuizBankItem.model_validate(item)
 
 
+@router.post("/quiz/{item_id}/solution/job")
+def generate_solution_job(item_id: int, session: Db):
+    """Start reference-solution generation as a background job.
+
+    Returns {job_id} immediately. On completion job.result.solution holds the
+    markdown. Poll GET /api/jobs/{id}. Navigating away does NOT cancel it.
+    """
+    from app.jobs.service import create_job, run_in_background
+
+    item = session.get(models.QuizItem, item_id)
+    if not item:
+        raise HTTPException(404, "Quiz item not found")
+    if item.solution:
+        # Already have one; return a completed job pointing at it.
+        job = create_job(session, "quiz_solution", ref_type="quiz", ref_id=item_id)
+        from app.jobs.service import complete_job
+
+        complete_job(job.id, {"item_id": item.id, "solution": item.solution})
+        return {"job_id": job.id}
+
+    job = create_job(session, "quiz_solution", ref_type="quiz", ref_id=item_id)
+    kind_snap = item.kind
+    question_snap = item.question
+    answer_snap = item.answer
+
+    def _run(job_id: str):
+        from app import models as _m
+        from app.db import SessionLocal
+        from app.jobs.models import Job as _Job
+        from app.jobs.service import complete_job, fail_job, update_progress
+        from app.llm import get_provider as _get_provider
+        from app.llm.base import LLMCallError
+        from app.metering import CostLimitExceeded, MeteredLLM, cost_limit_detail
+
+        update_progress(job_id, {"stage": "generating"})
+        prompt = (
+            f"Question kind: {kind_snap}\n"
+            f"Question:\n{question_snap}\n\n"
+            f"Correct answer:\n{answer_snap or '(none)'}\n"
+        )
+        try:
+            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex)
+            raw: str = meter.generate(
+                "quiz_solution", SOLUTION_SYSTEM, prompt, max_tokens=4000
+            )
+        except CostLimitExceeded as exc:
+            fail_job(job_id, f"Cost limit exceeded: {cost_limit_detail(exc)}")
+            return
+        except LLMCallError as exc:
+            fail_job(job_id, str(exc))
+            return
+        solution = (raw or "").strip()
+        if not solution:
+            fail_job(job_id, "The model did not return a solution.")
+            return
+        with SessionLocal() as s:
+            j = s.get(_Job, job_id)
+            if j and j.status == "cancelled":
+                return
+            it = s.get(_m.QuizItem, item_id)
+            if it:
+                it.solution = solution
+                s.commit()
+            complete_job(job_id, {"item_id": item_id, "solution": solution})
+
+    run_in_background(job.id, _run)
+    return {"job_id": job.id}
+
+
 @router.post("/quiz/{item_id}/solution")
 def generate_solution(
     item_id: int, session: Db, refresh: bool = Query(default=False)
@@ -368,6 +437,120 @@ def generate_quiz_questions(course_id: CourseId, body: QuizGenerateInput, sessio
     status_code=201,
     dependencies=MUTATION,
 )
+def create_variant_job(course_id: CourseId, item_id: int, session: Db):
+    """Start question variant generation as a background job.
+
+    Returns {job_id} immediately. On completion job.result holds the new
+    question {id, question, kind, options, concept}. Poll GET /api/jobs/{id}.
+    Navigating away does NOT cancel it.
+    """
+    from app.jobs.service import create_job, run_in_background
+
+    course = _course_or_404(session, course_id)
+    item = session.get(models.QuizItem, item_id)
+    if not item:
+        raise HTTPException(404, "Quiz item not found")
+    module_ids = {m.id for m in course.modules}
+    lesson = session.get(models.Lesson, item.lesson_id)
+    if not lesson or lesson.module_id not in module_ids:
+        raise HTTPException(422, "Question does not belong to this course.")
+
+    job = create_job(session, "quiz_variant", ref_type="course", ref_id=course_id)
+    item_id_snap = item.id
+    lesson_id_snap = lesson.id
+    kind_snap = item.kind
+    question_snap = item.question
+    answer_snap = item.answer
+
+    def _run(job_id: str):
+        from app import models as _m
+        from app.db import SessionLocal
+        from app.jobs.models import Job as _Job
+        from app.jobs.service import complete_job, fail_job, update_progress
+        from app.llm import get_provider as _get_provider
+        from app.llm.base import LLMCallError
+        from app.metering import CostLimitExceeded, MeteredLLM, cost_limit_detail
+
+        update_progress(job_id, {"stage": "generating"})
+        with SessionLocal() as s:
+            attempts = (
+                s.query(_m.Attempt)
+                .filter_by(quiz_item_id=item_id_snap)
+                .order_by(_m.Attempt.attempt_no)
+                .all()
+            )
+            attempt_dicts = [
+                {
+                    "attempt_no": a.attempt_no,
+                    "correct": a.correct,
+                    "submitted_answer": (a.submitted_answer or "")[:500],
+                }
+                for a in attempts
+            ]
+
+            class _Item:
+                kind = kind_snap
+                question = question_snap
+                answer = answer_snap
+
+            prompt = quizgen.build_variant_prompt(_Item(), attempt_dicts)
+        try:
+            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, course_id=course_id)
+            raw = meter.generate(quizgen.VARIANT_STAGE, _quizgen_system(), prompt)
+        except CostLimitExceeded as exc:
+            fail_job(job_id, f"Cost limit exceeded: {cost_limit_detail(exc)}")
+            return
+        except LLMCallError as exc:
+            fail_job(job_id, str(exc))
+            return
+        parsed = quizgen.parse_items(raw, [(kind_snap, 1)])
+        if not parsed:
+            fail_job(job_id, "The model did not return a usable variant.")
+            return
+        with SessionLocal() as s:
+            j = s.get(_Job, job_id)
+            if j and j.status == "cancelled":
+                return
+            entry = parsed[0]
+            row = _m.QuizItem(
+                lesson_id=lesson_id_snap,
+                question=entry["question"],
+                kind=entry["kind"],
+                options=entry["options"],
+                answer=entry["answer"],
+                concept=entry["concept"],
+            )
+            s.add(row)
+            s.commit()
+            s.refresh(row)
+            complete_job(
+                job_id,
+                {
+                    "id": row.id,
+                    "question": row.question,
+                    "kind": row.kind,
+                    "options": row.options or [],
+                    "concept": row.concept or "",
+                },
+            )
+
+    run_in_background(job.id, _run)
+    return {"job_id": job.id}
+
+
+# The job route must be registered before the sync route's decorator.
+_router_post = router.post
+
+
+@_router_post(
+    "/courses/{course_id}/quiz/{item_id}/variant/job",
+    status_code=201,
+    dependencies=MUTATION,
+)
+def _create_variant_job_route(course_id: CourseId, item_id: int, session: Db):
+    return create_variant_job(course_id, item_id, session)
+
+
 def create_variant(course_id: CourseId, item_id: int, session: Db):
     """One variant of a question, saved into the same lesson's bank.
 

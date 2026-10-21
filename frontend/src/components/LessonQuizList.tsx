@@ -4,7 +4,7 @@ import { useState } from "react";
 
 import { useI18n } from "@/components/LocaleProvider";
 import { QuizSection } from "@/components/QuizSection";
-import { createQuizVariant, type QuizVariant } from "@/lib/api";
+import { getJob, startQuizVariantJob, type QuizVariant } from "@/lib/api";
 import type { QuizItem, QuizProgress } from "@/lib/types";
 
 function VariantButton({
@@ -25,8 +25,16 @@ function VariantButton({
       onClick={async () => {
         setBusy(true);
         try {
-          const created = await createQuizVariant(courseId, itemId);
-          onCreated(created);
+          const { job_id } = await startQuizVariantJob(courseId, itemId);
+          for (let i = 0; i < 60; i++) {
+            await new Promise((r) => setTimeout(r, 2000));
+            const job = await getJob(job_id);
+            if (job.status === "completed" && job.result) {
+              onCreated(job.result as unknown as QuizVariant);
+              break;
+            }
+            if (job.status === "failed" || job.status === "cancelled") break;
+          }
         } finally {
           setBusy(false);
         }

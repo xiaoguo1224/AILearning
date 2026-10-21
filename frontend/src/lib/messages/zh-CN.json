@@ -930,5 +930,18 @@
   "Hide questions": "隐藏题目",
   "Hide Q&A": "隐藏问答",
   "Back to lesson": "返回课时",
-  "Questions: {0}": "{0} 的题目"
+  "Questions: {0}": "{0} 的题目",
+  "AI jobs": "AI 任务",
+  "Background AI work: generation, regeneration, and reviews. They keep running even if you leave the page.": "后台 AI 任务：生成、重新生成和评审。即使离开页面也会继续运行。",
+  "No AI jobs yet. Start a generation or regeneration to see it here.": "暂无 AI 任务。开始生成或重新生成后会在这里显示。",
+  "Course generation": "课程生成",
+  "Course regeneration": "课程重新生成",
+  "Lesson regeneration": "课时重新生成",
+  "Question generation": "题目生成",
+  "Question variant": "题目变式",
+  "pending": "等待中",
+  "running": "运行中",
+  "completed": "已完成",
+  "failed": "失败",
+  "cancelled": "已取消"
 }

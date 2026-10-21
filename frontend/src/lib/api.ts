@@ -799,6 +799,10 @@ export function generateQuestionSolution(
 ): Promise<{ item_id: number; solution: string }> {
   return postJson(`/api/quiz/${itemId}/solution${refresh ? "?refresh=true" : ""}`, {});
 }
+
+export function startQuestionSolutionJob(itemId: number): Promise<{ job_id: string }> {
+  return postJson(`/api/quiz/${itemId}/solution/job`, {});
+}
 export interface QuizBankLesson {
   id: number;
   title: string;
@@ -863,6 +867,13 @@ export interface QuizVariant {
 
 export function createQuizVariant(courseId: number, itemId: number): Promise<QuizVariant> {
   return postJson(`/api/courses/${courseId}/quiz/${itemId}/variant`, {});
+}
+
+export function startQuizVariantJob(
+  courseId: number,
+  itemId: number,
+): Promise<{ job_id: string }> {
+  return postJson(`/api/courses/${courseId}/quiz/${itemId}/variant/job`, {});
 }
 
 export function completeLesson(id: number): Promise<CompleteResult> {

@@ -13,9 +13,10 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import {
   ApiError,
   createQuestionSubmission,
-  generateQuestionSolution,
+  getJob,
   getSubmission,
   listQuestionSubmissions,
+  startQuestionSolutionJob,
   uploadQuestionSubmission,
 } from "@/lib/api";
 import type { QuizBankItem } from "@/lib/api";
@@ -75,11 +76,19 @@ export function CodeQuestionDetail({
     }
   }
 
-  async function loadSolution(refresh = false) {
+  async function loadSolution() {
     setGeneratingSolution(true);
     try {
-      const result = await generateQuestionSolution(item.id, refresh);
-      setSolution(result.solution);
+      const { job_id } = await startQuestionSolutionJob(item.id);
+      for (let i = 0; i < 60; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        const job = await getJob(job_id);
+        if (job.status === "completed" && job.result?.solution) {
+          setSolution(String(job.result.solution));
+          break;
+        }
+        if (job.status === "failed" || job.status === "cancelled") break;
+      }
     } catch {
       // Keep the previous solution (or none) on failure.
     } finally {
@@ -212,16 +221,7 @@ export function CodeQuestionDetail({
                 ) : solution ? (
                   <>
                     <QuizMarkdown content={solution} />
-                    <div className="mt-3 flex justify-end">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={generatingSolution}
-                        onClick={() => void loadSolution(true)}
-                      >
-                        {t("Regenerate")}
-                      </Button>
-                    </div>
+
                   </>
                 ) : (
                   <p className="text-small text-ink-muted">{t("No solution yet.")}</p>

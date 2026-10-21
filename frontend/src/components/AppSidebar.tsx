@@ -35,6 +35,7 @@ const NAV: { href: string; labelKey: string; icon: string }[] = [
   { href: "/projects", labelKey: "Projects", icon: "M2 4.5A1.5 1.5 0 0 1 3.5 3h3L8 4.5h4.5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z" },
   { href: "/courses", labelKey: "Courses", icon: "M3 2.5h8.5A1.5 1.5 0 0 1 13 4v9.5a1 1 0 0 1-1.7.7L8 11l-3.3 3.2a1 1 0 0 1-1.7-.7zM3 2.5v9M6 5.5h4" },
   { href: "/usage", labelKey: "Usage", icon: "M2.5 13.5v-4M6.5 13.5v-7M10.5 13.5V4.5M14.5 13.5v-10" },
+  { href: "/jobs", labelKey: "AI jobs", icon: "M8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8zm-1 2v3l2 2" },
 ];
 
 function NavRows({ onNavigate }: { onNavigate?: () => void }) {

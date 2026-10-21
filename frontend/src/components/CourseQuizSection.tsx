@@ -6,7 +6,8 @@ import { QuizSection } from "@/components/QuizSection";
 import { useI18n } from "@/components/LocaleProvider";
 import {
   ApiError,
-  createQuizVariant,
+  getJob,
+  startQuizVariantJob,
   generateQuizQuestions,
   getCourseQuiz,
   type QuizBank,
@@ -178,8 +179,16 @@ function VariantButton({
       onClick={async () => {
         setBusy(true);
         try {
-          await createQuizVariant(courseId, itemId);
-          onCreated();
+          const { job_id } = await startQuizVariantJob(courseId, itemId);
+          for (let i = 0; i < 60; i++) {
+            await new Promise((r) => setTimeout(r, 2000));
+            const job = await getJob(job_id);
+            if (job.status === "completed") {
+              onCreated();
+              break;
+            }
+            if (job.status === "failed" || job.status === "cancelled") break;
+          }
         } finally {
           setBusy(false);
         }
