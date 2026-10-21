@@ -351,10 +351,13 @@ def list_project_submissions(
     ]
     quiz_item_ids: list[int] = []
     if course_ids:
+        # QuizItem -> Lesson -> Module -> Course
         quiz_item_ids = [
             r[0]
-            for r in session.query(m.QuizBankItem.id)
-            .filter(m.QuizBankItem.course_id.in_(course_ids))
+            for r in session.query(m.QuizItem.id)
+            .join(m.Lesson, m.QuizItem.lesson_id == m.Lesson.id)
+            .join(m.Module, m.Lesson.module_id == m.Module.id)
+            .filter(m.Module.course_id.in_(course_ids))
             .all()
         ]
     if quiz_item_ids:

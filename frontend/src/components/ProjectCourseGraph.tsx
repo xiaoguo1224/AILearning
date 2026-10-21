@@ -9,6 +9,7 @@ import {
   getJob,
   getProjectGraph,
   startGraphExtractJob,
+  type ProjectGraph,
   type ProjectGraphEdge,
 } from "@/lib/api";
 import type { ProjectCurriculum } from "@/lib/types";
@@ -42,18 +43,20 @@ const KIND_STYLES: Record<string, { color: string; width: number; type?: string 
  */
 export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: ProjectCourseGraphProps) {
   const { t } = useI18n();
-  const [edges, setEdges] = useState<ProjectGraphEdge[] | null>(null);
+  const [graph, setGraph] = useState<ProjectGraph | null>(null);
+  const edges = graph?.edges ?? null;
+  const positions = graph?.positions ?? {};
   const [extracting, setExtracting] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     getProjectGraph(projectId)
-      .then((e) => {
-        if (!cancelled) setEdges(e);
+      .then((g) => {
+        if (!cancelled) setGraph(g);
       })
       .catch(() => {
-        if (!cancelled) setEdges([]);
+        if (!cancelled) setGraph({ edges: [], positions: {} });
       });
     return () => {
       cancelled = true;
@@ -68,7 +71,7 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
       for (let i = 0; i < 60; i++) {
         const job = await getJob(job_id);
         if (job.status === "completed") {
-          setEdges(await getProjectGraph(projectId));
+          setGraph(await getProjectGraph(projectId));
           break;
         }
         if (job.status === "failed" || job.status === "cancelled") break;
@@ -90,9 +93,12 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
 
     // All courses and lessons as nodes. Each course is its own category so the
     // legend lists course names; lessons take their parent course's category.
+    // When AI positions exist, use them with layout 'none'.
+    const hasPositions = Object.keys(positions).length > 0;
     curriculum.courses.forEach((course, courseIdx) => {
       const cid = `course-${course.id}`;
       nodeIds.add(cid);
+      const cpos = positions[cid];
       nodes.push({
         id: cid,
         name: course.title,
@@ -100,17 +106,20 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
         category: courseIdx,
         symbolSize: 56,
         itemStyle: { color: "#1fae54" },
+        ...(cpos ? { x: cpos.x, y: cpos.y } : {}),
       });
       for (const m of course.modules) {
         for (const l of m.lessons) {
           const lid = `lesson-${l.id}`;
           nodeIds.add(lid);
+          const lpos = positions[lid];
           nodes.push({
             id: lid,
             name: l.title,
             value: l.id,
             category: courseIdx,
             symbolSize: 28,
+            ...(lpos ? { x: lpos.x, y: lpos.y } : {}),
           });
         }
       }
@@ -168,7 +177,7 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
       series: [
         {
           type: "graph",
-          layout: "force",
+          layout: hasPositions ? "none" : "force",
           data: nodes,
           links,
           categories,

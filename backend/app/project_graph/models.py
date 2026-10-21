@@ -23,3 +23,16 @@ class ProjectGraphEdge(Base):
     to_id: Mapped[int] = mapped_column(Integer, nullable=False)
     kind: Mapped[str] = mapped_column(String(32), nullable=False)  # prerequisite | related | sequence
     reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+
+class ProjectGraphLayout(Base):
+    """AI-generated canvas positions for project graph nodes."""
+
+    __tablename__ = "project_graph_layout"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    project_id: Mapped[int] = mapped_column(Integer, index=True, nullable=False)
+    node_type: Mapped[str] = mapped_column(String(16), nullable=False)  # course | lesson
+    node_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    x: Mapped[float] = mapped_column(nullable=False, default=0)
+    y: Mapped[float] = mapped_column(nullable=False, default=0)

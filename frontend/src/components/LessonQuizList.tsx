@@ -82,7 +82,7 @@ export function LessonQuizList({
       try {
         const { job_id } = await startQuizGenerateJob(
           courseId,
-          [{ kind: "single_choice", count: 5 }],
+          [{ kind: "mcq", count: 5 }],
           lessonId,
         );
         for (let i = 0; i < 60; i++) {
@@ -113,7 +113,7 @@ export function LessonQuizList({
     try {
       const { job_id } = await startQuizGenerateJob(
         courseId,
-        [{ kind: "single_choice", count: 5 }],
+        [{ kind: "mcq", count: 5 }],
         lessonId,
       );
       for (let i = 0; i < 60; i++) {

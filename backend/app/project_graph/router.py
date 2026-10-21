@@ -21,21 +21,30 @@ class EdgeOut(BaseModel):
     reason: str
 
 
-@router.get("", response_model=list[EdgeOut])
+class GraphOut(BaseModel):
+    edges: list[EdgeOut]
+    positions: dict[str, dict]
+
+
+@router.get("", response_model=GraphOut)
 def get_graph(project_id: int, db: Session = Depends(get_db)):
     edges = graph_service.list_edges(db, project_id)
-    return [
-        EdgeOut(
-            id=e.id,
-            from_type=e.from_type,
-            from_id=e.from_id,
-            to_type=e.to_type,
-            to_id=e.to_id,
-            kind=e.kind,
-            reason=e.reason,
-        )
-        for e in edges
-    ]
+    positions = graph_service.get_positions(db, project_id)
+    return GraphOut(
+        edges=[
+            EdgeOut(
+                id=e.id,
+                from_type=e.from_type,
+                from_id=e.from_id,
+                to_type=e.to_type,
+                to_id=e.to_id,
+                kind=e.kind,
+                reason=e.reason,
+            )
+            for e in edges
+        ],
+        positions=positions,
+    )
 
 
 def _course_payload(db: Session, project_id: int) -> list[dict]:
@@ -73,7 +82,8 @@ def _run_extraction(job_id: str, project_id: int):
     try:
         courses = _course_payload(db, project_id)
         jobs.update_progress(job_id, {"stage": "extracting", "courses": len(courses)})
-        edges = graph_service.extract_relationships(db, project_id, courses)
+        result = graph_service.extract_relationships(db, project_id, courses)
+        edges = result["edges"] if isinstance(result, dict) else result
         jobs.complete_job(job_id, {"project_id": project_id, "edges": len(edges)})
     except Exception as exc:  # noqa: BLE001
         jobs.fail_job(job_id, str(exc)[:500])

@@ -1710,7 +1710,12 @@ export interface ProjectGraphEdge {
   reason: string;
 }
 
-export function getProjectGraph(projectId: number): Promise<ProjectGraphEdge[]> {
+export interface ProjectGraph {
+  edges: ProjectGraphEdge[];
+  positions: Record<string, { x: number; y: number }>;
+}
+
+export function getProjectGraph(projectId: number): Promise<ProjectGraph> {
   return get(`/api/projects/${projectId}/graph`);
 }
 

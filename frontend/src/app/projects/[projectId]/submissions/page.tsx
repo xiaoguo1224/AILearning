@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SubmissionDeleteButton } from "@/components/SubmissionDeleteButton";
-import { SubmissionForm } from "@/components/SubmissionForm";
 import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -128,7 +127,7 @@ export default async function ProjectSubmissionsPage({
               )}
             </section>
 
-            {!archived && <SubmissionForm projectId={id} variantId={variantId} />}
+
           </>
         )
       )}

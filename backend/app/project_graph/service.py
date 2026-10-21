@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.llm import get_provider
 from app.metering import MeteredLLM
-from app.project_graph.models import ProjectGraphEdge
+from app.project_graph.models import ProjectGraphEdge, ProjectGraphLayout
 
 EXTRACT_STAGE = "project_graph_extract"
 
@@ -42,6 +42,13 @@ Rules:
   course_sequence or prerequisite edge.
 - Do not invent ids. Use only the ids given.
 - Reply with ONLY the JSON array, no other text.
+
+After the edges, on a new line, reply with a second JSON object mapping each node
+to its suggested canvas position for a clear layout:
+{"positions": {"course-1": {"x": 100, "y": 200}, "lesson-5": {"x": 300, "y": 150}, ...}}
+Place earlier topics to the left, later topics to the right. Spread different
+courses vertically so their chapters do not overlap. Use a 1200x800 canvas.
+The two JSON values are separated by a line containing only "---".
 """
 
 
@@ -77,11 +84,17 @@ def extract_relationships(
         text = raw.strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[1]
-            if text.rsplit("```", 1)[0]:
-                text = text.rsplit("```", 1)[0]
-        items = json.loads(text.strip())
+            text = text.rsplit("```", 1)[0]
+        # Split edges and positions on the "---" separator.
+        parts = text.strip().split("\n---\n")
+        items = json.loads(parts[0].strip())
+        positions = {}
+        if len(parts) > 1:
+            pos_data = json.loads(parts[1].strip())
+            positions = pos_data.get("positions", {})
     except (json.JSONDecodeError, IndexError):
         items = []
+        positions = {}
 
     # Validate ids against known courses/lessons.
     valid_courses = {c["id"] for c in courses}
@@ -121,9 +134,33 @@ def extract_relationships(
                 reason=e.get("reason", "")[:500],
             )
         )
+    # Store AI-generated positions.
+    session.query(ProjectGraphLayout).filter_by(project_id=project_id).delete()
+    for node_key, pos in positions.items():
+        try:
+            ntype, nid = node_key.split("-", 1)
+            if ntype not in ("course", "lesson"):
+                continue
+            session.add(
+                ProjectGraphLayout(
+                    project_id=project_id,
+                    node_type=ntype,
+                    node_id=int(nid),
+                    x=float(pos.get("x", 0)),
+                    y=float(pos.get("y", 0)),
+                )
+            )
+        except (ValueError, AttributeError):
+            continue
     session.commit()
-    return edges
+    return {"edges": edges, "positions": positions}
 
 
 def list_edges(session: Session, project_id: int) -> list[ProjectGraphEdge]:
     return session.query(ProjectGraphEdge).filter_by(project_id=project_id).all()
+
+
+def get_positions(session: Session, project_id: int) -> dict[str, dict]:
+    """Return {node_key: {x, y}} for the project."""
+    rows = session.query(ProjectGraphLayout).filter_by(project_id=project_id).all()
+    return {f"{r.node_type}-{r.node_id}": {"x": r.x, "y": r.y} for r in rows}
