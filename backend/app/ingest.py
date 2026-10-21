@@ -104,7 +104,7 @@ MAX_REF_CHARS = 200
 # that combines several uploads (a folder drop, say) makes an accidental huge request easy
 # in a way a single PDF upload does not, so this is checked before any of them are read
 # rather than left to MAX_TOTAL_CHARS, which only sees the text AFTER extraction.
-MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+MAX_UPLOAD_BYTES = 150 * 1024 * 1024
 # The delimiters of generation's document tag, mapped to their round equivalents. See
 # clean_ref on why translated rather than stripped.
 _DELIMITERS = str.maketrans({"[": "(", "]": ")"})
