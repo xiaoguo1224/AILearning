@@ -174,7 +174,7 @@ def candidates(
 
 
 def draft_from_message(
-    session: Session, project_id: int, *, session_id: int, message_id: int
+    session: Session, project_id: int, *, session_id: int, message_id: int, commit: bool = True
 ) -> tuple[KnowledgeEntry | None, int | None, list[dict]]:
     """Create a draft from one assistant message.
 
@@ -229,6 +229,9 @@ def draft_from_message(
     # compared against. Nothing else about the draft differs from a hand-written note.
     history.record(session, entry, reason=REASON_CREATED)
     session.add(ProjectKnowledge(project_id=project_id, knowledge_id=entry.id))
-    session.commit()
+    if commit:
+        session.commit()
+    else:
+        session.flush()
     session.refresh(entry)
     return entry, None, found

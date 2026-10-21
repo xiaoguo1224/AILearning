@@ -20,6 +20,7 @@ from app.knowledge.models import (
 from app.knowledge.schemas import (
     CandidateOut,
     CompareResult,
+    ConfirmKnowledgeInput,
     CreateKnowledgeInput,
     DiffLine,
     DraftFromMessageInput,
@@ -178,6 +179,7 @@ def read_knowledge(knowledge_id: int, session: Db):
 )
 def update_knowledge(knowledge_id: int, body: UpdateKnowledgeInput, session: Db):
     entry = service.editable_entry(session, knowledge_id)
+    service.check_revision(entry, body.expected_updated_at)
     sent_back = service.apply_edit(
         session,
         entry,
@@ -202,8 +204,9 @@ def update_knowledge(knowledge_id: int, body: UpdateKnowledgeInput, session: Db)
     response_model=KnowledgeDetail,
     dependencies=MUTATION,
 )
-def confirm_knowledge(knowledge_id: int, session: Db):
+def confirm_knowledge(knowledge_id: int, session: Db, body: ConfirmKnowledgeInput | None = None):
     entry = service.editable_entry(session, knowledge_id)
+    service.check_revision(entry, body.expected_updated_at if body else None)
     service.confirm_entry(session, entry)
     session.commit()
     session.refresh(entry)

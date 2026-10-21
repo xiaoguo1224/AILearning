@@ -598,3 +598,26 @@ def test_the_review_queue_is_only_core_kinds_waiting_for_a_person(client):
     ).json()
     assert [item["id"] for item in queue["items"]] == [waiting["id"]]
     assert queue["total"] == 1
+
+
+def test_stale_edits_and_confirmations_cannot_replace_a_newer_revision(client):
+    from datetime import datetime, timedelta, timezone
+
+    project_id = _project(client)
+    created = _create(client, project_id, kind="definition").json()
+    path = f"/api/knowledge/{created['id']}"
+    changed = client.patch(path, json={
+        "body": "A corrected definition.", "expected_updated_at": created["updated_at"],
+    })
+    assert changed.status_code == 200
+    current = changed.json()
+    stale = {"expected_updated_at": created["updated_at"]}
+    assert client.patch(path, json={**stale, "body": "Stale content"}).status_code == 409
+    assert client.post(f"{path}/confirm", json=stale).status_code == 409
+    assert client.get(path).json()["body"] == "A corrected definition."
+    assert _revisions(client, created["id"])["total"] == 2
+    # Different timezone spelling of the same instant is a valid revision token.
+    expected = datetime.fromisoformat(current["updated_at"]).astimezone(timezone(timedelta(hours=8)))
+    confirmed = client.post(f"{path}/confirm", json={"expected_updated_at": expected.isoformat()})
+    assert confirmed.status_code == 200
+    assert confirmed.json()["status"] == "confirmed"

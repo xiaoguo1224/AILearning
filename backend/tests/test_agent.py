@@ -84,6 +84,25 @@ BROADCAST_NOTES = (
 )
 
 
+@pytest.mark.parametrize("grounded", [True, False])
+def test_answers_save_only_grounded_note_drafts_without_an_extra_model_call(client, explore_provider, grounded):
+    project_id = _project(client)
+    _resource(client, project_id, "Broadcasting", BROADCAST_NOTES)
+    session_id = _session(client, project_id)
+    provider = explore_provider(_reply(citations=["S1"] if grounded else [], beyond="Unverified extension"))
+    response = client.post(f"/api/sessions/{session_id}/messages", json={"body": "Explain broadcasting."})
+    assert response.status_code == 201
+    listing = client.get(f"/api/projects/{project_id}/knowledge").json()
+    assert listing["total"] == int(grounded)
+    assert len(provider.prompts) == 1
+    if grounded:
+        note = client.get(f"/api/knowledge/{listing['items'][0]['id']}").json()
+        assert note["status"] == "draft"
+        assert note["kind"] == "note"
+        assert "Unverified extension" not in note["body"]
+        assert any(item.get("message_id") == response.json()["assistant"]["id"] for item in note["provenance"])
+
+
 # --------------------------------------------------------------------------
 # Sessions
 # --------------------------------------------------------------------------

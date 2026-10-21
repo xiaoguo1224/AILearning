@@ -1,7 +1,6 @@
 """Knowledge: what a project has learned, kept apart from what it was told.
 
-FOUR TABLES, AND THE REASON EACH EXISTS.
-
+FIVE TABLES, AND THE REASON EACH EXISTS.
 `KnowledgeEntry` is the content. It carries a status because the product distinguishes
 two very different things wearing the same word "note": an ordinary draft that the model
 wrote while answering a question, which is useful immediately, and a core definition or
@@ -26,6 +25,11 @@ unrecoverable. Every revision keeps the whole entry rather than the edit that pr
 because the only question this table answers is "what did this say then" and a patch chain
 can answer it wrongly after one bad replay.
 
+`ErrorCause` is the other direction of the same idea: instead of what a project knows, what
+it keeps getting wrong, and which knowledge point that belongs to. It is deliberately not
+a scheduler — recording a mistake writes no review card, because a schedule is a model of
+memory and the only evidence that memory moved is a retrieval the learner performed.
+
 WHY PROVENANCE IS A JSON SNAPSHOT. The same reason the exploration messages keep theirs:
 a resource can be deleted, and an entry that claimed to derive from it would then point
 at nothing. The snapshot keeps what was shown — filename, locator, the conversation it
@@ -40,6 +44,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -83,6 +88,34 @@ REASON_CREATED = "created"
 REASON_EDITED = "edited"
 REASON_CONFIRMED = "confirmed"
 REVISION_REASONS = (REASON_CREATED, REASON_EDITED, REASON_CONFIRMED)
+
+# What went wrong, in a vocabulary small enough to count. Free text is kept beside it in
+# `note`; the point of the enum is that "this learner mostly loses marks on notation"
+# becomes a claim the app can make, and a tag cloud cannot make claims.
+CAUSE_CONCEPT_GAP = "concept_gap"
+CAUSE_PROCEDURE = "procedure"
+CAUSE_NOTATION = "notation"
+CAUSE_MISREAD = "misread"
+CAUSE_TOOLING = "tooling"
+CAUSE_CARELESS = "careless"
+CAUSE_UNCLASSIFIED = "unclassified"
+ERROR_CAUSES = (
+    CAUSE_CONCEPT_GAP,
+    CAUSE_PROCEDURE,
+    CAUSE_NOTATION,
+    CAUSE_MISREAD,
+    CAUSE_TOOLING,
+    CAUSE_CARELESS,
+    CAUSE_UNCLASSIFIED,
+)
+
+# Where a diagnosis came from. The id is stored without a foreign key because the rows it
+# points at are deletable — attempts die with their course — and a diagnosis that
+# vanished with its evidence would take the learner's own note with it.
+ERROR_SOURCE_ATTEMPT = "attempt"
+ERROR_SOURCE_SUBMISSION = "submission"
+ERROR_SOURCE_MANUAL = "manual"
+ERROR_SOURCES = (ERROR_SOURCE_ATTEMPT, ERROR_SOURCE_SUBMISSION, ERROR_SOURCE_MANUAL)
 
 
 class KnowledgeEntry(Base):
@@ -218,3 +251,68 @@ class KnowledgeRevision(Base):
     def body_chars(self) -> int:
         """Size only. The version list shows how much text a snapshot holds, not the text."""
         return len(self.body or "")
+
+
+class ErrorCause(Base):
+    """One diagnosed mistake, mapped to the knowledge point it belongs to.
+
+    THE RULE THIS TABLE EXISTS TO KEEP. Recording a mistake never moves a review card.
+    FSRS is written by `review.record_review` and by nothing else, because a schedule is
+    a model of memory and the only evidence that memory changed is a retrieval the
+    learner actually performed. An AI that said "you seem weak on matrix shapes" is not
+    that evidence, and letting a chat message set `due` would corrupt the elapsed_days
+    every later interval is fitted against.
+
+    So this is a queue of claims, not a schedule. A claim closes when a review log for
+    the same concept appears afterwards — evidence, derived at read time — or when a
+    person dismisses it. Nothing here is a date, and nothing here is a rating.
+
+    `concept_key` is required and `knowledge_id` is not: the mapping to a knowledge entry
+    is often unavailable (the point has not been written yet) and that absence is worth
+    recording rather than refusing. A mistake with no home is the clearest signal that
+    the project is missing a note.
+
+    `dismissed_at` is a person's judgement and is stored; closure by review is not stored,
+    because a derived fact written down is a second source of truth that can disagree
+    with the review logs.
+    """
+
+    __tablename__ = "error_causes"
+    __table_args__ = (
+        CheckConstraint(
+            "cause IN ('concept_gap', 'procedure', 'notation', 'misread', 'tooling', "
+            "'careless', 'unclassified')",
+            name="ck_error_cause",
+        ),
+        CheckConstraint(
+            "source_kind IN ('attempt', 'submission', 'manual')", name="ck_error_source"
+        ),
+        Index("ix_error_causes_project_created", "project_id", "created_at"),
+        Index("ix_error_causes_concept", "concept_key"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    # NULL when no knowledge entry matches the concept yet. Not a failure: see the class
+    # docstring.
+    knowledge_id: Mapped[int | None] = mapped_column(
+        ForeignKey("knowledge_entries.id"), nullable=True, index=True
+    )
+    concept_key: Mapped[str] = mapped_column(String(200))
+    # The label as the learner or the quiz wrote it. The key is normalized and lossy, and
+    # showing "gradient descent" for "Gradient Descent" would look like a typo.
+    concept_label: Mapped[str] = mapped_column(String(200), server_default=text("''"), default="")
+    cause: Mapped[str] = mapped_column(
+        String(20), server_default=text("'unclassified'"), default=CAUSE_UNCLASSIFIED
+    )
+    note: Mapped[str] = mapped_column(Text, server_default=text("''"), default="")
+    source_kind: Mapped[str] = mapped_column(
+        String(20), server_default=text("'manual'"), default=ERROR_SOURCE_MANUAL
+    )
+    source_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # What the evidence said at the time, e.g. "submitted 3x4, expected 3x3". A snapshot
+    # for the same reason provenance is one: the attempt row can be deleted with its
+    # course, and the diagnosis has to stay readable on its own.
+    detail: Mapped[str] = mapped_column(Text, server_default=text("''"), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    dismissed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

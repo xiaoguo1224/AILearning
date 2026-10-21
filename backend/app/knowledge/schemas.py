@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer, model_serializer
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_serializer, model_serializer
 
 from app.attempts import iso_utc
 from app.knowledge.service import MAX_BODY_CHARS, MAX_TITLE_CHARS
@@ -55,6 +55,12 @@ class UpdateKnowledgeInput(BaseModel):
     body: str | None = Field(default=None, min_length=1, max_length=MAX_BODY_CHARS)
     kind: Literal["note", "definition", "standard_answer"] | None = None
     concept_key: str | None = Field(default=None, max_length=200)
+    expected_updated_at: AwareDatetime | None = None
+
+
+class ConfirmKnowledgeInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_updated_at: AwareDatetime
 
 
 class RelationInput(BaseModel):
@@ -201,3 +207,116 @@ class CompareResult(BaseModel):
     changed: bool
     truncated: bool = False
     lines: list[DiffLine] = Field(default_factory=list)
+
+
+class ErrorCauseInput(BaseModel):
+    """One diagnosis, filed by hand.
+
+    `concept_key` and `knowledge_id` are both optional and at least one is required; the
+    router refuses the empty case with a sentence rather than guessing which concept was
+    meant.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+    concept_key: str | None = Field(default=None, max_length=200)
+    concept_label: str | None = Field(default=None, max_length=200)
+    knowledge_id: int | None = Field(default=None, strict=True, gt=0, le=2**63 - 1)
+    cause: Literal[
+        "concept_gap", "procedure", "notation", "misread", "tooling", "careless", "unclassified"
+    ] = "unclassified"
+    note: str = Field(default="", max_length=4000)
+    source_kind: Literal["attempt", "submission", "manual"] = "manual"
+    source_id: int | None = Field(default=None, strict=True, gt=0, le=2**63 - 1)
+    detail: str = Field(default="", max_length=4000)
+
+
+class ErrorFromAttemptInput(BaseModel):
+    """Diagnose a wrong quiz answer. The concept is taken from the attempt, not from here."""
+
+    model_config = ConfigDict(extra="forbid")
+    attempt_id: int = Field(strict=True, gt=0, le=2**63 - 1)
+    cause: Literal[
+        "concept_gap", "procedure", "notation", "misread", "tooling", "careless", "unclassified"
+    ] = "unclassified"
+    note: str = Field(default="", max_length=4000)
+
+
+class ErrorCauseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    project_id: int
+    knowledge_id: int | None = None
+    concept_key: str
+    concept_label: str = ""
+    cause: str
+    note: str = ""
+    source_kind: str
+    source_id: int | None = None
+    detail: str = ""
+    created_at: datetime
+    dismissed_at: datetime | None = None
+
+    @field_serializer("created_at", "dismissed_at")
+    def utc_timestamp(self, value: datetime | None) -> str | None:
+        return iso_utc(value) if value is not None else None
+
+
+class CauseCount(BaseModel):
+    cause: str
+    count: int
+
+
+class ErrorCauseList(BaseModel):
+    items: list[ErrorCauseOut]
+    total: int
+    # Counted across every diagnosis, dismissed ones included: dismissing says "do not
+    # chase this", not "this did not happen".
+    cause_counts: dict[str, int] = Field(default_factory=dict)
+
+
+class ReviewTaskCard(BaseModel):
+    """The scheduling state, read only. Not a due date the app acts on."""
+
+    id: int
+    state: str
+    due: datetime | None = None
+    lapses: int
+    reps: int
+    is_due: bool
+
+    @field_serializer("due")
+    def utc_timestamp(self, value: datetime | None) -> str | None:
+        return iso_utc(value) if value is not None else None
+
+
+class ReviewTaskOut(BaseModel):
+    """One concept with open diagnoses, and where it belongs.
+
+    `knowledge_id` is null when the project has never written an entry for this concept.
+    That is the most useful state in the list — it says a note is missing — so it is a
+    normal value and not an error.
+    """
+
+    concept_key: str
+    concept_label: str
+    knowledge_id: int | None = None
+    knowledge_title: str | None = None
+    knowledge_status: str | None = None
+    open_errors: int
+    causes: list[CauseCount] = Field(default_factory=list)
+    latest_error_id: int
+    latest_cause: str
+    latest_note: str = ""
+    latest_detail: str = ""
+    first_seen: datetime
+    last_seen: datetime
+    card: ReviewTaskCard | None = None
+
+    @field_serializer("first_seen", "last_seen")
+    def utc_timestamp(self, value: datetime) -> str:
+        return iso_utc(value)
+
+
+class ReviewTaskList(BaseModel):
+    items: list[ReviewTaskOut]
+    total: int

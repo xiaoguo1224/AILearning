@@ -224,6 +224,11 @@ def ask(session_id: int, body: MessageInput, session: Db):
     row.updated_at = utcnow()
     if not row.title:
         row.title = question[:60]
+    session.flush()
+    if assistant_message.grounded:
+        from app.knowledge.draft import draft_from_message
+
+        draft_from_message(session, row.project_id, session_id=row.id, message_id=assistant_message.id, commit=False)
     session.commit()
     session.refresh(user_message)
     session.refresh(assistant_message)
@@ -338,6 +343,11 @@ def create_practice(session_id: int, body: PracticeInput, session: Db):
     )
     session.add(message)
     row.updated_at = utcnow()
+    session.flush()
+    if message.grounded:
+        from app.knowledge.draft import draft_from_message
+
+        draft_from_message(session, row.project_id, session_id=row.id, message_id=message.id, commit=False)
     session.commit()
     session.refresh(message)
     session.refresh(exercise)

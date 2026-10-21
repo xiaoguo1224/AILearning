@@ -20,10 +20,11 @@ seed confirmed entries has to confirm them, one at a time, which is the same amo
 work as being sure.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy.orm import Session
 
+from app.attempts import iso_utc
 from app.concepts import normalize_concept
 from app.knowledge import history
 from app.knowledge.models import (
@@ -177,6 +178,11 @@ def editable_entry(session: Session, knowledge_id: int) -> KnowledgeEntry:
         writable_project(session, entry.project_id)
         session.refresh(entry)
     return entry
+
+
+def check_revision(entry: KnowledgeEntry, expected: datetime | None) -> None:
+    if expected is not None and iso_utc(entry.updated_at) != iso_utc(expected.astimezone(UTC)):
+        raise project_error(409, "knowledge_changed", "This entry changed. Reload and review it before saving or confirming.")
 
 
 def apply_edit(
