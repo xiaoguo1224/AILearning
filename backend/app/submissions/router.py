@@ -123,10 +123,25 @@ def _detail(session: Session, submission: Submission) -> SubmissionDetail:
 
 def _summary(submission: Submission) -> SubmissionSummaryOut:
     latest = submission.reviews[0] if submission.reviews else None
+    quiz_course_id = None
+    if submission.quiz_item_id:
+        from app import models as m
+        # Resolve via session bound to the submission.
+        from sqlalchemy import inspect
+        session = inspect(submission).session
+        if session is not None:
+            quiz_item = session.get(m.QuizItem, submission.quiz_item_id)
+            if quiz_item:
+                lesson = session.get(m.Lesson, quiz_item.lesson_id)
+                if lesson:
+                    module = session.get(m.Module, lesson.module_id)
+                    if module:
+                        quiz_course_id = module.course_id
     return SubmissionSummaryOut(
         id=submission.id,
         project_id=submission.project_id,
         quiz_item_id=submission.quiz_item_id,
+        quiz_course_id=quiz_course_id,
         exercise_id=submission.exercise_id,
         version=submission.version,
         status=submission.status,
@@ -665,7 +680,7 @@ def trigger_review_job(submission_id: int, session: Db, use_llm: bool = Query(Fa
                 hint_level_2=hint_2,
                 hint_level_3=hint_3,
                 reference_solution=solution,
-                model_name=model_name,
+                model=model_name,
                 llm_status=llm_status,
             )
             s.add(review)

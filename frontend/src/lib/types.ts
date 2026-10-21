@@ -1096,6 +1096,7 @@ export interface SubmissionSummary {
   id: number;
   project_id: number | null;
   quiz_item_id: number | null;
+  quiz_course_id: number | null;
   exercise_id: string | null;
   version: number;
   status: SubmissionStatus;

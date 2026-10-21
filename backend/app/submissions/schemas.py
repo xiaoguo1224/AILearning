@@ -91,6 +91,7 @@ class SubmissionSummaryOut(BaseModel):
     id: int
     project_id: int | None = None
     quiz_item_id: int | None = None
+    quiz_course_id: int | None = None
     exercise_id: str | None = None
     version: int
     status: str

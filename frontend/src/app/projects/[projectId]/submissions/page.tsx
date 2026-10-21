@@ -114,7 +114,11 @@ export default async function ProjectSubmissionsPage({
                           {formatWhen(item.created_at, t.locale)}
                         </span>
                         <Link
-                          href={`/projects/${id}/submissions/${item.id}`}
+                          href={
+                            item.quiz_item_id && item.quiz_course_id
+                              ? `/courses/${item.quiz_course_id}/quiz/${item.quiz_item_id}`
+                              : `/projects/${id}/submissions/${item.id}`
+                          }
                           className="text-small text-accent underline"
                         >
                           {t("Open")}
