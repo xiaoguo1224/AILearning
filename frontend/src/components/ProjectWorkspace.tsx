@@ -80,52 +80,66 @@ export function ProjectWorkspace({ project, courses = [], coursesError }: {
     void act(() => updateProject(project.id, { ...edits, expected_updated_at: project.updated_at }), "Project saved.", true);
   }
 
-  return <div className="space-y-8">
+  return <div className="space-y-6">
     {error && <ErrorState message={t(error)} />}
     {notice && <p role="status" className="text-small text-success">{t(notice)}</p>}
     {!archived && (conflicts || needsReload) && <div className="space-y-2">
       <p>{t("Your draft is preserved. Reloading saved values discards these edits.")}</p>
       <Button variant="secondary" disabled={pending} onClick={() => { setDraft({}); setError(null); setNeedsReload(false); }}>{t("Discard draft and reload saved values")}</Button>
     </div>}
-    {archived ? <p className="rounded-surface border border-line p-4 text-ink-muted">{t("This project is archived. Courses and learning history are preserved.")}</p> :
-      <form onSubmit={save} className="space-y-4" aria-label={t(project ? "Edit project" : "Create project")}>
-        <Field id="project-name" label={t("Project name")} value={name} onChange={e => change("name", e.target.value)} required maxLength={200} disabled={pending} />
-        <label className="block text-small text-ink-muted" htmlFor="project-goal">{t("Learning goal")}
-          <textarea id="project-goal" value={goal} onChange={e => change("goal", e.target.value)} maxLength={5000} rows={3} disabled={pending} className={INPUT} />
-        </label>
-        <label className="block text-small text-ink-muted" htmlFor="project-mode">{t("Initial template")}
-          <select id="project-mode" value={mode} onChange={e => change("mode", e.target.value)} disabled={pending} className={INPUT}>
-            <option value="course">{t("Course study")}</option><option value="research">{t("Research reading")}</option><option value="practice">{t("Programming practice")}</option>
-          </select>
-        </label>
-        <Button type="submit" disabled={pending}>{t(pending ? "Saving…" : project ? "Save project" : "Create project")}</Button>
-      </form>}
-    {project && <section aria-label={t("Linked courses")} className="space-y-4">
-      <h2 className="text-title">{t("Linked courses")}</h2>
-      <p className="text-small text-ink-muted">{t("Courses can be shared between projects. Unlinking keeps lessons and learning history.")}</p>
-      {project.courses.length === 0 ? <p>{t("No linked courses yet.")}</p> : <ul className="space-y-3">{project.courses.map(course =>
-        <li key={course.course_id} className="flex flex-wrap items-center justify-between gap-3 rounded-surface border border-line p-4">
-          <Link href={`/courses/${course.course_id}`} className="min-w-0 break-words font-medium text-accent underline underline-offset-2">{course.title}</Link>
-          {!archived && <Button disabled={pending} variant="ghost" onClick={() => void act(() => unlinkProjectCourse(project.id, course.course_id), "Course unlinked.")}>{t("Unlink course")}</Button>}
-        </li>)}</ul>}
-      {!archived && <>
-        {coursesError ? <ErrorState message={coursesError} action={<Button variant="secondary" onClick={() => router.refresh()}>{t("Retry")}</Button>} /> : available.length > 0 ?
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="min-w-0 flex-1 text-small text-ink-muted" htmlFor="project-course">{t("Choose a course")}
-              <select id="project-course" value={selected} onChange={e => setSelected(e.target.value)} disabled={pending} className={INPUT}>
-                <option value="">{t("Choose a course")}</option>{available.map(course => <option key={course.id} value={course.id}>{course.title}</option>)}
-              </select>
-            </label>
-            <Button disabled={pending || !selected} onClick={() => void act(() => linkProjectCourse(project.id, Number(selected), project.courses.length), "Course linked.")}>{t("Link course")}</Button>
-          </div> : <p className="text-small text-ink-muted">{t("No other courses available.")}</p>}
-        <Link href="/courses/new" className="text-accent underline underline-offset-2">{t("Create a course")}</Link>
-      </>}
-    </section>}
-    {project && !archived && <section className="border-t border-line pt-6">
-      {confirmArchive ? <div role="group" aria-label={t("Confirm archive")} className="space-y-3">
-        <p>{t("Archive “{0}”? Courses and learning history will be kept. The project becomes read-only.", project.name)}</p>
-        <div className="flex gap-3"><Button variant="danger" disabled={pending} onClick={() => void act(() => archiveProject(project.id), "Project archived.")}>{t("Confirm archive")}</Button><Button variant="secondary" disabled={pending} onClick={() => setConfirmArchive(false)}>{t("Cancel")}</Button></div>
-      </div> : <Button variant="secondary" disabled={pending} onClick={() => setConfirmArchive(true)}>{t("Archive project")}</Button>}
-    </section>}
+    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <section className="rounded-surface border border-line bg-surface p-6 shadow-raise">
+        <h2 className="font-display text-title">{t("Project settings")}</h2>
+        <div className="mt-4">
+          {archived ? <p className="text-ink-muted">{t("This project is archived. Courses and learning history are preserved.")}</p> :
+            <form onSubmit={save} className="space-y-4" aria-label={t(project ? "Edit project" : "Create project")}>
+              <Field id="project-name" label={t("Project name")} value={name} onChange={e => change("name", e.target.value)} required maxLength={200} disabled={pending} />
+              <label className="block text-small text-ink-muted" htmlFor="project-goal">{t("Learning goal")}
+                <textarea id="project-goal" value={goal} onChange={e => change("goal", e.target.value)} maxLength={5000} rows={3} disabled={pending} className={INPUT} />
+              </label>
+              <label className="block text-small text-ink-muted" htmlFor="project-mode">{t("Initial template")}
+                <select id="project-mode" value={mode} onChange={e => change("mode", e.target.value)} disabled={pending} className={INPUT}>
+                  <option value="course">{t("Course study")}</option><option value="research">{t("Research reading")}</option><option value="practice">{t("Programming practice")}</option>
+                </select>
+              </label>
+              <Button type="submit" disabled={pending}>{t(pending ? "Saving…" : project ? "Save project" : "Create project")}</Button>
+            </form>}
+        </div>
+      </section>
+      {project && <div className="space-y-6">
+        <section aria-label={t("Linked courses")} className="rounded-surface border border-line bg-surface p-6 shadow-raise">
+          <h2 className="text-title">{t("Linked courses")}</h2>
+          <p className="mt-1 text-small text-ink-muted">{t("Courses can be shared between projects. Unlinking keeps lessons and learning history.")}</p>
+          <div className="mt-4 space-y-4">
+            {project.courses.length === 0 ? <p className="text-small text-ink-muted">{t("No linked courses yet.")}</p> : <ul className="space-y-2">{project.courses.map(course =>
+              <li key={course.course_id} className="flex flex-wrap items-center justify-between gap-2 rounded-control border border-line px-3 py-2">
+                <Link href={`/courses/${course.course_id}`} className="min-w-0 break-words text-small font-medium text-accent underline underline-offset-2">{course.title}</Link>
+                {!archived && <Button disabled={pending} variant="ghost" onClick={() => void act(() => unlinkProjectCourse(project.id, course.course_id), "Course unlinked.")}>{t("Unlink course")}</Button>}
+              </li>)}</ul>}
+            {!archived && <>
+              {coursesError ? <ErrorState message={coursesError} action={<Button variant="secondary" onClick={() => router.refresh()}>{t("Retry")}</Button>} /> : available.length > 0 ?
+                <div className="space-y-3">
+                  <label className="block text-small text-ink-muted" htmlFor="project-course">{t("Choose a course")}
+                    <select id="project-course" value={selected} onChange={e => setSelected(e.target.value)} disabled={pending} className={INPUT}>
+                      <option value="">{t("Choose a course")}</option>{available.map(course => <option key={course.id} value={course.id}>{course.title}</option>)}
+                    </select>
+                  </label>
+                  <Button disabled={pending || !selected} onClick={() => void act(() => linkProjectCourse(project.id, Number(selected), project.courses.length), "Course linked.")}>{t("Link course")}</Button>
+                </div> : <p className="text-small text-ink-muted">{t("No other courses available.")}</p>}
+              <Link href="/courses/new" className="block text-small text-accent underline underline-offset-2">{t("Create a course")}</Link>
+            </>}
+          </div>
+        </section>
+        {!archived && <section aria-label={t("Danger zone")} className="rounded-surface border border-danger-border bg-danger-surface p-6">
+          <h2 className="text-title text-danger">{t("Danger zone")}</h2>
+          <div className="mt-3">
+            {confirmArchive ? <div role="group" aria-label={t("Confirm archive")} className="space-y-3">
+              <p className="text-small">{t("Archive “{0}”? Courses and learning history will be kept. The project becomes read-only.", project.name)}</p>
+              <div className="flex gap-3"><Button variant="danger" disabled={pending} onClick={() => void act(() => archiveProject(project.id), "Project archived.")}>{t("Confirm archive")}</Button><Button variant="secondary" disabled={pending} onClick={() => setConfirmArchive(false)}>{t("Cancel")}</Button></div>
+            </div> : <Button variant="secondary" disabled={pending} onClick={() => setConfirmArchive(true)}>{t("Archive project")}</Button>}
+          </div>
+        </section>}
+      </div>}
+    </div>
   </div>;
 }

@@ -68,9 +68,13 @@ export default async function ProjectExplorePage({
     }
   }
 
-  if (project && sessionId) {
+  // Without an explicit ?session=, open the most recent session so the page
+  // never shows a dead conversation panel when sessions exist.
+  const effectiveSessionId = sessionId ?? sessions?.items[0]?.id;
+
+  if (project && effectiveSessionId) {
     try {
-      const loaded = await getExploreSession(sessionId, t.locale);
+      const loaded = await getExploreSession(effectiveSessionId, t.locale);
       // A session id belonging to another project is treated as absent rather than
       // drawn: the header names this project, and a conversation from elsewhere under it
       // would read as this project's own material.
@@ -104,13 +108,15 @@ export default async function ProjectExplorePage({
             <div className="flex flex-col gap-6 lg:flex-row">
               {/* Session rail */}
               <aside className="w-full shrink-0 lg:w-72">
-                <div className="flex items-center justify-between gap-3">
-                  <h2 className="text-micro font-medium uppercase tracking-wider text-ink-subtle">
-                    {t("Sessions")}
-                  </h2>
-                  {!archived && <NewExploreSessionButton projectId={id} />}
-                </div>
-                <div className="mt-3">
+                {!archived && (
+                  <div className="[&>div]:w-full [&_button]:w-full">
+                    <NewExploreSessionButton projectId={id} />
+                  </div>
+                )}
+                <h2 className="mt-4 text-micro font-medium uppercase tracking-wider text-ink-subtle">
+                  {t("Sessions")}
+                </h2>
+                <div className="mt-2">
                   {listError ? (
                     <ErrorState message={listError} />
                   ) : !sessions || sessions.items.length === 0 ? (
@@ -184,10 +190,14 @@ export default async function ProjectExplorePage({
                   </div>
                 ) : (
                   !listError && (
-                    <div className="flex h-full min-h-64 items-center justify-center rounded-surface border border-dashed border-line p-8">
-                      <p className="max-w-xs text-center text-small text-ink-subtle">
-                        {t("Select a session on the left, or start a new one to ask a question.")}
-                      </p>
+                    <div className="flex h-full min-h-80 flex-col items-center justify-center gap-5 rounded-surface border border-dashed border-line p-8 text-center">
+                      <div className="space-y-1.5">
+                        <h2 className="font-display text-title">{t("No sessions yet")}</h2>
+                        <p className="mx-auto max-w-xs text-small text-ink-muted">
+                          {t("Start a session and ask a question about this project's material.")}
+                        </p>
+                      </div>
+                      {!archived && <NewExploreSessionButton projectId={id} />}
                     </div>
                   )
                 )}

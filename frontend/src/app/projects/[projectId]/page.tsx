@@ -26,11 +26,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     try { courses = await listCourses(t.locale); }
     catch { coursesError = t("Could not load course choices. Please retry."); }
   }
-  return <div className="max-w-3xl space-y-10">
-    <section className="space-y-4">
-      <h2 className="font-display text-title">{t("Project settings")}</h2>
-      {error ? <ErrorState message={error} /> : project && <ProjectWorkspace key={project.id} project={project} courses={courses} coursesError={coursesError} />}
-    </section>
+  return <div className="max-w-5xl space-y-10">
+    {error ? <ErrorState message={error} /> : project && <ProjectWorkspace key={project.id} project={project} courses={courses} coursesError={coursesError} />}
     {project && <section className="space-y-4">
       <h2 className="font-display text-title">{t("Materials")}</h2>
       <ProjectResourcesManager projectId={project.id} isArchived={project.status === 'archived'} />
