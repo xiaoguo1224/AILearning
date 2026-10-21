@@ -5,7 +5,7 @@ import { getLocale, getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { ConceptMap, MasteryLegend } from "@/components/ConceptMap";
+import { ConceptMap, MasteryLegend } from "@/components/ConceptMapECharts";
 import { CourseTabs } from "@/components/CourseTabs";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -120,9 +120,9 @@ export default async function CourseConceptsPage(
             scrolling the map inside its own box instead of scrolling the page sideways.
           */}
           <div className="lg:-mx-28 xl:-mx-40">
-            <ConceptMap lessons={lessons} concepts={concepts} courseTitle={data.title} locale={t.locale} />
+            <ConceptMap lessons={lessons} concepts={concepts} />
           </div>
-          <MasteryLegend locale={t.locale} />
+          <MasteryLegend />
 
           {weakest ? (
             <section className="mt-6 flex items-center justify-between gap-5 rounded-surface border border-line px-5 py-4">

@@ -1,5 +1,6 @@
 "use client";
 
+import { Collapse } from "antd";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
@@ -74,32 +75,25 @@ export function JobsList() {
   }
 
   return (
-    <div className="space-y-4">
+    <Collapse>
       {jobs.map((job) => {
         const link = jobLink(job);
         const label = TYPE_LABELS[job.type] ?? job.type;
+        const statusTone = job.status === "completed" ? "success" : job.status === "failed" ? "danger" : "neutral";
         return (
-          <div key={job.id} className="rounded-surface border border-line p-4">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="text-small font-medium">{t(label)}</span>
-                <Badge
-                  tone={
-                    job.status === "completed"
-                      ? "success"
-                      : job.status === "failed"
-                        ? "danger"
-                        : "neutral"
-                  }
-                >
-                  {t(job.status)}
-                </Badge>
-              </div>
-              <span className="text-micro text-ink-muted">
-                {new Date(job.created_at).toLocaleString()}
+          <Collapse.Panel
+            key={job.id}
+            header={
+              <span>
+                {t(label)}{" "}
+                <Badge tone={statusTone}>{t(job.status)}</Badge>{" "}
+                <span style={{ color: "#888", fontSize: 12 }}>
+                  {new Date(job.created_at).toLocaleString()}
+                </span>
               </span>
-            </div>
-            <div className="mt-3">
+            }
+          >
+            <div>
               <JobProgressBar job={job} />
             </div>
             <div className="mt-3 flex items-center gap-2">
@@ -122,9 +116,22 @@ export function JobsList() {
                 </Link>
               )}
             </div>
-          </div>
+            {job.error && (
+              <div style={{ marginTop: 12, color: "red" }}>
+                <strong>Error:</strong> {job.error}
+              </div>
+            )}
+            {job.result && (
+              <details style={{ marginTop: 12 }}>
+                <summary>Result</summary>
+                <pre style={{ fontSize: 12, overflow: "auto" }}>
+                  {JSON.stringify(job.result, null, 2)}
+                </pre>
+              </details>
+            )}
+          </Collapse.Panel>
         );
       })}
-    </div>
+    </Collapse>
   );
 }

@@ -1,5 +1,5 @@
 
-import { Table } from "antd";
+import { UsageTables } from "@/components/UsageTables";
 import { LocalizedText } from "@/components/LocaleProvider";
 import { getLocale, getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
@@ -154,104 +154,16 @@ export default async function UsagePage() {
             )}
           </section>
 
-          <section aria-labelledby="per-course-heading" className="mt-10">
-            <h2 id="per-course-heading" className="text-subtitle"><LocalizedText text={" Where the spend went "} /></h2>
-            {usage.per_course.length === 0 ? (
-              <p className="mt-3 rounded-surface border border-dashed border-line-strong px-4 py-6 text-center text-small text-ink-muted"><LocalizedText text={" No LLM spend recorded yet. "} /></p>
-            ) : (
-              <div className="mt-3 overflow-x-auto">
-                <Table
-                  dataSource={usage.per_course}
-                  rowKey={rowKey}
-                  pagination={false}
-                  columns={[
-                    {
-                      title: <LocalizedText text={" Attributed to "} />,
-                      key: "attributed",
-                      render: (_, row) => <AttributedTo row={row} />,
-                    },
-                    {
-                      title: <LocalizedText text={" Calls "} />,
-                      dataIndex: "calls",
-                      key: "calls",
-                      render: (_, row) => formatCount(row.calls),
-                    },
-                    {
-                      title: <LocalizedText text={" Input tokens "} />,
-                      dataIndex: "input_tokens",
-                      key: "input_tokens",
-                      render: (_, row) => formatCount(row.input_tokens),
-                    },
-                    {
-                      title: <LocalizedText text={" Output tokens "} />,
-                      dataIndex: "output_tokens",
-                      key: "output_tokens",
-                      render: (_, row) => formatCount(row.output_tokens),
-                    },
-                    {
-                      title: <LocalizedText text={" Est. cost "} />,
-                      dataIndex: "estimated_cost_usd",
-                      key: "estimated_cost_usd",
-                      render: (_, row) => formatUsd(row.estimated_cost_usd),
-                    },
-                  ]}
-                />
-                {/* One note per non-course group actually present. The server writes
-                    these sentences, because which one is true of a row is decided by
-                    the same code that decided the row's group. */}
-                {usage.per_course
-                  .filter((row) => row.note !== null)
-                  .map((row) => (
-                    <p key={row.group} id={`note-${row.group}`} className="mt-2 text-small text-ink-subtle">
-                      {row.note}
-                    </p>
-                  ))}
-              </div>
-            )}
-          </section>
-
-          <section aria-labelledby="recent-calls-heading" className="mt-10">
-            <h2 id="recent-calls-heading" className="text-subtitle"><LocalizedText text={" Recent calls "} /></h2>
-            {usage.recent_calls.length === 0 ? (
-              <p className="mt-3 rounded-surface border border-dashed border-line-strong px-4 py-6 text-center text-small text-ink-muted"><LocalizedText text={" No LLM calls recorded yet. "} /></p>
-            ) : (
-              <div className="mt-3 overflow-x-auto">
-                <Table
-                  dataSource={usage.recent_calls}
-                  rowKey="id"
-                  pagination={false}
-                  columns={[
-                    {
-                      title: <LocalizedText text={" Time "} />,
-                      dataIndex: "created_at",
-                      key: "created_at",
-                      render: (_, call) => formatTimestamp(call.created_at, t.locale),
-                    },
-                    { title: <LocalizedText text={" Provider "} />, dataIndex: "provider", key: "provider" },
-                    { title: <LocalizedText text={" Model "} />, dataIndex: "model", key: "model" },
-                    { title: <LocalizedText text={" Stage "} />, dataIndex: "stage", key: "stage" },
-                    {
-                      title: <LocalizedText text={" In / out tokens "} />,
-                      key: "tokens",
-                      render: (_, call) => `${formatCount(call.input_tokens)} / ${formatCount(call.output_tokens)}`,
-                    },
-                    {
-                      title: <LocalizedText text={" Est. cost "} />,
-                      key: "cost",
-                      render: (_, call) => (
-                        <>
-                          {formatUsd(call.estimated_cost_usd)}
-                          {call.approximate && (
-                            <span style={{ marginLeft: 4 }}><LocalizedText text={"(approx.)"} /></span>
-                          )}
-                        </>
-                      ),
-                    },
-                  ]}
-                />
-              </div>
-            )}
-          </section>
+                    <UsageTables
+            perCourse={usage.per_course}
+            recentCalls={usage.recent_calls}
+            locale={t.locale}
+            formatCount={formatCount}
+            formatUsd={formatUsd}
+            formatTimestamp={formatTimestamp}
+            rowKey={rowKey}
+            AttributedTo={AttributedTo}
+          />
         </>
       )}
     </main>

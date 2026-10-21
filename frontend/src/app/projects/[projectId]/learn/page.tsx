@@ -1,5 +1,6 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CurriculumTree } from "@/components/CurriculumTree";
+
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, getProject, getProjectCurriculum } from "@/lib/api";
@@ -22,8 +23,34 @@ export default async function ProjectLearningPage({ params }: { params: Promise<
     error = err instanceof ApiError ? err.message : t("Could not reach the server.");
   }
   return <div className="max-w-4xl space-y-8">
-    <PageHeader title={t("Course knowledge tree")} />
+    <PageHeader title={t("Courses")} />
     {error && <ErrorState message={error} />}
-    {data && project && <CurriculumTree data={data} archived={project.status === "archived"} t={t} />}
+    {data && <ProjectCourseList courses={data.courses} t={t} />}
   </div>;
+}
+
+function ProjectCourseList({
+  courses,
+  t,
+}: {
+  courses: { id: number; title: string }[];
+  t: any;
+}) {
+  if (courses.length === 0) {
+    return <p>{t("No courses in this project yet.")}</p>;
+  }
+  return (
+    <ul className="space-y-2">
+      {courses.map((course) => (
+        <li key={course.id}>
+          <Link
+            href={`/courses/${course.id}`}
+            className="block rounded-surface border border-line p-4 hover:border-line-strong"
+          >
+            <span className="text-ui font-medium">{course.title}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
 }
