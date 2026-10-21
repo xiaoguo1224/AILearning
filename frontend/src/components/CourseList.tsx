@@ -28,7 +28,7 @@ type SortKey = "created" | "frequent" | "alpha";
 export function CourseList({ courses }: { courses: CourseSummary[] }) {
   const { t } = useI18n();
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<SortKey>("created");
+  const [sort, setSort] = useState<SortKey>("frequent");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

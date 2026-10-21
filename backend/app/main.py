@@ -1251,7 +1251,7 @@ def regenerate_lesson_stream(
 @app.post("/api/courses/{course_id}/open")
 def record_course_open(course_id: int, session: Session = Depends(get_session)):
     """Record that the user opened a course. Returns the updated open count."""
-    course = session.get(_m.Course, course_id)
+    course = session.get(models.Course, course_id)
     if not course:
         raise HTTPException(404, "Course not found")
     course.opened_count = (course.opened_count or 0) + 1
