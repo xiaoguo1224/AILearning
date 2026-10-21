@@ -35,6 +35,7 @@ or attempts, and nothing here is a rating: a conversation is not a retrieval tes
 folding one into the schedule would let a learner talk their way to a longer interval.
 """
 
+import json
 import re
 from datetime import UTC, datetime
 from typing import NamedTuple
@@ -43,7 +44,7 @@ from sqlalchemy.orm import Session
 
 from app import days, generation, models, remediation, review, teaching
 from app.attempts import LESSON_QUIZ_SOURCE, iso_utc
-from app.concepts import normalize_concept
+from app.concepts import course_scope, normalize_concept
 from app.untrusted import as_data
 
 # The stage string these calls are recorded under in llm_calls, so tutor spend shows up
@@ -120,6 +121,7 @@ BEYOND_MAX_CHARS = 400
 # pair means. A new field on this reply is exactly how one slips past sanitisation, so
 # anything added here needs that decision taken deliberately rather than inherited from
 # whichever neighbour it was pasted next to.
+MAX_REFS = 5
 ASK_MAX_CHARS = 300
 
 # The two reply modes. Answer mode explains and optionally ends with a recall question;
@@ -499,8 +501,14 @@ def context(session: Session, concept_key: str, now: datetime | None = None) -> 
     card = review.get_card(session, concept_key)
     withheld = open_answer_item_ids(session, concept_key, quiz_items, card)
     flagged, missed, of = _attention(session, concept_key, moment)
+    label = _display_label(concept_key, card, lessons, quiz_items)
+    course_id = course_scope(concept_key)
+    if course_id is not None:
+        course = session.get(models.Course, course_id)
+        if course and course.title:
+            label = course.title
     return TutorContext(
-        concept_label=_display_label(concept_key, card, lessons, quiz_items),
+        concept_label=label,
         lessons=lessons,
         items=[
             MaterialItem(
@@ -599,9 +607,31 @@ def message_payload(row: models.TutorMessage) -> dict:
         "beyond": (row.beyond or None) if is_tutor else None,
         "check": (row.check_question or None) if is_tutor else None,
         "ask": (row.ask or None) if is_tutor else None,
+        "refs": _read_refs(row) if is_tutor else [],
         "model": (row.model or None) if is_tutor else None,
         "created_at": iso_utc(row.created_at),
     }
+
+
+def _read_refs(row) -> list[dict]:
+    """The row's stored lesson references, or [] when absent or malformed.
+
+    Defensive on purpose: rows written before the column existed backfill to
+    "[]", but a hand-edited database can hold anything, and a citation list is
+    display-only — it must never be the thing that 500s a conversation read.
+    """
+    raw = getattr(row, "refs", "") or ""
+    try:
+        data = json.loads(raw)
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [
+        {"lesson_id": entry.get("lesson_id"), "title": entry.get("title", "")}
+        for entry in data
+        if isinstance(entry, dict) and isinstance(entry.get("lesson_id"), int)
+    ]
 
 
 def limits_payload(counts: TurnCounts) -> dict:
@@ -873,10 +903,16 @@ _ANSWER_SCHEMA = """{
   "answer": str,            # required, never empty; only what the supplied material supports
   "beyond": str or null,    # optional; general knowledge the material does not cover
   "check": str or null      # optional; exactly one short recall question
+  "refs": [str] or null,      # lesson titles from the material this answer draws on, copied exactly
 }
 All values are markdown strings, escaped the way JSON requires. Leave "beyond" or "check" out, or \
 set them to null, when they do not apply. A reply with no non-empty "answer" is thrown away and \
-the learner is shown an error, so never send one."""
+the learner is shown an error, so never send one.
+
+Cite your sources: list in "refs" the exact lesson titles (as shown in the material block) that \
+support this answer, most relevant first, at most 5. Only titles that appear in the material; \
+never invent one. Omit "refs" or set it to null when the answer adds nothing beyond the \
+conversation."""
 
 # Answer mode's rules block: the shared answer-first paragraph, unchanged in wording and
 # now owned by app/teaching.py so free exploration cannot state a weaker version of it.
@@ -933,11 +969,17 @@ GUIDED_RUNGS = (1, 2)
 _GUIDED_SCHEMA = """{
   "answer": str,            # required, never empty; only what the supplied material supports
   "beyond": str or null,    # optional; general knowledge the material does not cover
-  "ask": str or null        # optional; the one move you withheld, handed back as a question
+  "ask": str or null,       # optional; the one move you withheld, handed back as a question
+  "refs": [str] or null,      # lesson titles from the material this answer draws on, copied exactly
 }
 All values are markdown strings, escaped the way JSON requires. Leave "beyond" or "ask" out, or \
 set them to null, when they do not apply. A reply with no non-empty "answer" is thrown away and \
-the learner is shown an error, so never send one."""
+the learner is shown an error, so never send one.
+
+Cite your sources: list in "refs" the exact lesson titles (as shown in the material block) that \
+support this answer, most relevant first, at most 5. Only titles that appear in the material; \
+never invent one. Omit "refs" or set it to null when the answer adds nothing beyond the \
+conversation."""
 
 # The rung sentence, which is the only text that differs between the two rungs. Kept as one
 # sentence each rather than as two whole rule blocks, so that the rungs cannot drift apart
@@ -1245,6 +1287,9 @@ class TutorReply(NamedTuple):
     beyond: str = ""
     check: str = ""
     ask: str = ""
+    # Resolved lesson references: [{"lesson_id": int, "title": str}], most relevant
+    # first. Empty when the model cited nothing (or nothing it cited resolved).
+    refs: list = []
 
 
 # A sentence is everything up to and including its terminator, plus the whitespace that
@@ -1252,6 +1297,7 @@ class TutorReply(NamedTuple):
 # "e.g." and "Dr." split early, which can only ever make `beyond` shorter than three
 # real sentences, never longer than the cap.
 _SENTENCE = re.compile(r"[^.!?]*[.!?]+\s*|[^.!?]+\Z")
+_WHITESPACE = re.compile(r"\s+")
 
 
 def _clean_text(raw: object) -> str:
@@ -1300,7 +1346,46 @@ def truncate_beyond(text: str) -> str:
     return _hard_cut("".join(pieces).strip(), BEYOND_MAX_CHARS)
 
 
-def parse_reply(text: str, mode: str) -> TutorReply:
+def _resolve_refs(raw_refs: object, lessons: list) -> list[dict]:
+    """Map the model's cited lesson titles onto lesson ids.
+
+    Exact title first, then a normalized comparison, because a model asked to
+    copy exactly still occasionally trims a trailing "（上）" or a space. Titles
+    that match nothing are dropped, not guessed at: a wrong link is worse than
+    no link. Capped at MAX_REFS so a chatty model cannot stuff the row.
+    """
+    if not isinstance(raw_refs, list):
+        return []
+    by_title: dict[str, object] = {}
+    by_norm: dict[str, object] = {}
+    for lesson in lessons:
+        title = getattr(lesson, "title", "") or ""
+        if title and title not in by_title:
+            by_title[title] = lesson
+        norm = _normalize_title(title)
+        if norm and norm not in by_norm:
+            by_norm[norm] = lesson
+    resolved: list[dict] = []
+    seen: set[int] = set()
+    for entry in raw_refs:
+        if not isinstance(entry, str):
+            continue
+        lesson = by_title.get(entry.strip()) or by_norm.get(_normalize_title(entry))
+        lesson_id = getattr(lesson, "id", None)
+        if lesson is None or lesson_id in seen:
+            continue
+        seen.add(lesson_id)
+        resolved.append({"lesson_id": lesson_id, "title": getattr(lesson, "title", "")})
+        if len(resolved) >= MAX_REFS:
+            break
+    return resolved
+
+
+def _normalize_title(title: str) -> str:
+    return _WHITESPACE.sub(" ", title or "").strip().casefold()
+
+
+def parse_reply(text: str, mode: str, lessons: list | None = None) -> TutorReply:
     """The model's reply as a TutorReply, or ValueError. `mode` is the EFFECTIVE mode.
 
     `answer` is required in both modes, and its absence is a parse failure rather than
@@ -1349,4 +1434,5 @@ def parse_reply(text: str, mode: str) -> TutorReply:
         beyond=truncate_beyond(_clean_text(parsed.get("beyond"))),
         check="" if guided else _clean_text(parsed.get("check")),
         ask=_hard_cut(_clean_text(parsed.get("ask")), ASK_MAX_CHARS) if guided else "",
+        refs=_resolve_refs(parsed.get("refs"), lessons or []),
     )

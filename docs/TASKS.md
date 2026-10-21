@@ -69,6 +69,13 @@
 
 **完成定义：** 单人可独立使用学习→提交→诊断→复测与论文自由学习两个闭环。
 
+## 后续修复（2026-10-21 起）
+
+已验收行为的缺陷修复，均在 PRD 范围内（P2 评审准确性 / P3 检索质量），不扩张范围。
+
+- [x] FIX-01 评审行号偏差：`_prompt()` 给模型的代码块加 `N|` 行号前缀，`REVIEW_SYSTEM` 规则 4 要求引用打印出的行号。2026-10-21 完成并测试（`test_review_prompt_numbers_code_lines_for_the_model`），测试记录 `docs/test-reports/2026-10-21-review-line-numbers-cjk-retrieval.md`。
+- [x] FIX-02 中文长问句检索不到资料：`expand_cjk_search_terms()` 把 ≥4 字连续 CJK 展开为重叠二元词；`search_resources_fts()` 在 FTS 无命中且含中文时走按命中词数排序的 LIKE 兜底；`retrieval.py::_terms()` / `_like_fallback()` 同步。2026-10-21 完成并测试（4 个新增用例），测试记录同上。未引入分词依赖。
+
 ## 优先级及依赖约束
 
 `P0 → P1 → P2 → P3 → P4 → P5`。允许同阶段并行的只读分析，但不得提前重构尚未验证的下游接口。Codex 负责自身任务拆解；用户仅在边界冲突、付费、凭据或无法恢复的操作时参与决策。

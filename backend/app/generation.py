@@ -103,7 +103,7 @@ OUTLINE_SYSTEM = outline_system(SEGMENT_ROUTING_MIN_CHUNKS)
 LESSON_SYSTEM = """You are a teacher writing one lesson of a course. Given the lesson title, \
 its summary, and the relevant source material, respond with ONLY a JSON object matching:
 {
-  "content": str,            # the lesson itself, in markdown: explanations, examples
+  "content": str,            # the lesson itself, in markdown (see CONTENT RULES below)
   "concepts": [str],         # 2-5 key concepts this lesson teaches
   "quiz": [
     {"question": str, "kind": "mcq" | "short", "options": [str], "answer": str, "concept": str}
@@ -113,6 +113,30 @@ Output format: the JSON object is the entire reply. Do not put a ``` fence aroun
 write anything before or after it. Code examples belong inside the "content" string as ordinary \
 markdown, fences and all, escaped the way JSON requires; a code example is never a reason to \
 stop emitting JSON.
+
+CONTENT RULES — write a full lesson, not a summary. A reader should be able to learn the topic \
+from this lesson alone, without opening the source:
+- Length: aim for a thorough lesson (roughly 1500-2500 Chinese characters of prose plus \
+examples). A few short paragraphs is a failure; go deep.
+- Structure every lesson the same way:
+  1. 为什么学 (motivation): one paragraph on why this matters and where it is used.
+  2. 核心讲解: split into 2-4 subsections, one per key idea. For each idea give the \
+intuition first (an analogy or picture), then the precise definition, then the details.
+  3. 代码示例: at least one complete, runnable example with line-by-line explanation of \
+what each part does and why it is written that way. For math-heavy ideas, walk through \
+a small numerical example by hand.
+  4. 常见误区: 2-3 mistakes beginners make here and how to avoid them.
+  5. 小结: the 3-5 takeaways in one short list.
+- Connect to the rest of the course: say what this lesson builds on and what it leads to.
+- Prefer concrete over abstract: every new term gets an example the first time it appears.
+- Formulas: whenever the lesson needs a formula, write it in LaTeX — inline as $...$ and \
+display as $$...$$ on their own lines. Never write a formula as plain text or as an image \
+placeholder; the renderer turns LaTeX into typeset math.
+- Diagrams: whenever a picture would teach better than a paragraph — an architecture \
+(e.g. the Transformer encoder-decoder), a data flow, a process with steps, a comparison \
+of two approaches — draw it as a Mermaid diagram inside a ```mermaid fenced code block \
+(flowchart, sequenceDiagram, or graph as appropriate). Keep node labels short; explain \
+the diagram in the prose around it. Do not describe a diagram in words instead of drawing it.
 
 Quiz rules:
 - Write 3-6 items. For "mcq" give exactly 4 options and set "answer" to the correct option's \
@@ -391,8 +415,17 @@ def label_segments(
     return "\n\n".join(parts)
 
 
-def generate_outline(meter: Meter, chunks: list[str], owners: list[str] | None = None) -> dict:
+def generate_outline(
+    meter: Meter,
+    chunks: list[str],
+    owners: list[str] | None = None,
+    feedback: str | None = None,
+) -> dict:
     """The outline call. `owners` names the document each chunk came from, if several.
+
+    `feedback` is the learner's verdict on a previous version of this course
+    ("too hard", "needs more examples", ...). It is appended as an instruction
+    so a regeneration adjusts instead of rolling the same dice twice.
 
     The unrouted branch does NOT defuse forged labels, and that is not an oversight: it
     writes no labels, so there is nothing for the source to forge. Neutralizing there
@@ -414,6 +447,12 @@ def generate_outline(meter: Meter, chunks: list[str], owners: list[str] | None =
         # No segment numbering either: labels the model is told nothing about are
         # noise in the middle of the text it is meant to be reading.
         prompt = "Source material:\n\n" + "\n\n".join(chunks)
+    if feedback and feedback.strip():
+        prompt = (
+            f"{prompt}\n\nThe learner reviewed a previous version of this course "
+            f"and asks for these changes. Apply them to the outline and carry them "
+            f"through the lessons:\n{feedback.strip()}"
+        )
     outline = generate_json(
         meter, OUTLINE_STAGE, outline_system(len(chunks), source_count), prompt
     )
@@ -544,6 +583,44 @@ def generate_lesson(
     return lesson
 
 
+# How many times a lesson is attempted before it is dropped. generate_json already
+# retries a single unparseable reply once, so this is retries of the whole lesson
+# attempt: 3 here means up to 3 model calls (each with its own parse retry) per
+# lesson. A lesson that fails all of them is dropped, and the failure is recorded
+# with its attempt count so the caller can tell "tried hard" from "gave up early".
+LESSON_MAX_ATTEMPTS = 3
+
+
+def generate_lesson_with_retry(
+    meter: Meter,
+    lesson_title: str,
+    lesson_summary: str,
+    chunks: list[str],
+    segments: list[int] | None = None,
+    owners: list[str] | None = None,
+    attempts: int = LESSON_MAX_ATTEMPTS,
+) -> tuple[dict, int]:
+    """generate_lesson, retried up to `attempts` times. Returns (lesson, attempts_used).
+
+    Raises the last ValueError when every attempt fails, so the caller records one
+    failure with the full attempt count rather than one per try.
+    """
+    last_error: ValueError | None = None
+    used = 0
+    for _ in range(max(1, attempts)):
+        used += 1
+        try:
+            return generate_lesson(meter, lesson_title, lesson_summary, chunks, segments, owners), used
+        except ValueError as exc:
+            last_error = exc
+            logger.warning(
+                "lesson=%r: attempt %d/%d failed (%s)",
+                lesson_title, used, attempts, exc,
+            )
+    assert last_error is not None
+    raise last_error
+
+
 def generate_course(meter: Meter, chunks: list[str], owners: list[str] | None = None) -> dict:
     """Full pipeline. Returns {title, description, modules: [{title, lessons: [...]}]}
     where each lesson has title, content, concepts, quiz, and the source segments it
@@ -586,12 +663,12 @@ def generate_course(meter: Meter, chunks: list[str], owners: list[str] | None = 
             if segments_are_fallback(lesson_stub, len(chunks)):
                 fell_back += 1
             try:
-                authored = generate_lesson(
+                authored, attempts_used = generate_lesson_with_retry(
                     meter, title, lesson_stub.get("summary", ""), chunks, segments, owners
                 )
             except ValueError as exc:
-                logger.error("dropping lesson %r: %s", title, exc)
-                failures.append({"lesson": title, "error": str(exc)})
+                logger.error("dropping lesson %r after %d attempts: %s", title, LESSON_MAX_ATTEMPTS, exc)
+                failures.append({"lesson": title, "error": str(exc), "attempts": LESSON_MAX_ATTEMPTS})
                 continue
             built["lessons"].append({"title": title, "segments": segments, **authored})
         # An empty module would render as a heading with nothing under it.

@@ -204,18 +204,43 @@ def test_generate_course_keeps_the_lessons_that_parsed():
     """One unrecoverable lesson costs that lesson, not the course and its spend."""
     meter = ScriptedMeter(
         [json.dumps(OUTLINE), json.dumps(LESSON), "garbage", "garbage again"]
+        + ["still garbage"] * 4
     )
     course = generate_course(meter, ["one", "two", "three"])
     lessons = course["modules"][0]["lessons"]
     assert [lesson["title"] for lesson in lessons] == ["Lesson A"]
     assert course["dropped_lessons"] == [
-        {"lesson": "Lesson B", "error": course["dropped_lessons"][0]["error"]}
+        {
+            "lesson": "Lesson B",
+            "error": course["dropped_lessons"][0]["error"],
+            "attempts": 3,
+        }
     ]
     assert "No JSON object" in course["dropped_lessons"][0]["error"]
 
 
+def test_generate_course_retries_a_lesson_before_dropping_it():
+    """A lesson that fails twice but parses on the third attempt is kept.
+
+    Each attempt is one generate_json call, which itself retries one unparseable
+    reply: 2 garbage pops per attempt, then a good lesson on the third.
+    """
+    meter = ScriptedMeter(
+        [json.dumps(OUTLINE)]
+        + ["garbage"] * 2  # Lesson A, attempt 1 (call + parse retry)
+        + ["garbage"] * 2  # Lesson A, attempt 2
+        + [json.dumps(LESSON)]  # Lesson A, attempt 3
+        + [json.dumps(LESSON)]  # Lesson B, attempt 1
+    )
+    course = generate_course(meter, ["one", "two", "three"])
+    lessons = course["modules"][0]["lessons"]
+    assert [lesson["title"] for lesson in lessons] == ["Lesson A", "Lesson B"]
+    assert "dropped_lessons" not in course
+
+
 def test_generate_course_raises_when_every_lesson_fails():
-    meter = ScriptedMeter([json.dumps(OUTLINE)] + ["garbage"] * 4)
+    # 2 lessons x 3 attempts x (1 call + 1 parse retry) pops per attempt.
+    meter = ScriptedMeter([json.dumps(OUTLINE)] + ["garbage"] * 12)
     with pytest.raises(ValueError, match="No lesson could be generated"):
         generate_course(meter, ["one", "two", "three"])
 

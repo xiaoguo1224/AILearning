@@ -8,6 +8,10 @@ import { notFound } from "next/navigation";
 
 import { CourseTabs } from "@/components/CourseTabs";
 import { CourseDeletionProvider, DeleteCourseButton } from "@/components/DeleteCourseButton";
+import { EditCourseButton } from "@/components/EditCourseButton";
+import { RegenerateCourseButton } from "@/components/RegenerateCourseButton";
+import { CourseQaSection } from "@/components/CourseQaSection";
+import { CourseQuizSection } from "@/components/CourseQuizSection";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, getCourse } from "@/lib/api";
@@ -81,9 +85,16 @@ export default async function CoursePage(props: { params: Promise<{ courseId: st
             <span aria-hidden className="mx-2">/</span>
             <span className="text-ink-muted">{course.title}</span>
           </nav>
-          <h1 className="mt-2 break-words text-[28px] font-bold leading-tight tracking-tight">
-            {course.title}
-          </h1>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <h1 className="break-words text-[28px] font-bold leading-tight tracking-tight">
+              {course.title}
+            </h1>
+            <EditCourseButton
+              courseId={course.id}
+              initialTitle={course.title}
+              initialDescription={course.description ?? ""}
+            />
+          </div>
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-small text-ink-muted">
             <span>{t("{0} lessons", lessons.length)}</span>
             <span>{t("{0} completed", completedCount)}</span>
@@ -93,13 +104,14 @@ export default async function CoursePage(props: { params: Promise<{ courseId: st
             <p className="mt-4 max-w-3xl text-ui text-ink-muted">{course.description}</p>
           )}
           {nextLesson && (
-            <div className="mt-6">
+            <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
                 href={`/courses/${course.id}/lessons/${nextLesson.id}`}
                 className={START_LEARNING_CLASSES}
               >
                 {completedCount > 0 ? t("Continue learning") : t("Start learning")}
               </Link>
+              <RegenerateCourseButton courseId={course.id} />
             </div>
           )}
         </div>
@@ -189,6 +201,12 @@ export default async function CoursePage(props: { params: Promise<{ courseId: st
             </div>
           </aside>
         </div>
+
+        {/* Per-course features, laid out around the course: the question bank
+            (collapsed until opened) and the course Q&A with its conversation
+            memory. Both are scoped to this course. */}
+        <CourseQuizSection courseId={course.id} />
+        <CourseQaSection courseId={course.id} courseTitle={course.title} />
       </main>
     </CourseDeletionProvider>
   );

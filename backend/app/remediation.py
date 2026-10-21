@@ -60,7 +60,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app import days, fsrs, generation, models, review
 from app.attempts import iso_utc
-from app.concepts import normalize_concept
+from app.concepts import course_scope, normalize_concept
 from app.metering import MeteredLLM
 from app.untrusted import as_data
 
@@ -243,8 +243,30 @@ def trim_material(
 def concept_material(
     session: Session, concept_key: str
 ) -> tuple[list[models.Lesson], list[models.QuizItem]]:
-    """The lessons that taught this concept and the quiz items that test it."""
+    """The lessons that taught this concept and the quiz items that test it.
+
+    A course-scoped key ("course:{id}") grounds in the whole course instead:
+    every lesson and quiz item it holds, cut to the same budget. That is what
+    lets the tutor answer "explain this course to me" without a second prompt
+    shape or a second material definition.
+    """
+    cid = course_scope(concept_key)
+    if cid is not None:
+        return trim_material(_course_lessons(session, cid))
     return trim_material(teaching_lessons(session, concept_key))
+
+
+def _course_lessons(
+    session: Session, course_id: int
+) -> list[tuple[models.Lesson, list[models.QuizItem]]]:
+    course = session.get(models.Course, course_id)
+    if not course:
+        return []
+    matches: list[tuple[models.Lesson, list[models.QuizItem]]] = []
+    for module in sorted(course.modules, key=lambda m: (m.position, m.id)):
+        for lesson in sorted(module.lessons, key=lambda l: (l.position, l.id)):
+            matches.append((lesson, list(lesson.quiz_items)))
+    return matches
 
 
 def sole_course_id(

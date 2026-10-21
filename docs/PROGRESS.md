@@ -350,3 +350,27 @@
 - 安全边界：zip 本体 ≤5 MB；成员 ≤50 个、解包后 ≤2 MB（防 zip bomb）；拒绝加密成员、绝对路径/`..` 穿越、`__MACOSX`/`.DS_Store` 跳过；成员后缀必须在 CODE_SUFFIXES 内；同名 basename 自动去重（`model.py` → `model_2.py`）；空包拒绝。
 - 前端 `SubmissionForm.tsx`：code file input 增加 `.zip`，提示文案更新；`zh-CN.json` 同步中文。
 - 验证：`pytest tests/test_submissions.py` **18 passed**（新增 3 个 zip 测试：正常展开/坏成员+穿越+炸弹+非zip+空包拒绝/同名去重）；前端 vitest **24 files / 178 passed**，tsc clean；后端全量 **1341 passed, 2 skipped**。真实模型端到端：上传含 model.py/train.py/README.md 的 zip + 报错日志，LLM 评审正确跨文件定位 `train.py` 中 `x * net.weight` 应为 `net(x)` 的 bug。
+
+### 2026-10-21 — 修复评审行号偏差与中文长问句检索
+
+- 背景：上午 agent 能力测试发现两个缺口（属 P2 评审 / P3 检索已验收行为的缺陷，非新功能）：(1) 评审 hint 引用行号差一行（模型自行数行数错）；(2) 中文长问句检索不到资料（无空格长串既做不成 FTS phrase 也做不成 LIKE）。
+- 修复 1（行号）：`backend/app/submissions/llm_review.py` 新增 `_number_lines()`，`_prompt()` 给模型的代码块每行加 `N|` 前缀；`REVIEW_SYSTEM` 规则 4 改为引用打印出的行号。提示词规则与证据类型约束不变。
+- 修复 2（中文检索）：`backend/app/resources/service.py` 新增共享 `cjk_bigrams()` / `expand_cjk_search_terms()`（≥4 字连续 CJK → 去重重叠二元词，上限 12）；`search_resources_fts()` 在 FTS 无命中且 query 含中文时走 `_like_search()`（按命中词数倒序）；`backend/app/agent/retrieval.py` 的 `_terms()` 同样做二元词展开（引用共享函数，避免循环导入），`_like_fallback()` 改按命中词数排序。中间曾验证"FTS 内二元词 OR"方案不可行（unicode61 把连续 CJK 切成单个 token，二元词 phrase 永远不命中），已废弃。
+- 验证：新增 5 个用例（prompt 行号断言 / `_terms` 二元词展开 / 英文关键词不变 / LIKE 排序 / API 级长问句搜索+关键词回归），`tests/test_submissions.py` + `tests/test_agent.py` + `tests/test_resources.py` **48 passed**；后端全量 **1319 passed, 2 skipped**，29 failed 均为 `test_ingest.py` / `test_multi_source.py` / `test_error_shape.py` 的沙箱代理网络问题（干净检出复现相同 29 个，与改动无关）；`ruff check` 本次文件 clean。测试记录：`docs/test-reports/2026-10-21-review-line-numbers-cjk-retrieval.md`（未调用真实模型；行号在真模型下的引用准确率待用户下次评审时复核）。
+- 剩余风险：二元词 LIKE 是召回优先的近似方案，大资料库下可能返回弱相关 chunk；当前单人本地小资料库可接受，未引入分词依赖。
+
+### 2026-10-21 — 课程功能包：题库+AI出题、课程问答、重新生成、Markdown导入、目录、代码判分
+
+- **题库聚合**：`GET /api/courses/{id}/quiz` 按模块→课时聚合全课程题目，答案永不泄露（只经 `/quiz/{item_id}/answer`）。
+- **AI出题**：`POST /api/courses/{id}/quiz/generate`，body `{lesson_id?, items: [{kind, count}]}`，题型 mcq/short/truefalse/code 可混搭、每种单独指定数量，总量上限 20；truefalse 选项服务端规范为 ["正确","错误"]。
+- **课程问答**：tutor 支持 `course:{id}` concept key，会话记忆持久化，回答带 `refs`（精确课时标题→lesson_id，去重，上限5）；`TutorMessage.refs` 新增 JSON 列。
+- **生成重试**：`generate_lesson_with_retry` 最多 3 次；**重新生成**：`POST /api/courses/{id}/regenerate/stream`，可带 feedback，产出全新课程（原课程不动）。
+- **内容加深**：LESSON_SYSTEM 重写——1500–2500字、直觉先行、逐行讲解、手算数值例、常见误区；LaTeX 公式（KaTeX）+ Mermaid 图表（remark-math/rehype-katex/mermaid 前端渲染）。
+- **Markdown导入**：`POST /api/courses/import`，文件夹结构见 `docs/markdown-import.md`（子文件夹=模块，.md=课时，数字前缀排序，course.json 定标题）；**手动修改**：`PATCH /api/lessons/{id}`（标题/正文/概念）、`PATCH /api/courses/{id}`（标题/简介）。
+- **课时目录**：`extractToc` 提 ##/###（跳过代码围栏），LessonMarkdown 给 h2/h3 打 `toc-n` 锚点，课时页右侧 sticky 目录跳转。
+- **代码题判分**：`POST /quiz/{item_id}/answer` 对 kind=code 走 `app/code_grade.py`（新 stage `code_grade`）——模型对照题目+参考实现静态判定，只返回 correct+一句话 feedback；不可解析→502且不记 attempt；attempt.grader="llm_code" 版本化。
+- **布局**（用户拍板）：课程内功能只在点开课程后可见；题目区折叠+AI出题按钮，问答区直接摆放；重新生成放 hero。
+- **产品模型**（用户明确，已记 MEMORY）：Project 只做课程整合（ProjectCourse 关联），项目级提问看所有课程，学习功能下放到课程；代码提交=对指定题目的作答。
+- 验证：后端 **1381 passed, 2 skipped**；前端 **28 files / 190 passed**，tsc/eslint clean，next build 成功；真机联调（fake）导入/题库/问答两轮/patch/课时页截图全过。测试记录：`docs/test-reports/2026-10-21-course-features.md`。
+- 修了两个测试污染：`_seed_course` 直接赋值 `main.get_provider` 改为 monkeypatch（曾致 openai 测试在全量中失败）；usage pin 测试补 `quiz_generate`/`code_grade` 双 stage 驱动。
+- 待用户拍板：项目提问跨课程检索、代码题提示下放、变式题下放（三选一已给出选项）。

@@ -74,7 +74,7 @@ export interface QuizProgress {
 export interface QuizItem {
   id: number;
   question: string;
-  kind: "mcq" | "short";
+  kind: "mcq" | "short" | "truefalse" | "code";
   options: string[];
   concept: string;
   attempt_state: AttemptState;
@@ -99,6 +99,8 @@ export interface LessonDetail {
 export interface AnswerResult {
   correct: boolean;
   expected: string;
+  /** AI verdict reason for code-kind answers; null for every other kind. */
+  feedback: string | null;
   attempt_id: number;
   attempt_no: number;
   attempt_state: AttemptState;
@@ -474,6 +476,8 @@ export type TutorMessage =
       beyond: null;
       check: null;
       ask: null;
+      /** Always empty on this role; citations belong to answers, not questions. */
+      refs: { lesson_id: number; title: string }[];
       model: null;
       created_at: string;
     }
@@ -521,6 +525,12 @@ export type TutorMessage =
        * escaping and never a rendering path of its own.
        */
       ask: string | null;
+      /**
+       * Lesson citations: the lessons this answer draws on, as
+       * [{lesson_id, title}]. Empty when the model cited nothing. Render as
+       * "引用：第 X 节" chips linking into the lesson.
+       */
+      refs: { lesson_id: number; title: string }[];
       /** Which model answered, or null. Provenance lives on the usage screen. */
       model: string | null;
       created_at: string;

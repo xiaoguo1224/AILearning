@@ -11,13 +11,18 @@ from dataclasses import dataclass
 from sqlalchemy import bindparam, text
 from sqlalchemy.orm import Session
 
-from app.resources.service import search_resources_fts
+from app.resources.service import cjk_bigrams, search_resources_fts
 
 MAX_SOURCES = 5
 MAX_CHUNK_CHARS = 1_200
 MAX_CONTEXT_CHARS = 6_000
 MIN_TERM_CHARS = 2
 MAX_FALLBACK_TERMS = 3
+# An unbroken CJK run this long is a sentence/question, not a keyword: FTS5 and
+# LIKE have no Chinese word segmentation, so searching it verbatim matches
+# nothing. Splitting it into overlapping bigrams approximates keyword search.
+CJK_RUN_BIGRAM_MIN = 4
+MAX_EXPANDED_TERMS = 12
 
 
 @dataclass(frozen=True)
@@ -48,6 +53,25 @@ def _clip(text_value: str, limit: int) -> str:
     return text_value[: limit - len(ELLIPSIS)].rstrip() + ELLIPSIS
 
 
+def _expand_word(word: str) -> list[str]:
+    """Split a sanitized word's long CJK runs into bigrams; keep the rest.
+
+    "为什么矩阵乘法里面用星号会报错" becomes 矩阵/阵乘/乘法/… bigrams so the
+    LIKE fallback can find the chunk about 矩阵乘法 and 星号. Short runs and
+    non-CJK words are kept verbatim to preserve keyword precision.
+    """
+    parts = re.split(r"([\u4e00-\u9fff]+)", word)
+    out: list[str] = []
+    for part in parts:
+        if not part:
+            continue
+        if "\u4e00" <= part[0] <= "\u9fff" and len(part) >= CJK_RUN_BIGRAM_MIN:
+            out.extend(cjk_bigrams(part))
+        elif len(part) >= MIN_TERM_CHARS:
+            out.append(part)
+    return out or [word]
+
+
 def _terms(query: str) -> list[str]:
     """Query words, with punctuation removed.
 
@@ -55,21 +79,38 @@ def _terms(query: str) -> list[str]:
     Splitting on whitespace alone leaves the full stop attached, and a LIKE
     '%broadcasting.%' matches nothing — which is how a perfectly good question ends up
     with no sources and an answer that says the project material does not cover it.
+
+    A long unbroken Chinese question has no whitespace at all; it is expanded
+    into character bigrams (see _expand_word) so it degrades to keyword search
+    instead of one unmatchable verbatim phrase.
     """
     words = [re.sub(r"[^\w\u4e00-\u9fff]", "", word) for word in re.split(r"\s+", query.strip())]
-    return [word for word in words if len(word) >= MIN_TERM_CHARS][:MAX_FALLBACK_TERMS]
+    words = [word for word in words if len(word) >= MIN_TERM_CHARS][:MAX_FALLBACK_TERMS]
+    terms: list[str] = []
+    for word in words:
+        terms.extend(_expand_word(word))
+    seen: set[str] = set()
+    deduped = [term for term in terms if not (term in seen or seen.add(term))]
+    return deduped[:MAX_EXPANDED_TERMS]
 
 
-def _like_fallback(session: Session, project_id: int, query: str) -> list[tuple[int, int, str, str, str]]:
+def _like_fallback(
+    session: Session, project_id: int, query: str
+) -> list[tuple[int, int, str, str, str]]:
     """FTS5 tokenisation is word-based; a Chinese phrase can miss entirely.
 
     The fallback is a bounded LIKE over this project's chunks rather than a second
     index: it is slower, so it only runs when FTS returned nothing, and it is capped.
+    Rows are ranked by how many terms they match, so a bigram-OR query still
+    surfaces the chunk sharing the most vocabulary with the question first.
     """
     terms = _terms(query)
     if not terms:
         return []
     clauses = " OR ".join("c.text LIKE :term" + str(index) for index in range(len(terms)))
+    score = " + ".join(
+        f"(CASE WHEN c.text LIKE :term{index} THEN 1 ELSE 0 END)" for index in range(len(terms))
+    )
     params = {f"term{index}": f"%{term}%" for index, term in enumerate(terms)}
     params["pid"] = project_id
     params["limit"] = MAX_SOURCES
@@ -81,7 +122,7 @@ def _like_fallback(session: Session, project_id: int, query: str) -> list[tuple[
             JOIN resources r ON r.id = c.resource_id
             JOIN project_resources pr ON pr.resource_id = r.id
             WHERE pr.project_id = :pid AND ({clauses})
-            ORDER BY c.id
+            ORDER BY ({score}) DESC, c.id
             LIMIT :limit
             """
         ),

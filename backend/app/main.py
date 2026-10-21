@@ -12,7 +12,7 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Respon
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field, TypeAdapter, ValidationError, model_validator
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, ValidationError, model_validator
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -35,6 +35,7 @@ from app.agent import practice as agent_practice
 from app.agent import router as agent_router_module
 from app.agent.router import router as agent_router
 from app.attempts import (
+    GRADER,
     _attempt_state,
     _attempts_by_item,
     _attempts_for_item,
@@ -43,8 +44,10 @@ from app.attempts import (
     _sanitize_elapsed_ms,
     iso_utc,
 )
-from app.concepts import normalize_concept
+from app.concepts import course_scope, normalize_concept
 from app.content_reviews.router import router as content_reviews_router
+from app.course_content.router import router as course_content_router
+from app.course_quiz.router import router as course_quiz_router
 from app.costs import is_priced
 from app.curriculum.router import router as curriculum_router
 from app.db import SessionLocal, get_session, init_db
@@ -54,6 +57,7 @@ from app.llm import get_provider
 from app.llm.base import LLMCallError
 from app.locale import TeachingLocaleMiddleware
 from app.metering import CostLimitExceeded, MeteredLLM, acknowledge_alert, alert_state
+from app import code_grade
 from app.projects.router import router as projects_router
 from app.rating import rating_v1
 from app.resources.router import router as resources_router
@@ -74,6 +78,8 @@ app.include_router(knowledge_errors_router)
 app.include_router(suggestions_router)
 app.include_router(curriculum_router)
 app.include_router(content_reviews_router)
+app.include_router(course_content_router)
+app.include_router(course_quiz_router)
 
 _cors_origins = os.environ.get("STUDYFORGE_CORS_ORIGINS", "http://localhost:3000")
 app.add_middleware(
@@ -781,140 +787,209 @@ def generate_stream(body: GenerateRequest, session: Session = Depends(get_sessio
     chunks, owners = _ingest_or_refuse(specs, legacy=not body.used_canonical_field(), stage="url")
 
     def event_stream():
-        run_id = uuid.uuid4().hex
-        meter = MeteredLLM(get_provider(), run_id)
-        try:
-            outline = generation.generate_outline(meter, chunks, owners)
-        except CostLimitExceeded as exc:
-            yield _sse("error", {"error": "cost_limit_exceeded", **metering.cost_limit_detail(exc)})
-            return
-        except Exception as exc:
-            yield _sse("error", {"error": "generation_failed", "message": str(exc)[:300]})
-            return
+        yield from _stream_course_events(chunks, owners, session)
 
-        plan = [
-            {
-                "title": module.get("title", "Module"),
-                "lessons": [
-                    {"title": lesson.get("title", "Lesson")}
-                    for lesson in module.get("lessons", [])
-                ],
-            }
-            for module in outline.get("modules", [])
-        ]
-        yield _sse(
-            "outline",
-            {
-                "title": outline.get("title", "Untitled course"),
-                "description": outline.get("description", ""),
-                "modules": plan,
-            },
-        )
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
-        jobs: list[tuple[int, int, dict, list[int]]] = []
-        for module_index, module in enumerate(outline.get("modules", [])):
-            for lesson_index, stub in enumerate(module.get("lessons", [])):
-                segments = generation.lesson_segments(stub, len(chunks))
-                jobs.append((module_index, lesson_index, stub, segments))
 
-        course = {
-            "title": outline.get("title", "Untitled course"),
-            "description": outline.get("description", ""),
-            "modules": [
-                {"title": module.get("title", "Module"), "lessons": [None] * len(module.get("lessons", []))}
-                for module in outline.get("modules", [])
+def _stream_course_events(
+    chunks: list[str],
+    owners: list[str] | None,
+    session: Session,
+    outline_feedback: str | None = None,
+    title_suffix: str = "",
+):
+    """The shared course-generation event stream.
+
+    generate_stream feeds it ingested sources; the regenerate route feeds it the
+    course's own lessons plus the learner's feedback. Everything downstream —
+    outline event, parallel lesson authoring, lesson/lesson_failed events, save,
+    done — is identical, so a regeneration is not a second pipeline to drift.
+    """
+    run_id = uuid.uuid4().hex
+    meter = MeteredLLM(get_provider(), run_id)
+    try:
+        outline = generation.generate_outline(meter, chunks, owners, feedback=outline_feedback)
+    except CostLimitExceeded as exc:
+        yield _sse("error", {"error": "cost_limit_exceeded", **metering.cost_limit_detail(exc)})
+        return
+    except Exception as exc:
+        yield _sse("error", {"error": "generation_failed", "message": str(exc)[:300]})
+        return
+
+    plan = [
+        {
+            "title": module.get("title", "Module"),
+            "lessons": [
+                {"title": lesson.get("title", "Lesson")}
+                for lesson in module.get("lessons", [])
             ],
         }
-        failures: list[dict] = []
+        for module in outline.get("modules", [])
+    ]
+    course_title = outline.get("title", "Untitled course") + title_suffix
+    yield _sse(
+        "outline",
+        {
+            "title": course_title,
+            "description": outline.get("description", ""),
+            "modules": plan,
+        },
+    )
 
-        def author(job: tuple[int, int, dict, list[int]]) -> tuple[int, int, dict]:
-            module_index, lesson_index, stub, segments = job
-            authored = generation.generate_lesson(
-                meter,
-                stub.get("title", "Lesson"),
-                stub.get("summary", ""),
-                chunks,
-                segments,
-                owners,
-            )
-            return module_index, lesson_index, {
-                "title": stub.get("title", "Lesson"),
-                "segments": segments,
-                **authored,
-            }
+    jobs: list[tuple[int, int, dict, list[int]]] = []
+    for module_index, module in enumerate(outline.get("modules", [])):
+        for lesson_index, stub in enumerate(module.get("lessons", [])):
+            segments = generation.lesson_segments(stub, len(chunks))
+            jobs.append((module_index, lesson_index, stub, segments))
 
-        with ThreadPoolExecutor(max_workers=STREAM_LESSON_WORKERS) as pool:
-            futures = {pool.submit(author, job): job for job in jobs}
-            for future in as_completed(futures):
-                module_index, lesson_index, stub, _ = futures[future]
-                try:
-                    _, _, lesson = future.result()
-                except CostLimitExceeded as exc:
-                    yield _sse("error", {"error": "cost_limit_exceeded", **metering.cost_limit_detail(exc)})
-                    return
-                except Exception as exc:
-                    failures.append(
-                        {"lesson": stub.get("title", "Lesson"), "error": str(exc)[:200]}
-                    )
-                    yield _sse(
-                        "lesson_failed",
-                        {
-                            "module_index": module_index,
-                            "lesson_index": lesson_index,
-                            "title": stub.get("title", "Lesson"),
-                        },
-                    )
-                    continue
-                course["modules"][module_index]["lessons"][lesson_index] = lesson
+    course = {
+        "title": course_title,
+        "description": outline.get("description", ""),
+        "modules": [
+            {"title": module.get("title", "Module"), "lessons": [None] * len(module.get("lessons", []))}
+            for module in outline.get("modules", [])
+        ],
+    }
+    failures: list[dict] = []
+
+    def author(job: tuple[int, int, dict, list[int]]) -> tuple[int, int, dict]:
+        module_index, lesson_index, stub, segments = job
+        authored, _attempts = generation.generate_lesson_with_retry(
+            meter,
+            stub.get("title", "Lesson"),
+            stub.get("summary", ""),
+            chunks,
+            segments,
+            owners,
+        )
+        return module_index, lesson_index, {
+            "title": stub.get("title", "Lesson"),
+            "segments": segments,
+            **authored,
+        }
+
+    with ThreadPoolExecutor(max_workers=STREAM_LESSON_WORKERS) as pool:
+        futures = {pool.submit(author, job): job for job in jobs}
+        for future in as_completed(futures):
+            module_index, lesson_index, stub, _ = futures[future]
+            try:
+                _, _, lesson = future.result()
+            except CostLimitExceeded as exc:
+                yield _sse("error", {"error": "cost_limit_exceeded", **metering.cost_limit_detail(exc)})
+                return
+            except Exception as exc:
+                failures.append(
+                    {"lesson": stub.get("title", "Lesson"), "error": str(exc)[:200]}
+                )
                 yield _sse(
-                    "lesson",
+                    "lesson_failed",
                     {
                         "module_index": module_index,
                         "lesson_index": lesson_index,
-                        "lesson": lesson,
+                        "title": stub.get("title", "Lesson"),
                     },
                 )
-
-        for module in course["modules"]:
-            module["lessons"] = [lesson for lesson in module["lessons"] if lesson]
-        course["modules"] = [m for m in course["modules"] if m["lessons"]]
-        if not course["modules"]:
+                continue
+            course["modules"][module_index]["lessons"][lesson_index] = lesson
             yield _sse(
-                "error",
-                {"error": "generation_failed", "message": "No lesson could be generated."},
-            )
-            return
-        if failures:
-            course["dropped_lessons"] = failures
-
-        try:
-            row = _save_course(session, course)
-        except Exception as exc:
-            yield _sse("error", {"error": "generation_failed", "message": str(exc)[:300]})
-            return
-        session.query(models.LlmCall).filter(models.LlmCall.run_id == run_id).update(
-            {"course_id": row.id}
-        )
-        session.commit()
-        run_cost = (
-            session.query(func.sum(models.LlmCall.estimated_cost_usd))
-            .filter(models.LlmCall.run_id == run_id)
-            .scalar()
-            or 0.0
-        )
-        state = alert_state(session)
-        yield _sse(
-            "done",
-            {
-                "id": row.id,
-                "title": row.title,
-                "dropped_lessons": failures,
-                "usage": {
-                    "run_cost_usd": run_cost,
-                    "total_cost_usd": state["total_usd"],
-                    "alert_active": state["active"],
+                "lesson",
+                {
+                    "module_index": module_index,
+                    "lesson_index": lesson_index,
+                    "lesson": lesson,
                 },
+            )
+
+    for module in course["modules"]:
+        module["lessons"] = [lesson for lesson in module["lessons"] if lesson]
+    course["modules"] = [m for m in course["modules"] if m["lessons"]]
+    if not course["modules"]:
+        yield _sse(
+            "error",
+            {"error": "generation_failed", "message": "No lesson could be generated."},
+        )
+        return
+    if failures:
+        course["dropped_lessons"] = failures
+
+    try:
+        row = _save_course(session, course)
+    except Exception as exc:
+        yield _sse("error", {"error": "generation_failed", "message": str(exc)[:300]})
+        return
+    session.query(models.LlmCall).filter(models.LlmCall.run_id == run_id).update(
+        {"course_id": row.id}
+    )
+    session.commit()
+    run_cost = (
+        session.query(func.sum(models.LlmCall.estimated_cost_usd))
+        .filter(models.LlmCall.run_id == run_id)
+        .scalar()
+        or 0.0
+    )
+    state = alert_state(session)
+    yield _sse(
+        "done",
+        {
+            "id": row.id,
+            "title": row.title,
+            "dropped_lessons": failures,
+            "usage": {
+                "run_cost_usd": run_cost,
+                "total_cost_usd": state["total_usd"],
+                "alert_active": state["active"],
             },
+        },
+    )
+
+
+class RegenerateRequest(BaseModel):
+    """Feedback-driven regeneration of an unsatisfactory course.
+
+    `feedback` is free text ("too hard", "add more examples on X", ...); empty
+    means "try again with a fresh roll".
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    feedback: str = Field(default="", max_length=2000)
+
+
+@app.post("/api/courses/{course_id}/regenerate/stream")
+def regenerate_course_stream(
+    course_id: int, body: RegenerateRequest, session: Session = Depends(get_session)
+):
+    """Regenerate a course the learner is unhappy with, as an SSE stream.
+
+    The course's own lessons become the source material (one chunk per lesson),
+    and the learner's feedback is threaded into the outline prompt. The event
+    shapes are identical to /courses/generate/stream, so the same progress UI
+    renders both.
+
+    The result is saved as a NEW course titled "<old>（重新生成）": the original
+    is never touched, so a regeneration that comes out worse costs nothing but
+    the run. Source intake (404/422) still happens before the first byte.
+    """
+    course = session.get(models.Course, course_id)
+    if not course:
+        raise HTTPException(404, "Course not found")
+    chunks: list[str] = []
+    for module in sorted(course.modules, key=lambda m: (m.position, m.id)):
+        for lesson in sorted(module.lessons, key=lambda l: (l.position, l.id)):
+            text = (lesson.content or "").strip()
+            if text:
+                chunks.append(f"# {lesson.title}\n\n{text}")
+    if not chunks:
+        raise HTTPException(422, "The course has no lesson text to regenerate from.")
+
+    def event_stream():
+        yield from _stream_course_events(
+            chunks,
+            [course.title or "course"],
+            session,
+            outline_feedback=body.feedback,
+            title_suffix="（重新生成）",
         )
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
@@ -1230,16 +1305,40 @@ def answer_quiz(item_id: int, body: QuizAnswer, session: Session = Depends(get_s
     if not body.answer.strip():
         raise HTTPException(400, "Answer cannot be empty")
 
+    feedback: str | None = None
+    grader = GRADER
+    if item.kind == "code":
+        # A code submission IS the answer to this question — the analogue of
+        # picking an option on a multiple-choice item — so the model judges
+        # whether it solves this question. Static reading only; the server
+        # never executes submitted code.
+        run_id = uuid.uuid4().hex
+        meter = MeteredLLM(get_provider(), run_id)
+        try:
+            correct, feedback = code_grade.grade_answer(
+                meter, item.question, item.answer, body.answer
+            )
+        except CostLimitExceeded as exc:
+            raise _cost_limit_exceeded(exc) from exc
+        except code_grade.GradeParseError as exc:
+            # No attempt recorded: a provider failure is not the learner's error.
+            raise HTTPException(502, "AI 判分失败，请重试一次。") from exc
+        grader = code_grade.CODE_GRADER
+    else:
+        correct = _grade(body.answer, item.answer)
+
     attempt = _record_attempt(
         session,
         item,
         body.answer,
-        _grade(body.answer, item.answer),
+        correct,
         _sanitize_elapsed_ms(body.elapsed_ms),
+        grader=grader,
     )
     return {
         "correct": attempt.correct,
         "expected": item.answer,
+        "feedback": feedback,
         "attempt_id": attempt.id,
         "attempt_no": attempt.attempt_no,
         "attempt_state": _attempt_state(_attempts_for_item(session, item.id)),
@@ -2038,8 +2137,13 @@ def post_tutor_message(body: TutorQuestion, session: Session = Depends(get_sessi
     # it is left alone rather than reaching inside the meter to check the cap early.
     # Never backfilled afterwards either, because unlike a generation run there is no
     # course saved later to backfill from.
-    matches = remediation.teaching_lessons(session, concept_key)
-    meter = MeteredLLM(provider, run_id, course_id=remediation.sole_course_id(session, matches))
+    scoped_course = course_scope(concept_key)
+    if scoped_course is not None:
+        meter_course_id = scoped_course
+    else:
+        matches = remediation.teaching_lessons(session, concept_key)
+        meter_course_id = remediation.sole_course_id(session, matches)
+    meter = MeteredLLM(provider, run_id, course_id=meter_course_id)
     prompt = tutor.build_prompt(context, tutor.history(session, concept_key), message)
 
     # THE MODE, DECIDED ONCE, and every use below reads this name rather than asking
@@ -2055,7 +2159,9 @@ def post_tutor_message(body: TutorQuestion, session: Session = Depends(get_sessi
     # has parsed, which is what makes every failure below leave zero rows behind.
     try:
         reply = tutor.parse_reply(
-            meter.generate(tutor.TUTOR_STAGE, system, prompt, tutor.MAX_TOKENS), mode
+            meter.generate(tutor.TUTOR_STAGE, system, prompt, tutor.MAX_TOKENS),
+            mode,
+            lessons=context.lessons,
         )
     except CostLimitExceeded as exc:
         raise _cost_limit_exceeded(exc) from exc
@@ -2122,6 +2228,7 @@ def post_tutor_message(body: TutorQuestion, session: Session = Depends(get_sessi
         # Whichever of the two the mode allowed; parse_reply has already blanked the
         # other, so this row can never carry two questions.
         ask=reply.ask,
+        refs=json.dumps(reply.refs, ensure_ascii=False),
         run_id=run_id,
         model=getattr(provider, "model", ""),
         created_at=now,

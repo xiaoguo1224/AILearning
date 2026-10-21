@@ -86,3 +86,30 @@ def test_resource_upload_and_search_flow(client):
 
     # Now get 404
     assert client.get(f"/api/resources/{rd_data['id']}").status_code == 404
+
+
+def test_search_answers_long_chinese_question_with_bigram_fallback(client):
+    """A long unbroken Chinese question has no whitespace, so the verbatim FTS
+    phrase can never match under unicode61 tokenisation. The bigram fallback
+    must still find the chunk; keyword queries keep working as before."""
+    p = client.post("/api/projects", json={"name": "PyTorch CN"}).json()
+    pid = p["id"]
+    res = client.post(
+        f"/api/projects/{pid}/resources/text",
+        json={
+            "title": "矩阵乘法笔记",
+            "content": "矩阵乘法使用 @ 运算符或 torch.matmul，而不是星号 *。星号是逐元素乘法。",
+            "kind": "markdown",
+        },
+    )
+    assert res.status_code == 201
+
+    long_q = client.get(f"/api/projects/{pid}/resources/search", params={"q": "为什么矩阵乘法里面用星号会报错"})
+    assert long_q.status_code == 200
+    items = long_q.json()
+    assert len(items) >= 1
+    assert items[0]["filename"] == "矩阵乘法笔记"
+
+    keyword = client.get(f"/api/projects/{pid}/resources/search", params={"q": "矩阵乘法 星号"})
+    assert keyword.status_code == 200
+    assert len(keyword.json()) >= 1

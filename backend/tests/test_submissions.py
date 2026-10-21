@@ -459,3 +459,24 @@ def test_upload_dedupes_zip_members_with_same_basename(client):
     assert response.status_code == 201
     names = sorted(a["filename"] for a in response.json()["artifacts"])
     assert names == ["model.py", "model_2.py"]
+
+
+def test_review_prompt_numbers_code_lines_for_the_model():
+    """The model miscounted bare code lines (cited line 7 for a bug on line 8).
+
+    The prompt must print 1-based `N|` numbers so findings and hints can cite
+    the exact printed numbers instead of counting.
+    """
+    from app.submissions.llm_review import REVIEW_SYSTEM, ReviewContext, _prompt
+
+    ctx = ReviewContext(
+        exercise_id="matmul-01",
+        user_note=None,
+        artifacts=[("solution.py", "code", "import torch\nx = torch.ones(2, 2)\ny = x * 2\n")],
+    )
+    prompt = _prompt(ctx, [])
+    assert "1|import torch" in prompt
+    assert "2|x = torch.ones(2, 2)" in prompt
+    assert "3|y = x * 2" in prompt
+    assert "--- solution.py ---" in prompt
+    assert "cite exactly those" in REVIEW_SYSTEM or "N|" in REVIEW_SYSTEM

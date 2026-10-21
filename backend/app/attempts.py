@@ -139,6 +139,7 @@ def _record_attempt(
     correct: bool,
     elapsed_ms: int | None,
     source: str = LESSON_QUIZ_SOURCE,
+    grader: str = GRADER,
 ) -> models.Attempt:
     """Append one attempt row. Attempts are never updated: the history is the data.
 
@@ -169,7 +170,7 @@ def _record_attempt(
             correct=correct,
             attempt_no=prior + 1,
             source=source,
-            grader=GRADER,
+            grader=grader,
             elapsed_ms=elapsed_ms,
         )
         session.add(row)

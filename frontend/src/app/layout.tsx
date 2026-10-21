@@ -6,6 +6,7 @@ import { AppSidebar, MobileTopBar } from "@/components/AppSidebar";
 import { LocaleProvider } from "@/components/LocaleProvider";
 import { getTranslator } from "@/lib/locale-server";
 import "./globals.css";
+import "katex/dist/katex.min.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",

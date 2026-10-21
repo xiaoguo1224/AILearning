@@ -42,3 +42,22 @@ def normalize_concept(raw: str | None) -> str:
                 text = text[1:-1].strip(_EDGE_CHARS)
                 changed = True
     return text
+
+
+# A tutor conversation scoped to a whole course rather than one concept travels
+# as the concept_key "course:{id}", so the entire tutor machinery — history,
+# turn caps, prompt, persistence — works unchanged. The prefix survives
+# normalize_concept (no edge chars to strip), and nothing else in the codebase
+# writes keys of this shape, so the branch below cannot misfire on a real label.
+COURSE_SCOPE_PREFIX = "course:"
+
+
+def course_scope(key: str | None) -> int | None:
+    """The course id when `key` is a course-scoped conversation key, else None."""
+    if not key or not key.startswith(COURSE_SCOPE_PREFIX):
+        return None
+    try:
+        course_id = int(key[len(COURSE_SCOPE_PREFIX):])
+    except ValueError:
+        return None
+    return course_id if course_id > 0 else None

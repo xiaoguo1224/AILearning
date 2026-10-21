@@ -347,7 +347,7 @@ def test_the_two_rows_come_back_in_the_one_shape_both_endpoints_render(client, m
 
     body = _ask(client, key, "why does this work").json()
 
-    keys = {"id", "role", "content", "answer", "beyond", "check", "ask", "model", "created_at"}
+    keys = {"id", "role", "content", "answer", "beyond", "check", "ask", "refs", "model", "created_at"}
     assert set(body["learner"]) == keys
     assert set(body["reply"]) == keys
 

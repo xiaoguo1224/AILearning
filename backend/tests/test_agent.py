@@ -531,3 +531,39 @@ def test_the_spend_cap_answers_402_with_both_figures_and_calls_nothing(client, m
     assert detail["spent_usd"] == pytest.approx(spent)
     assert provider.calls == 0
     assert client.get(f"/api/sessions/{session_id}").json()["messages"] == []
+
+
+def test_terms_expands_long_chinese_question_into_bigrams():
+    from app.agent.retrieval import _terms
+
+    terms = _terms("为什么矩阵乘法里面用星号会报错")
+    # the verbatim 15-char phrase must not survive: it can never match
+    assert "为什么矩阵乘法里面用星号会报错" not in terms
+    assert "矩阵" in terms
+    assert "乘法" in terms
+    assert "星号" in terms
+
+
+def test_terms_keeps_english_keywords_verbatim():
+    from app.agent.retrieval import _terms
+
+    assert _terms("Explain broadcasting.") == ["Explain", "broadcasting"]
+
+
+def test_like_fallback_ranks_chunk_with_most_term_matches_first(client):
+    from app.agent.retrieval import _like_fallback
+    from app.db import SessionLocal
+
+    project_id = _project(client, name="CJK Ranking")
+    _resource(
+        client,
+        project_id,
+        "矩阵乘法笔记",
+        "矩阵乘法使用 @ 运算符或 torch.matmul，而不是星号。星号是逐元素乘法，矩阵乘法要求内维一致。",
+    )
+    _resource(client, project_id, "闲聊", "为什么今天天气这么好，适合出去走走。")
+
+    with SessionLocal() as session:
+        rows = _like_fallback(session, project_id, "为什么矩阵乘法里面用星号会报错")
+    assert rows, "long Chinese question must find the matmul chunk via bigram LIKE"
+    assert rows[0][2] == "矩阵乘法笔记"

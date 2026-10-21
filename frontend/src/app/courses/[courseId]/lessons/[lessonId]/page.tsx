@@ -8,6 +8,8 @@ import { notFound } from "next/navigation";
 
 import { LessonMarkdown } from "@/components/LessonMarkdown";
 import { MarkCompleteButton } from "@/components/MarkCompleteButton";
+import { EditLessonButton } from "@/components/EditLessonButton";
+import { LessonToc } from "@/components/LessonToc";
 import { QuizSection } from "@/components/QuizSection";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -94,7 +96,7 @@ export default async function LessonPage(
   if (lesson.course_id !== course) notFound();
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
+    <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-12">
       {backToCourseLink(courseId, t)}
 
       {/*
@@ -111,7 +113,17 @@ export default async function LessonPage(
       <PageHeader
         className="mt-4"
         title={lesson.title}
-        actions={<MarkCompleteButton lessonId={lesson.id} completed={lesson.completed} />}
+        actions={
+          <div className="flex items-center gap-2">
+            <EditLessonButton
+              lessonId={lesson.id}
+              initialTitle={lesson.title}
+              initialContent={lesson.content}
+              initialConcepts={lesson.concepts}
+            />
+            <MarkCompleteButton lessonId={lesson.id} completed={lesson.completed} />
+          </div>
+        }
       />
 
       {lesson.concepts.length > 0 && (
@@ -134,16 +146,19 @@ export default async function LessonPage(
         </ul>
       )}
 
-      <div className="mt-8">
-        <p className="mb-4 rounded-surface border border-line p-4 text-small text-ink-muted">{t("AI-generated explanations, formulas and examples require review before being treated as authoritative. Textbook extensions are not verified course facts.")}</p>
-        <LessonMarkdown content={lesson.content} title={lesson.title} />
-      </div>
-
-      {lesson.quiz.length > 0 && (
-        <div className="mt-12">
-          <QuizSection quiz={lesson.quiz} progress={lesson.quiz_progress} />
+      <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_220px]">
+        <div className="min-w-0">
+          <p className="mb-4 rounded-surface border border-line p-4 text-small text-ink-muted">{t("AI-generated explanations, formulas and examples require review before being treated as authoritative. Textbook extensions are not verified course facts.")}</p>
+          <LessonMarkdown content={lesson.content} title={lesson.title} />
         </div>
-      )}
+        <LessonToc content={lesson.content} />
+
+        {lesson.quiz.length > 0 && (
+          <div className="mt-12 lg:col-span-2">
+            <QuizSection quiz={lesson.quiz} progress={lesson.quiz_progress} />
+          </div>
+        )}
+      </div>
     </main>
   );
 }

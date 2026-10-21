@@ -1,5 +1,8 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import { MermaidBlock } from "./MermaidBlock";
 
 /** Loose comparison so wording that differs only in case, spacing, or emphasis still matches. */
 function normalizeHeading(text: string): string {
@@ -123,9 +126,47 @@ export function stripDuplicateTitle(content: string, title: string): string {
  * surface. Deliberate, on the divider argument above.
  */
 export function LessonMarkdown({ content, title }: { content: string; title: string }) {
+  /*
+   * Positional heading ids for the lesson TOC sidebar (see lib/toc.ts): the nth
+   * h2/h3 rendered gets id `toc-n`, matching extractToc's nth entry. A render-local
+   * counter, so concurrent renders cannot share state and re-renders recount the
+   * same way. h1 is the lesson title and never takes an id.
+   */
+  let headingIndex = 0;
+  const headingId = () => `toc-${headingIndex++}`;
   return (
     <article className="flex flex-col gap-4 text-prose [&_a]:text-accent [&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-line-strong [&_blockquote]:pl-4 [&_blockquote]:text-ink-muted [&_code]:rounded [&_code]:bg-surface-sunken [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-small [&_h1]:text-title [&_h2]:text-subtitle [&_h3]:font-semibold [&_li]:ml-5 [&_ol]:list-decimal [&_pre]:overflow-x-auto [&_pre]:rounded-control [&_pre]:bg-surface-sunken [&_pre]:p-4 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_table]:w-full [&_td]:border [&_td]:border-line [&_td]:px-3 [&_td]:py-1.5 [&_th]:border [&_th]:border-line [&_th]:px-3 [&_th]:py-1.5 [&_th]:text-left [&_ul]:list-disc">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm, remarkMath]}
+        rehypePlugins={[rehypeKatex]}
+        components={{
+          h2({ children, ...props }) {
+            return (
+              <h2 id={headingId()} {...props}>
+                {children}
+              </h2>
+            );
+          },
+          h3({ children, ...props }) {
+            return (
+              <h3 id={headingId()} {...props}>
+                {children}
+              </h3>
+            );
+          },
+          code({ className, children, ...props }) {
+            const language = /language-(\w+)/.exec(className || "")?.[1];
+            if (language === "mermaid") {
+              return <MermaidBlock key={String(children).trim()} chart={String(children).trim()} />;
+            }
+            return (
+              <code className={className} {...props}>
+                {children}
+              </code>
+            );
+          },
+        }}
+      >
         {stripDuplicateTitle(content, title)}
       </ReactMarkdown>
     </article>

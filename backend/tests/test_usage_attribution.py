@@ -22,6 +22,9 @@ from app import fsrs, generation, main, models, remediation, review, tutor
 from app.agent import practice as agent_practice
 from app.agent import router as agent_router
 from app.concepts import normalize_concept
+from app.course_quiz import quizgen
+from app.course_quiz import router as quiz_router
+from app import code_grade
 from app.db import Base, SessionLocal
 from app.llm.base import LLMCallError, LLMResult
 from app.llm.fake_provider import FakeProvider
@@ -568,6 +571,42 @@ class _PracticeStageProvider:
         )
 
 
+class _QuizGenStageProvider:
+    name = "fake"
+    model = "quizgen-stage-model"
+    is_paid = False
+
+    def generate(self, system, prompt, max_tokens=64000):
+        return LLMResult(
+            text=json.dumps(
+                [
+                    {
+                        "question": "What does attention weight?",
+                        "kind": "mcq",
+                        "options": ["Values", "Keys", "Queries", "Biases"],
+                        "answer": "Values",
+                        "concept": "attention",
+                    }
+                ]
+            ),
+            input_tokens=5,
+            output_tokens=5,
+        )
+
+
+class _CodeGradeStageProvider:
+    name = "fake"
+    model = "codegrade-stage-model"
+    is_paid = False
+
+    def generate(self, system, prompt, max_tokens=64000):
+        return LLMResult(
+            text=json.dumps({"correct": True, "feedback": "正确。"}),
+            input_tokens=5,
+            output_tokens=5,
+        )
+
+
 class _ExploreStageProvider:
     name = "fake"
     model = "explore-stage-model"
@@ -597,7 +636,9 @@ def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monke
     recorded, after driving both the paths that record any.
     """
     monkeypatch.setattr(main, "get_provider", lambda: FakeProvider())
-    assert client.post("/courses/generate", json={"text": "Whales breathe air."}).status_code == 200
+    generated = client.post("/courses/generate", json={"text": "Whales breathe air."})
+    assert generated.status_code == 200
+    generated_course_id = generated.json()["id"]
 
     monkeypatch.setattr(main, "get_provider", lambda: ReteachProvider())
     card_id, _, _ = _seed_struggling_concept(1)
@@ -644,6 +685,51 @@ def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monke
         == 201
     )
 
+    # The course question bank's AI generation, patched where its router looks
+    # the provider up. The generated course above has lesson text to work from.
+    monkeypatch.setattr(quiz_router, "get_provider", lambda: _QuizGenStageProvider())
+    assert (
+        client.post(
+            f"/api/courses/{generated_course_id}/quiz/generate",
+            json={"items": [{"kind": "mcq", "count": 1}]},
+        ).status_code
+        == 201
+    )
+
+    # A code question's submission is its answer: the model grades it against
+    # the question, recorded under the code_grade stage.
+    seed = SessionLocal()
+    try:
+        lesson_id = (
+            seed.query(models.Lesson.id)
+            .join(models.Module, models.Lesson.module_id == models.Module.id)
+            .filter(models.Module.course_id == generated_course_id)
+            .order_by(models.Lesson.id)
+            .first()[0]
+        )
+        seed.add(
+            models.QuizItem(
+                lesson_id=lesson_id,
+                question="实现 add(a, b)",
+                kind="code",
+                options=[],
+                answer="def add(a, b):\n    return a + b",
+                concept="函数",
+            )
+        )
+        seed.commit()
+        code_item_id = seed.query(models.QuizItem.id).filter(
+            models.QuizItem.lesson_id == lesson_id, models.QuizItem.kind == "code"
+        ).order_by(models.QuizItem.id.desc()).first()[0]
+    finally:
+        seed.close()
+    monkeypatch.setattr(main, "get_provider", lambda: _CodeGradeStageProvider())
+    assert (
+        client.post(f"/quiz/{code_item_id}/answer", json={"answer": "def add(a, b):\n    return a+b"})
+        .status_code
+        == 200
+    )
+
     session = SessionLocal()
     try:
         recorded = {stage for (stage,) in session.query(models.LlmCall.stage).distinct()}
@@ -657,6 +743,8 @@ def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monke
         llm_variant.VARIANT_STAGE,
         agent_router.EXPLORE_STAGE,
         agent_practice.PRACTICE_STAGE,
+        quizgen.QUIZGEN_STAGE,
+        code_grade.CODE_GRADE_STAGE,
     }
     assert explained <= recorded, "the scenario above should exercise every known stage"
     assert recorded <= explained, f"stage with no /usage copy: {sorted(recorded - explained)}"

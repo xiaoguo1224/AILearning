@@ -52,10 +52,18 @@ function planToState(modules: StreamOutlineModule[]): ModuleState[] {
  */
 export function GenerationProgress({
   sources,
+  openStream,
   onSourceFailures,
   onCancel,
 }: {
   sources: SourceInput[];
+  /**
+   * Override the stream source. The default streams /courses/generate/stream
+   * from `sources`; the regenerate flow passes a factory that streams
+   * /api/courses/{id}/regenerate/stream instead, so this same progress UI
+   * renders both without a second component to drift.
+   */
+  openStream?: (signal: AbortSignal) => AsyncGenerator<GenerationStreamEvent>;
   onSourceFailures: (failures: SourceFailure[]) => void;
   onCancel: () => void;
 }) {
@@ -76,7 +84,8 @@ export function GenerationProgress({
 
     async function run() {
       try {
-        for await (const event of streamCourseGeneration(sources, { signal: controller.signal })) {
+        const open = openStream ?? ((signal) => streamCourseGeneration(sources, { signal }));
+        for await (const event of open(controller.signal)) {
           if (cancelled) return;
           applyEvent(event);
         }

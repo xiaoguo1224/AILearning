@@ -467,6 +467,11 @@ class TutorMessage(Base):
     #     -> identical, and every pre-existing row backfills to '' rather than to NULL.
     # `text` is imported at the top of this file for exactly this.
     ask: Mapped[str] = mapped_column(Text, default="", server_default=text("''"))
+    # Lesson references the reply cited, as JSON [{"lesson_id": int, "title": str}].
+    # Stored as JSON text rather than a child table: refs are display-only, never
+    # queried by lesson, and a join table would make "which conversation is this"
+    # answerable in two places. Matched pair with the ADDED_COLUMNS entry in db.py.
+    refs: Mapped[str] = mapped_column(Text, default="[]", server_default=text("'[]'"))
     run_id: Mapped[str] = mapped_column(String(32), default="")
     model: Mapped[str] = mapped_column(String(100), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)

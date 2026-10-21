@@ -61,6 +61,7 @@ export function tutorRow(fields: {
   beyond?: string | null;
   ask?: string | null;
   check?: string | null;
+  refs?: { lesson_id: number; title: string }[];
 }): TutorRow {
   return {
     role: "tutor",
@@ -70,6 +71,7 @@ export function tutorRow(fields: {
     beyond: fields.beyond ?? null,
     ask: fields.ask ?? null,
     check: fields.check ?? null,
+    refs: fields.refs ?? [],
     model: "tutor-model",
     created_at: "2026-09-01T12:00:05Z",
   };
@@ -84,6 +86,7 @@ export function learnerRow(content: string, id = 1): TutorMessage {
     beyond: null,
     check: null,
     ask: null,
+    refs: [],
     model: null,
     created_at: "2026-09-01T12:00:00Z",
   };
@@ -233,7 +236,7 @@ export const UNANSWERED: AttemptState = {
  * One quiz item. `options` defaults to a plausible mcq set for an mcq item and to an
  * empty array otherwise, matching what the server sends for a short-answer item.
  */
-export function quizItem(fields: { id: number; kind: "mcq" | "short" } & Partial<QuizItem>): QuizItem {
+export function quizItem(fields: { id: number; kind: "mcq" | "short" | "truefalse" | "code" } & Partial<QuizItem>): QuizItem {
   return {
     id: fields.id,
     question: fields.question ?? "Which orbit shape keeps a satellite's altitude constant?",
@@ -257,10 +260,12 @@ export function answerResult(fields: {
   correct: boolean;
   expected: string;
   everCorrect?: boolean;
+  feedback?: string | null;
 }): AnswerResult {
   return {
     correct: fields.correct,
     expected: fields.expected,
+    feedback: fields.feedback ?? null,
     attempt_id: 1,
     attempt_no: 1,
     attempt_state: {

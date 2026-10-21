@@ -960,10 +960,16 @@ matching:
   "answer": str,            # required, never empty; only what the supplied material supports
   "beyond": str or null,    # optional; general knowledge the material does not cover
   "check": str or null      # optional; exactly one short recall question
+  "refs": [str] or null,      # lesson titles from the material this answer draws on, copied exactly
 }}
 All values are markdown strings, escaped the way JSON requires. Leave "beyond" or "check" out, or \
 set them to null, when they do not apply. A reply with no non-empty "answer" is thrown away and \
 the learner is shown an error, so never send one.
+
+Cite your sources: list in "refs" the exact lesson titles (as shown in the material block) that \
+support this answer, most relevant first, at most 5. Only titles that appear in the material; \
+never invent one. Omit "refs" or set it to null when the answer adds nothing beyond the \
+conversation.
 
 WHY THERE ARE TWO ANSWER FIELDS. "answer" carries only what the supplied material supports. \
 "beyond" carries anything else you know. The learner sees them under separate headings, one of \

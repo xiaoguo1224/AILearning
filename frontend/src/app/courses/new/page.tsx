@@ -5,6 +5,7 @@ import { getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 
 import { GenerateForm } from "@/components/GenerateForm";
+import { MarkdownImportForm } from "@/components/MarkdownImportForm";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 export default async function NewCoursePage() {
@@ -24,6 +25,7 @@ export default async function NewCoursePage() {
       <div className="mt-8">
         <GenerateForm />
       </div>
+      <MarkdownImportForm />
     </main>
   );
 }

@@ -16,6 +16,8 @@ import type { AttemptState, QuizItem, QuizProgress } from "@/lib/types";
 interface Feedback {
   correct: boolean;
   expected: string;
+  /** The AI's verdict reason; only set for code-kind answers. */
+  aiFeedback: string | null;
 }
 
 /**
@@ -60,7 +62,10 @@ function restored(item: QuizItem): ItemState {
   const latest = item.attempt_state.latest_quiz_attempt;
   return {
     answer: latest?.answer ?? "",
-    feedback: latest === null ? null : { correct: latest.correct, expected: latest.expected },
+    feedback:
+      latest === null
+        ? null
+        : { correct: latest.correct, expected: latest.expected, aiFeedback: null },
     attemptState: item.attempt_state,
     submitting: false,
     error: null,
@@ -98,6 +103,7 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
    * its button and leaves its inputs disabled.
    */
   const inputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
+  const codeRefs = useRef<Map<number, HTMLTextAreaElement>>(new Map());
   const mcqRefs = useRef<Map<number, Map<string, HTMLInputElement>>>(new Map());
   const correctRefs = useRef<Map<number, HTMLParagraphElement>>(new Map());
   /**
@@ -150,7 +156,11 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
       }
       const answer = stateOf(item).answer;
       const target =
-        item.kind === "mcq" ? mcqRefs.current.get(item.id)?.get(answer) : inputRefs.current.get(item.id);
+        item.kind === "mcq" || item.kind === "truefalse"
+          ? mcqRefs.current.get(item.id)?.get(answer)
+          : item.kind === "code"
+            ? codeRefs.current.get(item.id)
+            : inputRefs.current.get(item.id);
       target?.focus();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -186,7 +196,11 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
       // attempt's own verdict, that decides which control survives to land focus on.
       pendingFocus.current.set(item.id, result.attempt_state.ever_correct ? "correct" : "answer");
       patch(item, {
-        feedback: { correct: result.correct, expected: result.expected },
+        feedback: {
+          correct: result.correct,
+          expected: result.expected,
+          aiFeedback: result.feedback,
+        },
         attemptState: result.attempt_state,
         submitting: false,
       });
@@ -244,7 +258,7 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
                   <p className="mt-1 text-small text-ink-subtle">{t("Concept: ")}{item.concept}</p>
                 )}
 
-                {item.kind === "mcq" ? (
+                {item.kind === "mcq" || item.kind === "truefalse" ? (
                   <div
                     className="mt-3 flex flex-col gap-2"
                     /*
@@ -295,10 +309,10 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
                       </label>
                     ))}
                   </div>
-                ) : (
-                  <input
-                    type="text"
+                ) : item.kind === "code" ? (
+                  <textarea
                     value={state.answer}
+                    rows={6}
                     disabled={state.submitting || solved}
                     onChange={(e) => {
                       const value = e.target.value;
@@ -312,16 +326,16 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
                       );
                     }}
                     ref={(el) => {
-                      if (el) inputRefs.current.set(item.id, el);
-                      else inputRefs.current.delete(item.id);
+                      if (el) codeRefs.current.set(item.id, el);
+                      else codeRefs.current.delete(item.id);
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") {
+                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                         e.preventDefault();
                         void submit(item);
                       }
                     }}
-                    placeholder={t("Your answer")}
+                    placeholder={t("Your answer (Ctrl+Enter to submit)")}
                     aria-labelledby={`quiz-question-${item.id}`}
                     /*
                       `border-line-strong`, which is the colour this input already had:
@@ -398,6 +412,36 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
                     */
                     className="mt-3 w-full rounded-control border border-line-strong bg-transparent px-3 py-2 text-ui text-ink placeholder:text-ink-subtle transition-colors duration-fast ease-standard hover:border-line-hover focus:border-line-hover disabled:opacity-60"
                   />
+                ) : (
+                  <input
+                    type="text"
+                    value={state.answer}
+                    disabled={state.submitting || solved}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Same reasoning as the mcq onChange just above: a validation
+                      // complaint about the answer goes stale the moment the answer
+                      // changes, a server error does not.
+                      patch(item, (prev) =>
+                        prev.errorKind === "validation"
+                          ? { answer: value, error: null, errorKind: null }
+                          : { answer: value },
+                      );
+                    }}
+                    ref={(el) => {
+                      if (el) inputRefs.current.set(item.id, el);
+                      else inputRefs.current.delete(item.id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void submit(item);
+                      }
+                    }}
+                    placeholder={t("Your answer")}
+                    aria-labelledby={`quiz-question-${item.id}`}
+                    className="mt-3 w-full rounded-control border border-line-strong bg-transparent px-3 py-2 text-ui text-ink placeholder:text-ink-subtle transition-colors duration-fast ease-standard hover:border-line-hover focus:border-line-hover disabled:opacity-60"
+                  />
                 )}
 
                 {/* role="alert" (implicitly assertive) rather than sitting inside the
@@ -454,6 +498,12 @@ export function QuizSection({ quiz, progress }: { quiz: QuizItem[]; progress: Qu
                         ? t("Last answer was incorrect, expected: ")
                         : t("Incorrect, expected: ")}
                       <span className="font-medium">{state.feedback.expected}</span>
+                    </p>
+                  )}
+                  {state.feedback?.aiFeedback && (
+                    <p className="mt-3 rounded-control border border-line bg-surface-sunken px-3 py-2 text-small">
+                      <span className="font-medium">{t("AI verdict: ")}</span>
+                      {state.feedback.aiFeedback}
                     </p>
                   )}
                 </div>

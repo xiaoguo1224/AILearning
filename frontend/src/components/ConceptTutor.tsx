@@ -159,6 +159,21 @@ function TutorReply({
         <div className="mt-2 text-[13px]">
           <LessonMarkdown content={message.answer} title={conceptLabel} />
         </div>
+        {message.refs.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="text-[12px] font-semibold uppercase tracking-wide text-ink-muted">
+              {t("References")}
+            </span>
+            {message.refs.map((ref) => (
+              <span
+                key={ref.lesson_id}
+                className="rounded-full border border-line bg-surface px-2.5 py-0.5 text-small text-ink-muted"
+              >
+                {ref.title}
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* DIRECTLY under the grounded explanation, and above `beyond` rather than after

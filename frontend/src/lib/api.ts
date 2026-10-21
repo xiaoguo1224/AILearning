@@ -65,6 +65,7 @@ import type {
   TutorMode,
   TutorTurn,
   UsageSummary,
+  QuizItem,
 } from "./types";
 
 const BASE_URL =
@@ -262,6 +263,48 @@ function postJson<T>(path: string, body: unknown, costLimitConsequence?: string)
     },
     costLimitConsequence,
   );
+}
+
+function patchJson<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+export interface LessonPatchInput {
+  title?: string;
+  content?: string;
+  concepts?: string[];
+}
+
+export function patchLesson(
+  lessonId: number,
+  patch: LessonPatchInput,
+): Promise<{ id: number; title: string }> {
+  return patchJson(`/api/lessons/${lessonId}`, patch);
+}
+
+export function patchCourse(
+  courseId: number,
+  patch: { title?: string; description?: string },
+): Promise<{ id: number; title: string }> {
+  return patchJson(`/api/courses/${courseId}`, patch);
+}
+
+export interface ImportFileInput {
+  path: string;
+  content: string;
+}
+
+export function importCourseFromMarkdown(files: ImportFileInput[]): Promise<{
+  id: number;
+  title: string;
+  modules: number;
+  lessons: number;
+}> {
+  return postJson("/api/courses/import", { files });
 }
 
 function putJson<T>(path: string, body: unknown): Promise<T> {
@@ -513,7 +556,7 @@ export async function* streamCourseGeneration(
   if (!res.body) return;
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
-  let buffer = "";
+  const buffer = "";
   let kind = "";
   let data = "";
   const flush = function* (): Generator<GenerationStreamEvent> {
@@ -528,6 +571,18 @@ export async function* streamCourseGeneration(
     kind = "";
     data = "";
   };
+  yield* readSseEvents(reader, decoder, buffer, kind, data, flush);
+}
+
+/** Read SSE frames from an open response body. Shared by both generation streams. */
+async function* readSseEvents(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  decoder: TextDecoder,
+  buffer: string,
+  kind: string,
+  data: string,
+  flush: () => Generator<GenerationStreamEvent>,
+): AsyncGenerator<GenerationStreamEvent> {
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -542,6 +597,98 @@ export async function* streamCourseGeneration(
     }
   }
   yield* flush();
+}
+
+/**
+ * Regenerate an unsatisfactory course with the learner's feedback, as the same
+ * event stream the generate route emits, so GenerationProgress renders both.
+ */
+export async function* streamCourseRegeneration(
+  courseId: number,
+  feedback: string,
+  init?: { signal?: AbortSignal },
+): AsyncGenerator<GenerationStreamEvent> {
+  const res = await localizedFetch(`${BASE_URL}/api/courses/${courseId}/regenerate/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ feedback }),
+    signal: init?.signal,
+  });
+  if (!res.ok) {
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      // Non-JSON body, so the status has to carry the meaning on its own.
+    }
+    const fallback = res.statusText || `Request failed with status ${res.status}`;
+    throw new ApiError(
+      res.status,
+      messageFromErrorBody(body, fallback, COST_LIMIT_CONSEQUENCE.generate),
+    );
+  }
+  if (!res.body) return;
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  const buffer = "";
+  let kind = "";
+  let data = "";
+  const flush = function* (): Generator<GenerationStreamEvent> {
+    if (kind) {
+      try {
+        yield { type: kind, ...JSON.parse(data) } as GenerationStreamEvent;
+      } catch {
+        // A truncated frame is dropped; the stream's own error/done event
+        // still tells the client how the run ended.
+      }
+    }
+    kind = "";
+    data = "";
+  };
+  yield* readSseEvents(reader, decoder, buffer, kind, data, flush);
+}
+
+export interface QuizBankItem {
+  id: number;
+  question: string;
+  kind: string;
+  options: string[];
+  concept: string;
+  attempt_state: QuizItem["attempt_state"];
+}
+export interface QuizBankLesson {
+  id: number;
+  title: string;
+  items: QuizBankItem[];
+}
+export interface QuizBankModule {
+  id: number;
+  title: string;
+  lessons: QuizBankLesson[];
+}
+export interface QuizBank {
+  course_id: number;
+  total: number;
+  modules: QuizBankModule[];
+}
+export interface QuizKindCount {
+  kind: string;
+  count: number;
+}
+
+export function getCourseQuiz(courseId: number): Promise<QuizBank> {
+  return request(`/api/courses/${courseId}/quiz`);
+}
+
+export function generateQuizQuestions(
+  courseId: number,
+  items: QuizKindCount[],
+  lessonId?: number,
+): Promise<{ course_id: number; lesson_id: number | null; created: QuizBankItem[] }> {
+  return postJson(`/api/courses/${courseId}/quiz/generate`, {
+    lesson_id: lessonId ?? null,
+    items,
+  });
 }
 
 /** `elapsedMs` is a soft timing signal; omit it when the measurement is unavailable. */

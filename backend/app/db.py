@@ -134,6 +134,10 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # REFERENCES clause because SQLite cannot add one, and nothing cascades because the
     # exercise outlives the conversation it was drafted in.
     ("agent_messages", "exercise_id", "INTEGER"),
+    # Tutor citations: the lesson titles the reply drew on, resolved to ids and kept
+    # as JSON. TEXT with a constant default, the safe shape; old rows read back as
+    # "[]", which renders as "no citations" exactly as it should.
+    ("tutor_messages", "refs", "TEXT NOT NULL DEFAULT '[]'"),
 )
 
 
