@@ -4,13 +4,13 @@
 
 ## 当前状态
 
-- 当前里程碑：**P0/P1/P2/P3 及 P4-01~04 已验收；下一步 P4-05/06 跨项目建议确认与拒绝不变性**。本节与最新追加记录优先于下方历史状态。
+- 当前里程碑：**P0~P4 已验收；下一步 P5-01 结构化课程知识树、教材映射与知识驱动整合**。本节与最新追加记录优先于下方历史状态。
 - 已确定：产品需求、单人本地运行边界、项目化、课程/自由学习、自动知识草稿与核心审核、跨项目确认。
 - 已准备：AGENTS、PRD、ARCHITECTURE、TASKS、DECISIONS、README 的目标文档草案。
 - 已有源码审查：通过 GitHub 阅读 StudyForge 目录、models、ingest、generation、tutor、remediation、db、部分 API 及依赖文件。
 - 运行约定：本机 FastAPI `http://localhost:8000`、Next.js `http://localhost:3000`；日常开发不使用 Docker。上轮服务状态不代表本轮仍在线，本轮未重新核实常驻进程；自动测试使用独立临时库及确定性 provider。
 - 已完成：基线文档合并、容器/本机测试、浏览器课程/Quiz/Review/Tutor、SQLite 快照/恢复、Gemini adapter 和一次真实 Shape 教学。功能提交截至 `12419d0`（P3 收尾），本段之后为文档批次。
-- 已完成：P3 全部任务与 P4 知识模型、自动草稿、核心审核、版本对照、错因与主动复习。最新功能提交 `52ece5e`；既有 P4 提交见最新记录。旧初始化“未运行”表仅是历史记录。
+- 已完成：P3 全部任务与 P4 知识模型、自动草稿、核心审核、版本对照、错因与主动复习。最新功能提交 `e13bf10`；既有 P4 提交见最新记录。旧初始化“未运行”表仅是历史记录。
 
 ## 上游静态审查主要观察
 
@@ -34,8 +34,8 @@
 ## 下次工作入口
 
 1. 核对当前状态和最新追加记录，保留用户既有文档删除；不要重新执行已通过的 P0 基线。
-2. 从 P4-05/06 继续：复用 ErrorCause 作为来源，实现跨项目建议待确认、接受/拒绝和留痕；接受前或拒绝后不得修改目标项目。
-3. P4 完整验收后进入 P5 知识驱动整合，不重复 P0~P3 基线。
+2. 从 P5-01 继续：核查现有 Course → Module → Lesson → concept 映射，实现结构化课程树与教材引用，允许自由跳转，保留历史。
+3. 按 P5-02~06 完成内容审核、旧 Today/Review 时间驱动交互清理、三条用户流程及最终质量回归；不重复 P0~P4 已验收任务。
 
 
 ### 2026-10-20 — P1 完整验收与学习机制调整（取消时间驱动，转为知识掌握驱动）
@@ -228,3 +228,20 @@
 - 边界：自评 rating >= 2 关闭复习建议，不表示代码实测通过；证据快照上限 4000 字符，超长可截断。归档后已打开的课程复习页仍沿用原有全局复习接口，新诊断写入受归档保护。旧 Today/全局 Review 日期展示属于 P5 已记录整合工作。
 - 未执行全量 pytest/Vitest、浏览器端到端、真实模型调用；本批不引入模型调用，用户代码始终未执行。未改个人学习库、未推送远程，保留用户原有文件删除。
 - 下一步：P4-05/06 建议持久化、状态流转、接受后创建目标项目的知识驱动复习任务，并验证创建/待确认/拒绝均不改目标项目；接受需幂等并留下来源与确认历史。
+
+### 2026-10-21 — P4-05/06 验收：跨项目建议确认、拒绝与留痕
+- 功能提交：`e13bf10`。P4 全部任务完成，下一阶段 P5-01。
+- 新增 `backend/app/suggestions/`，独立模型、schema、服务与 router。LearningSuggestion 保存来源错因/项目、目标项目、概念/错因/证据快照、pending/accepted/rejected、决定时间和目标任务 ID。新增表由 create_all 注册，不重建旧表，升级/回滚仍遵循数据库备份恢复规范。
+- 创建建议只读目标；拒绝只改建议。接受先取得 SQLite 写锁并重新读取状态，再在同一事务创建目标 ErrorCause 复习任务与保存 accepted。同决定重试幂等，反向决定 409，唯一约束阻止同来源/目标重复建议。来源/目标归档或来源错因已关闭时拒绝接受，仍可拒绝建议。
+- ErrorCause.record 增加 commit=False 供原子接受使用；原有调用默认行为不变。逐条 is_open 校验防止新错因令旧证据复活。新增任务不写 FSRS，不改课程、不安排日期。
+- 前端新增 `/projects/:id/suggestions`：从错因卡片选择跨项目目标，分页加载项目选项，保存待确认建议；显示来源/目标、证据、状态、决定时间，明确接受后具体添加的任务，独立接受/拒绝，接受后链接目标任务。中英双语、错误保留、列表分页和请求防重入。
+- 实际验证（本机）：
+  1. `uv run pytest tests/test_suggestions.py tests/test_errors.py -q` 初版 **27 passed**；`uv run pytest tests/test_suggestions.py tests/test_errors.py tests/test_tutor_migration.py -q` **51 passed, 2 skipped**（既有迁移历史跳过）。随后增加旧证据复活回归，`uv run pytest tests/test_suggestions.py -q` **7 passed**。
+  2. 覆盖待确认及拒绝的目标 Project/错误/知识/FSRS 快照完全一致、重复及并发接受只建一条任务、目标归档接受失败保持 pending、插入后异常整体回滚、错误来源/同项目拒绝、旧证据不复活。
+  3. `uv run ruff check app tests --fix` 通过，修正新增测试导入排序；未删除测试或禁用检查。
+  4. `npm test -- tests/suggestions.test.tsx tests/project-review-tasks.test.tsx` **9 passed**；最终建议页微调后 `npm test -- tests/suggestions.test.tsx` **5 passed**。覆盖待确认不自动接受、拒绝契约/目标不变提示、接受错误不报成功、终态无决定按钮、提议和接受分开。
+  5. tsc 首次发现测试 fixture 多写不存在的 course_count，删除错误 fixture 字段后 `node node_modules/typescript/bin/tsc --noEmit` 通过；`npm run lint` 通过；最终 `$env:NODE_OPTIONS=''; npm run build` 成功，含建议页新路由。
+  6. 差异检查发现新 schema 文件尾部多余空行，已清理后重新 `git diff --cached --check` 通过。所有测试使用临时库和 fake/mock，不写个人数据库或运行上传程序。
+- 多 Agent：只读审查复核目标零变更、原子提交、幂等、归档与前端刷新边界，无交付阻塞。
+- 限制：目标由用户选择，未加自动目标匹配/额外 LLM 调用；来源归档后接受 409，但可拒绝。证据快照有长度上限，复习任务不等于目标代码实测失败。未做浏览器端到端、真实模型或全量回归；P5 仍保留最终整体验证。
+- 下一步：P5-01 核查课程知识结构及教材引用映射，完成知识驱动课程树；随后 P5-02 核心内容审核、P5-03/04 三条用户流程和最终回归、P5-05 运维说明、P5-06 异常态双语与旧 Today/Review 时间展示整合。不要把 P4 完成视为整个项目已完成。

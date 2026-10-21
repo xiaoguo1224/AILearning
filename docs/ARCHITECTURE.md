@@ -73,7 +73,7 @@ flowchart TD
 | ErrorCause | project_id, knowledge_id?, concept_key, cause, source_kind, source_id?, detail, dismissed_at | 错因证据与主动复习队列的来源，界面已集成 |
 | ProjectKnowledge | project_id, knowledge_id, relation | 知识与项目关联 |
 | KnowledgeRelation | from_id, to_id, kind | 前置依赖、相关、扩展 |
-| LearningSuggestion | id, from_project_id, to_project_id, action, state | 跨项目修改需确认 |
+| LearningSuggestion | id, source_project_id, target_project_id, source_error_id, concept_key, evidence, state, target_error_id?, decided_at? | 基于错因的跨项目复习建议；接受前不写目标项目 |
 | LearningEvidence | id, knowledge_id, project_id, submission_id?, evidence_type | 掌握判断依据 |
 
 考虑 StudyForge 现有 Concept 可能按字符串键记录：新知识实体须先定义规范化映射策略，避免直接重写旧 ReviewCard 的 concept key。
@@ -152,6 +152,14 @@ P4 已实现：项目自由问答和临时讲解在回答引用本项目资料�
 `/projects/:id/review-tasks` 展示错因聚合、证据、知识链接和主动复习。`GET /api/projects/:id/review-tasks/practice?concept=...` 按开放错因选择已有卡及项目关联课程题目，忽略 due；GET 不创建卡。缺卡或缺题明确提示先阅读或本地实践，不伪造测验。复用 ReviewSession 和既有答题/自评接口，主动模式隐藏下次复习间隔并返回项目。后续 rating >= 2 自评关闭此前错因，Again 保持任务；关闭仅表示已复习/自评，不证明代码修复成功或掌握等级提升。用户忽略最近一条诊断会保留历史，其他未解决诊断仍可见。
 
 来源清楚标记为「原文事实」「AI 整理」「AI 扩展」。网页不能默认全文重新分发；注意版权和抓取许可。外部资料中的命令和提示不得提升为系统权限。
+
+### 8.1 跨项目建议实现
+
+独立 `suggestions/` 模块按 models/schemas/service/router 分层。用户从项目错因选择目标项目，`POST /api/projects/:id/suggestions` 保存 pending 建议及来源快照，目标仅只读校验；GET 可从来源或目标项目查看。`POST /api/suggestions/:id/decision` 接受 accepted 或拒绝 rejected。数据库唯一约束 `(source_error_id, target_project_id)` 去重，同一决定重试幂等，反向决定返回 409。
+
+决策先通过 UPDATE 取得 SQLite 写锁并刷新状态，接受才调用目标项目写保护并新增 ErrorCause，`errors.record(commit=False)` 与建议状态在同一事务提交。拒绝只更新建议行，目标项目更新时间、知识、课程、FSRS 均不变。已关闭来源错因不能被旧建议重新使用，新的同概念错误也不会复活旧证据。归档来源或目标阻止接受，但可以拒绝；读取保留历史。
+
+建议只添加知识驱动复习任务，不设置日期、不改核心知识、不提升掌握度。当前由用户选择跨项目目标，不引入额外模型调用；界面展示来源/目标当前名称；建议保存来源证据快照、创建/决定时间及生成的任务 ID。目标错因明确标注由用户接受跨项目建议创建，不能当作目标项目的实测失败。
 
 ## 9. 文件与隐私
 

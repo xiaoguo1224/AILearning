@@ -42,5 +42,3 @@ class SuggestionOut(BaseModel):
 class SuggestionList(BaseModel):
     items: list[SuggestionOut]
     total: int
-
-
