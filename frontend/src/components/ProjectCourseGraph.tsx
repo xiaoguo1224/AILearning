@@ -133,14 +133,14 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
       const cid = `course-${course.id}`;
       nodeIds.add(cid);
       const cpos = positions[cid];
-      // Course positions from AI (course-level only). Chapters are laid out
-      // under their course.
-      let cx: number | undefined, cy: number | undefined;
+      // Course positions from AI (course-level only). Every course gets a
+      // position even if AI missed it, so chapters always have an anchor.
+      let cx: number, cy: number;
       if (cpos) {
         cx = cpos.x * 20; cy = cpos.y * 20;
-      } else if (!hasPositions) {
+      } else {
         cx = 150 + (courseCount > 1 ? (courseIdx * 900) / (courseCount - 1) : 450);
-        cy = 150;
+        cy = 300;
       }
       nodes.push({
         id: cid,
@@ -148,30 +148,33 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
         value: course.id,
         category: courseIdx,
         symbolSize: 64,
-        ...(cx !== undefined ? { x: cx, y: cy } : {}),
+        x: cx,
+        y: cy,
       });
       // Chapter nodes: arranged in a circle around their course.
-      const allLessons = course.modules.flatMap((m) => m.lessons);
+      const allLessons = (course.modules || []).flatMap((m) => m.lessons || []);
+      if (typeof window !== "undefined") {
+        console.log(`Course ${course.title}: ${allLessons.length} lessons`);
+      }
       allLessons.forEach((l, lessonIdx) => {
         {
           const lid = `lesson-${l.id}`;
           nodeIds.add(lid);
-          let lx: number | undefined, ly: number | undefined;
-          if (cx !== undefined && cy !== undefined) {
-            // Circular arrangement around the course.
-            const n = allLessons.length;
-            const radius = 90 + Math.floor(lessonIdx / 8) * 55;
-            const angle = (lessonIdx % 8) * ((2 * Math.PI) / Math.min(8, n)) - Math.PI / 2;
-            lx = cx + radius * Math.cos(angle);
-            ly = cy + radius * Math.sin(angle);
-          }
+          // Circular arrangement around the course.
+          const n = allLessons.length;
+          const radius = 90 + Math.floor(lessonIdx / 8) * 55;
+          const angle = (lessonIdx % 8) * ((2 * Math.PI) / Math.min(8, n)) - Math.PI / 2;
+          const lx = cx + radius * Math.cos(angle);
+          const ly = cy + radius * Math.sin(angle);
           nodes.push({
             id: lid,
             name: l.title,
             value: l.id,
             category: courseIdx,
-            symbolSize: 28,
-            ...(lx !== undefined ? { x: lx, y: ly } : {}),
+            symbolSize: 36,
+            itemStyle: { opacity: 0.9 },
+            x: lx,
+            y: ly,
           });
           // Containment edge: course -> chapter.
           links.push({
