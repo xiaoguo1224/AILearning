@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Alert, Button, Form, InputNumber, Modal } from "antd";
+import { Alert, Button, Modal } from "antd";
 
 import { useI18n } from "@/components/LocaleProvider";
 import { QuizSection } from "@/components/QuizSection";
@@ -72,45 +72,142 @@ function LessonQuizGenerateDialog({
     }
   }
 
+  const KIND_META: Record<string, { icon: string; desc: string }> = {
+    mcq: { icon: "☰", desc: t("Multiple choice with options") },
+    short: { icon: "✎", desc: t("Short answer or fill in the blank") },
+    truefalse: { icon: "✓", desc: t("True or false judgment") },
+    code: { icon: "⟨/⟩", desc: t("Programming exercise") },
+  };
+
+  function adjust(kind: string, delta: number) {
+    setCounts((c) => ({
+      ...c,
+      [kind]: Math.max(0, Math.min(20, (c[kind] || 0) + delta)),
+    }));
+  }
+
   return (
     <Modal
       open={true}
       onCancel={onClose}
-      title={t("Generate questions")}
-      footer={[
-        <Button key="cancel" onClick={onClose}>
-          {t("Cancel")}
-        </Button>,
-        <Button
-          key="generate"
-          type="primary"
-          loading={busy}
-          disabled={total === 0}
-          onClick={submit}
-        >
-          {busy ? t("Generating…") : t("Generate {0} questions", total)}
-        </Button>,
-      ]}
+      title={null}
+      footer={null}
+      width={520}
     >
-      <p>{t("Pick the types and how many of each.")}</p>
-      <Form layout="vertical" style={{ marginTop: 16 }}>
-        {KINDS.map((kind) => (
-          <Form.Item key={kind} label={t(`quiz_kind_${kind}`)}>
-            <InputNumber
-              min={0}
-              max={20}
-              value={counts[kind]}
-              onChange={(v) =>
-                setCounts((c) => ({
-                  ...c,
-                  [kind]: Math.max(0, Math.min(20, Number(v) || 0)),
-                }))
-              }
-            />
-          </Form.Item>
-        ))}
-        {error && <Alert title={error} type="error" showIcon />}
-      </Form>
+      <div style={{ padding: "8px 4px" }}>
+        <h3 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 4px" }}>
+          {t("AI 出题")}
+        </h3>
+        <p style={{ color: "var(--ink-muted)", fontSize: 13, margin: "0 0 20px" }}>
+          {t("Pick the types and how many of each.")}
+        </p>
+        <div style={{ display: "grid", gap: 12 }}>
+          {KINDS.map((kind) => {
+            const meta = KIND_META[kind];
+            const active = (counts[kind] || 0) > 0;
+            return (
+              <div
+                key={kind}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  padding: "14px 16px",
+                  borderRadius: 12,
+                  border: `1px solid ${active ? "var(--accent)" : "var(--line)"}`,
+                  background: active ? "color-mix(in srgb, var(--accent) 6%, transparent)" : "transparent",
+                  transition: "all 0.2s",
+                }}
+              >
+                <div
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 10,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 18,
+                    background: active ? "var(--accent)" : "var(--surface)",
+                    color: active ? "#fff" : "var(--ink-muted)",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {meta.icon}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 500, fontSize: 14 }}>
+                    {t(`quiz_kind_${kind}`)}
+                  </div>
+                  <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+                    {meta.desc}
+                  </div>
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Button
+                    size="small"
+                    shape="circle"
+                    disabled={busy || (counts[kind] || 0) <= 0}
+                    onClick={() => adjust(kind, -1)}
+                  >
+                    −
+                  </Button>
+                  <span
+                    style={{
+                      minWidth: 28,
+                      textAlign: "center",
+                      fontSize: 16,
+                      fontWeight: 600,
+                      color: active ? "var(--accent)" : "var(--ink-muted)",
+                    }}
+                  >
+                    {counts[kind] || 0}
+                  </span>
+                  <Button
+                    size="small"
+                    shape="circle"
+                    disabled={busy || (counts[kind] || 0) >= 20}
+                    onClick={() => adjust(kind, 1)}
+                  >
+                    ＋
+                  </Button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {error && (
+          <Alert title={error} type="error" showIcon style={{ marginTop: 16 }} />
+        )}
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: 24,
+          }}
+        >
+          <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+            {total > 0
+              ? t("Total: {0} questions", total)
+              : t("Select at least one question")}
+          </span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button onClick={onClose} disabled={busy}>
+              {t("Cancel")}
+            </Button>
+            <Button
+              type="primary"
+              loading={busy}
+              disabled={total === 0 || busy}
+              onClick={submit}
+              style={{ minWidth: 120 }}
+            >
+              {busy ? t("Generating…") : t("Generate")}
+            </Button>
+          </div>
+        </div>
+      </div>
     </Modal>
   );
 }

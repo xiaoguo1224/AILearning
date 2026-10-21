@@ -105,7 +105,7 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
       // horizontally, each course's lessons in a grid below it.
       let cx: number | undefined, cy: number | undefined;
       if (cpos) {
-        cx = cpos.x * 10; cy = cpos.y * 10;
+        cx = cpos.x * 20; cy = cpos.y * 20;
       } else if (!hasPositions) {
         cx = 150 + (courseCount > 1 ? (courseIdx * 900) / (courseCount - 1) : 450);
         cy = 120;
@@ -127,7 +127,7 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
           const lpos = positions[lid];
           let lx: number | undefined, ly: number | undefined;
           if (lpos) {
-            lx = lpos.x * 10; ly = lpos.y * 10;
+            lx = lpos.x * 20; ly = lpos.y * 20;
           } else if (!hasPositions && cx !== undefined) {
             lx = cx - 120 + (lessonIdx % 4) * 80;
             ly = 220 + Math.floor(lessonIdx / 4) * 70;
@@ -235,7 +235,7 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
         {extractError && (
           <span style={{ color: "#f5222d", fontSize: 12 }}>{extractError}</span>
         )}
-        <Button loading={extracting} onClick={() => void reExtract()}>
+        <Button loading={extracting} disabled={extracting} onClick={() => void reExtract()}>
           {t("Re-extract with AI")}
         </Button>
       </div>
@@ -244,18 +244,22 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
           暂无 AI 提炼的关系，显示教学顺序。点击上方按钮用 AI 提炼。
         </p>
       )}
-      <ReactECharts
-        option={option}
-        style={{ height: 900, width: "100%" }}
-        onEvents={{
-          click: (params: { data?: { id?: string; value?: number } }) => {
-            const id = params.data?.id ?? "";
-            if (id.startsWith("course-") && params.data?.value && onNodeClick) {
-              onNodeClick(params.data.value);
-            }
-          },
-        }}
-      />
+      <div style={{ overflowX: "auto" }}>
+        <div style={{ minWidth: 1600 }}>
+          <ReactECharts
+            option={option}
+            style={{ height: 900, width: "100%" }}
+            onEvents={{
+              click: (params: { data?: { id?: string; value?: number } }) => {
+                const id = params.data?.id ?? "";
+                if (id.startsWith("course-") && params.data?.value && onNodeClick) {
+                  onNodeClick(params.data.value);
+                }
+              },
+            }}
+          />
+        </div>
+      </div>
     </div>
   );
 }

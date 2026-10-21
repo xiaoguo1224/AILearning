@@ -46,7 +46,7 @@ export function ExtractConceptsButton({ courseId }: ExtractConceptsButtonProps) 
 
   return (
     <div style={{ marginTop: 16, textAlign: "center" }}>
-      <Button type="primary" loading={busy} onClick={() => void extract()}>
+      <Button type="primary" loading={busy} disabled={busy} onClick={() => void extract()}>
         AI 提炼知识点
       </Button>
       {error && <p style={{ color: "#f5222d", marginTop: 8, fontSize: 12 }}>{error}</p>}
