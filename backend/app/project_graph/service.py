@@ -12,24 +12,34 @@ from app.project_graph.models import ProjectGraphEdge
 EXTRACT_STAGE = "project_graph_extract"
 
 SYSTEM_PROMPT = """You are analyzing a learning project made of courses, each with chapters (lessons).
-Given the course and chapter titles (and short summaries when available), extract the
-learning-order relationships between them.
+Given the course and chapter titles (and short summaries when available), extract THREE
+kinds of relationships:
 
-Return a JSON array. Each item:
-{
-  "from_type": "course" | "lesson",
-  "from_id": <int>,
-  "to_type": "course" | "lesson",
-  "to_id": <int>,
-  "kind": "prerequisite" | "related" | "sequence",
-  "reason": "<one sentence, Chinese, why the learner should do `from` before `to`>"
-}
+1. CONTAINMENT: every course contains its chapters. Emit one edge per chapter:
+   {"from_type": "course", "from_id": <course id>, "to_type": "lesson",
+    "to_id": <lesson id>, "kind": "contains",
+    "reason": "<course> 包含章节 <lesson>"}
+
+2. COURSE ORDER: the learning sequence between courses. Which course should be
+   studied first, based on topic dependencies?
+   {"from_type": "course", "from_id": <earlier>, "to_type": "course",
+    "to_id": <later>, "kind": "course_sequence", "reason": "<why, Chinese>"}
+
+3. CHAPTER ORDER: the learning sequence between chapters (within a course and
+   across courses). Which chapter should come first?
+   {"from_type": "lesson", "from_id": <earlier>, "to_type": "lesson",
+    "to_id": <later>, "kind": "chapter_sequence", "reason": "<why, Chinese>"}
+
+Also allowed when the dependency is strong:
+- "prerequisite": `to` genuinely requires concepts from `from`. Be conservative.
+- "related": topical overlap worth reviewing together, order flexible.
 
 Rules:
-- "prerequisite": `to` genuinely requires concepts from `from`. Be conservative.
-- "sequence": the natural teaching order within/across courses when no hard prerequisite exists.
-- "related": topical overlap worth reviewing together, order flexible.
-- Cover every chapter: each chapter (except the very first) should have at least one incoming edge.
+- Containment edges: emit ALL of them, one per chapter.
+- Sequence edges: every chapter (except the very first to study) should have at
+  least one incoming chapter_sequence or prerequisite edge, forming a coherent
+  learning path. Every course (except the first) should have an incoming
+  course_sequence or prerequisite edge.
 - Do not invent ids. Use only the ids given.
 - Reply with ONLY the JSON array, no other text.
 """
@@ -85,7 +95,13 @@ def extract_relationships(
             t_ok = (item["to_type"] == "course" and item["to_id"] in valid_courses) or (
                 item["to_type"] == "lesson" and item["to_id"] in valid_lessons
             )
-            return f_ok and t_ok and item["kind"] in ("prerequisite", "related", "sequence")
+            return f_ok and t_ok and item["kind"] in (
+                "contains",
+                "course_sequence",
+                "chapter_sequence",
+                "prerequisite",
+                "related",
+            )
         except (KeyError, TypeError):
             return False
 

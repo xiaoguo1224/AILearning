@@ -20,15 +20,19 @@ interface ProjectCourseGraphProps {
 }
 
 const KIND_LABELS: Record<string, string> = {
+  contains: "包含",
+  course_sequence: "课程顺序",
+  chapter_sequence: "章节顺序",
   prerequisite: "前置",
   related: "相关",
-  sequence: "顺序",
 };
 
-const KIND_COLORS: Record<string, string> = {
-  prerequisite: "#f5222d",
-  related: "#1890ff",
-  sequence: "#52c41a",
+const KIND_STYLES: Record<string, { color: string; width: number; type?: string }> = {
+  contains: { color: "#d9d9d9", width: 1, type: "dashed" },
+  course_sequence: { color: "#1fae54", width: 3 },
+  chapter_sequence: { color: "#52c41a", width: 2 },
+  prerequisite: { color: "#f5222d", width: 2 },
+  related: { color: "#1890ff", width: 1, type: "dashed" },
 };
 
 /**
@@ -112,13 +116,26 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
             nodeIds.has(`${e.from_type}-${e.from_id}`) &&
             nodeIds.has(`${e.to_type}-${e.to_id}`),
         )
-        .map((e) => ({
-          source: `${e.from_type}-${e.from_id}`,
-          target: `${e.to_type}-${e.to_id}`,
-          label: { show: true, formatter: KIND_LABELS[e.kind] ?? e.kind, fontSize: 10 },
-          lineStyle: { color: KIND_COLORS[e.kind] ?? "#999", width: 2 },
-          tooltip: { formatter: e.reason },
-        }));
+        .map((e) => {
+          const style = KIND_STYLES[e.kind] ?? { color: "#999", width: 2 };
+          return {
+            source: `${e.from_type}-${e.from_id}`,
+            target: `${e.to_type}-${e.to_id}`,
+            label: {
+              show: e.kind !== "contains",
+              formatter: KIND_LABELS[e.kind] ?? e.kind,
+              fontSize: 10,
+            },
+            lineStyle: {
+              color: style.color,
+              width: style.width,
+              type: style.type ?? "solid",
+            },
+            // Containment edges point inward without arrowheads.
+            edgeSymbol: e.kind === "contains" ? ["none", "none"] : ["none", "arrow"],
+            tooltip: { formatter: e.reason },
+          };
+        });
     } else {
       links = [];
       let prev: string | null = null;

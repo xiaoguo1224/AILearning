@@ -1706,7 +1706,7 @@ export interface ProjectGraphEdge {
   from_id: number;
   to_type: "course" | "lesson";
   to_id: number;
-  kind: "prerequisite" | "related" | "sequence";
+  kind: "contains" | "course_sequence" | "chapter_sequence" | "prerequisite" | "related";
   reason: string;
 }
 
