@@ -78,6 +78,8 @@ node node_modules/next/dist/bin/next dev --hostname 127.0.0.1
 
 「课程知识树」入口 `/projects/:id/learn` 展示已关联课程的 Module → Lesson → 知识点、章节完成与正式作答证据。可随时打开任意课时；先修知识仅提供建议。已核实的 PyTorch 基础主题链接《动手学深度学习》中文版章节，未映射内容明确标记。点击「准备学习提问」会打开可编辑草稿，确认发送后才调用模型。
 
+课程树的「审核公式与示例」和已打开参考解法的审核按钮会创建待审核知识快照。项目「内容审核记录」按来源版本显示审核结果；原文或审核稿发生变化后，不再将原文标为已审。审核不会自动覆盖原课程、自动确认 AI 内容或执行解法。
+
 ## 许可证与上游
 
 现有根 `.env` 的 `LLM_PROVIDER=gemini`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY` 可直接用于 OpenAI 兼容网关；后端自动加载，密钥只用于后端请求。显式 `STUDYFORGE_LLM_PROVIDER` 优先（测试可设 `fake`）；不要用 backend/.env 中默认的 anthropic 覆盖想使用的网关。网关须启用 HTTPS，已有环境变量优先于 backend/.env，后者优先于根 .env。默认不自动降级到其他供应商，连接失败返回受控错误。

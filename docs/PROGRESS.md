@@ -10,7 +10,7 @@
 - 已有源码审查：通过 GitHub 阅读 StudyForge 目录、models、ingest、generation、tutor、remediation、db、部分 API 及依赖文件。
 - 运行约定：本机 FastAPI `http://localhost:8000`、Next.js `http://localhost:3000`；日常开发不使用 Docker。上轮服务状态不代表本轮仍在线，本轮未重新核实常驻进程；自动测试使用独立临时库及确定性 provider。
 - 已完成：基线文档合并、容器/本机测试、浏览器课程/Quiz/Review/Tutor、SQLite 快照/恢复、Gemini adapter 和一次真实 Shape 教学。功能提交截至 `12419d0`（P3 收尾），本段之后为文档批次。
-- 已完成：P3 全部任务与 P4 知识模型、自动草稿、核心审核、版本对照、错因与主动复习。最新功能提交 `d81f8d9`；既有 P4 提交见最新记录。旧初始化“未运行”表仅是历史记录。
+- 已完成：P3 全部任务与 P4 知识模型、自动草稿、核心审核、版本对照、错因与主动复习。最新功能提交 `a552e1e`；既有 P4 提交见最新记录。旧初始化“未运行”表仅是历史记录。
 
 ## 上游静态审查主要观察
 
@@ -260,3 +260,19 @@
 - 多 Agent：只读审查复核时间驱动隔离、原概念键、正式证据与自由跳转，无阻塞。条目图投影为概念可能成推荐环，目前不锁课；仅在错因中存在的主题仍从错因页进入，课程树不声称覆盖全部诊断。
 - 尚未验证：浏览器端到端、真实模型教学质量、全量回归；均保留为后续 P5 整合验证。本批不调用真实模型、不修改个人数据库、不执行上传程序、不推送远程；用户既有文件删除保持原状。
 - 下一步：P5-02 核心公式/示例/参考解法审核与 AI 扩展标记，再完成 P5-03/04 三条流程与最终回归、P5-05 运维使用说明、P5-06 双语和旧 Today/Review 时间展示清理。课程推荐不是课程内容已经审核的证据。
+
+### 2026-10-21 — P5-02 进行中：版本绑定内容审核机制
+- 功能提交：`a552e1e`。P5-02 仍为进行中，本批完成审核入口和失效保护，不意味着已经逐篇审核所有课程或完成核心基准核对。
+- 新增 `content_reviews/` 和 ContentReview 表，保存项目、来源类型/ID、SHA256、知识稿关联与创建时间。同一来源版本去重；创建时服务器读取已关联课时或已主动揭示的解法，生成 definition/standard_answer 待审核稿，绑定与知识首版同事务。
+- 未揭示解法返回 409，不通过审核接口绕过原有主动查看门槛；跨项目拒绝；正文超过 40000 字拒绝，不静默截断整篇后标已审。原课时及参考解法不变，未运行代码。
+- 已审标记由当前源归属+源哈希不变+知识稿已确认+类型正文一致派生；修改来源、审核稿正文/类型、解绑或删除源都不能误把旧版标已审。历史稿保留；用户修改后的确认稿不自动覆盖原课时。
+- 前端：课程树新增「审核公式与示例」，已揭示参考解法新增审核入口；项目 `/content-reviews` 显示来源版本和待审核/已审/来源变化/稿件不一致状态，链接原知识审核页；provenance 展示课时/评审与来源版本。课时页面新增 AI 解释/公式/示例审核及扩展提示，保留解法 AI 未验证标签。全部应用文案中英双语。
+- 实际验证：
+  1. 共享 create_entry 改造后 `uv run pytest tests/test_knowledge.py -q` **32 passed**。
+  2. `uv run pytest tests/test_content_reviews.py tests/test_knowledge.py tests/test_tutor_migration.py -q` **61 passed, 2 skipped**（既有迁移 pin 跳过）。随后增加绑定失败回滚回归，最终 `uv run pytest tests/test_content_reviews.py -q` **6 passed**，无新跳过。
+  3. 覆盖显式确认与幂等、原文不变、来源变动创建新快照/旧版失效、修改审核稿后确认不审批旧原文、未揭示/越项目拒绝、超长拒绝、绑定失败无孤立知识稿。
+  4. `uv run ruff check app tests` 通过，新增模块/测试使用 ruff format。
+  5. `npm test -- tests/content-review.test.tsx tests/curriculum.test.tsx tests/knowledge-review.test.tsx` **17 passed**；`node node_modules/typescript/bin/tsc --noEmit`、最终 `npm run lint` 通过；`$env:NODE_OPTIONS=''; npm run build` 成功，包含 content-reviews 路由。
+  6. `git diff --cached --check` 通过；本机执行，无 Docker，无个人数据库写入、真实模型调用、上传代码执行或远程推送。
+- 多 Agent：只读审查复核项目归属、解法门槛、原文一致性、确认与事务保护，无新交付阻塞。未来若支持知识删除，须同步处理内容审核引用。
+- 剩余：P5-02 仍需对张量广播、矩阵乘法/列轴保留等核心公式与示例/参考解法作实际来源核对和验证，记录审核证据；不应将“有审核工作流”写成“全部内容已审核”。之后继续 P5-03/04 端到端与最终质量门禁、P5-05 使用运维文档、P5-06 异常态双语与旧时间驱动页面整合。

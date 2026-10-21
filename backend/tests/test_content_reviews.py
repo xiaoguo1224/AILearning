@@ -103,3 +103,18 @@ def test_foreign_or_oversized_lessons_are_refused_without_partial_review(client)
         session.commit()
     assert create(client, pid, lid).status_code == 422
     assert client.get(f"/api/projects/{pid}/knowledge").json()["total"] == 0
+
+
+def test_binding_failure_rolls_back_the_new_knowledge_copy(client, monkeypatch):
+    import pytest
+
+    from app.content_reviews.models import ContentReview
+
+    pid, lid = setup_source(client)
+    def fail_binding(*args, **kwargs):
+        raise RuntimeError("forced binding failure")
+    monkeypatch.setattr(ContentReview, "__init__", fail_binding)
+    with pytest.raises(RuntimeError, match="forced binding failure"):
+        create(client, pid, lid)
+    assert client.get(f"/api/projects/{pid}/knowledge").json()["total"] == 0
+    assert client.get(f"/api/projects/{pid}/content-reviews").json()["total"] == 0
