@@ -116,6 +116,9 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # carries the same default, so upgraded == fresh and every row already in the table
     # backfills to '' rather than to NULL.
     ("tutor_messages", "ask", "TEXT NOT NULL DEFAULT ''"),
+    # Job execution trace: thinking process and tool call chain as JSON.
+    # Nullable; NULL means the job predates trace recording.
+    ("jobs", "trace", "JSON"),
     # Course deletion: the title stamped onto a deleted course's spend rows. Nullable
     # with no default, because NULL is meaningful here rather than a placeholder: it
     # means this row's course still exists, so its id may be resolved. Rows already in

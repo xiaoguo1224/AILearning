@@ -62,6 +62,24 @@ def update_progress(job_id: str, progress: dict) -> None:
     _set_status(job_id, "running", progress=progress)
 
 
+def append_trace(job_id: str, entry: dict) -> None:
+    """Append a trace entry (thinking step or tool call) to the job's trace log."""
+    from app.db import SessionLocal as _SessionLocal
+    with _SessionLocal() as session:
+        job = session.get(Job, job_id)
+        if not job:
+            return
+        trace = job.trace or {"entries": []}
+        if "entries" not in trace:
+            trace = {"entries": []}
+        entry = dict(entry)
+        entry["at"] = utcnow().isoformat()
+        trace["entries"].append(entry)
+        job.trace = trace
+        job.updated_at = utcnow()
+        session.commit()
+
+
 def complete_job(job_id: str, result: dict) -> None:
     _set_status(job_id, "completed", result=result, progress=None)
     logger.info("job_completed id=%s", job_id)

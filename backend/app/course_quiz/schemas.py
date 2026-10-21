@@ -68,6 +68,7 @@ class QuizGenerateInput(BaseModel):
 
     lesson_id: int | None = None
     items: list[KindCount] = Field(min_length=1, max_length=4)
+    prompt: str | None = Field(default=None, max_length=500)
 
 
 class QuizGenerateResult(BaseModel):

@@ -33,7 +33,10 @@ _KIND_SPECS = {
 
 
 def build_prompt(
-    material: str, requests: list[tuple[str, int]], lesson_title: str | None
+    material: str,
+    requests: list[tuple[str, int]],
+    lesson_title: str | None,
+    user_prompt: str | None = None,
 ) -> str:
     lines = [
         "你是编程课程的出题老师。根据下面的课程内容出练习题。",
@@ -49,6 +52,8 @@ def build_prompt(
             continue
         total += count
         lines.append(f"- {kind}（{_KIND_SPECS[kind]}）× {count} 道")
+    if user_prompt and user_prompt.strip():
+        lines.append(f"- 用户的额外要求：{user_prompt.strip()}")
     lines += [
         f"共 {total} 道题，难度循序渐进，覆盖内容的不同方面，不要重复。",
         "只返回 JSON 数组，不要解释：",

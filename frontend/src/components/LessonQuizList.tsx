@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Alert, Button, Modal } from "antd";
+import { Alert, Button, Input, Modal } from "antd";
 
 import { useI18n } from "@/components/LocaleProvider";
 import { QuizSection } from "@/components/QuizSection";
@@ -39,6 +39,7 @@ function LessonQuizGenerateDialog({
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [prompt, setPrompt] = useState("");
 
   const total = KINDS.reduce((sum, k) => sum + (counts[k] || 0), 0);
 
@@ -54,7 +55,12 @@ function LessonQuizGenerateDialog({
     setBusy(true);
     setError(null);
     try {
-      const { job_id } = await startQuizGenerateJob(courseId, items, lessonId);
+      const { job_id } = await startQuizGenerateJob(
+        courseId,
+        items,
+        lessonId,
+        prompt.trim() || undefined,
+      );
       for (let i = 0; i < 60; i++) {
         const job = await getJob(job_id);
         if (job.status === "completed") break;
@@ -176,6 +182,30 @@ function LessonQuizGenerateDialog({
               </div>
             );
           })}
+        </div>
+        <div style={{ marginTop: 16 }}>
+          <div
+            style={{
+              fontSize: 13,
+              fontWeight: 500,
+              marginBottom: 8,
+              color: "var(--ink)",
+            }}
+          >
+            {t("出题要求（可选）")}
+          </div>
+          <Input.TextArea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder={t(
+              "例如：侧重 Transformer 的注意力机制，出中等难度的应用题…",
+            )}
+            rows={3}
+            disabled={busy}
+            maxLength={500}
+            showCount
+            style={{ resize: "vertical" }}
+          />
         </div>
         {error && (
           <Alert title={error} type="error" showIcon style={{ marginTop: 16 }} />

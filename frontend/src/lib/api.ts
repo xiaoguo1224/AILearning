@@ -774,10 +774,12 @@ export function startQuizGenerateJob(
   courseId: number,
   items: { kind: string; count: number }[],
   lessonId?: number,
+  prompt?: string,
 ): Promise<{ job_id: string }> {
   return postJson(`/api/courses/${courseId}/quiz/generate/job`, {
     items,
     lesson_id: lessonId,
+    prompt,
   });
 }
 

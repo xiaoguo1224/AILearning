@@ -39,6 +39,7 @@ class Job(Base):
     status: Mapped[str] = mapped_column(String(20), index=True, default="pending")
     progress: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     result: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    trace: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     ref_type: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     ref_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)

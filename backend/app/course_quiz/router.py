@@ -264,6 +264,7 @@ def generate_quiz_job(course_id: CourseId, body: QuizGenerateInput, session: Db)
         session, "quiz_generate", ref_type="course", ref_id=course_id,
     )
     items_spec = [{"kind": k, "count": c} for k, c in requests]
+    user_prompt = (body.prompt or "").strip() or None
 
     def _run(job_id: str):
         from app import models as _m
@@ -295,7 +296,12 @@ def generate_quiz_job(course_id: CourseId, body: QuizGenerateInput, session: Db)
             fail_job(job_id, "There is no lesson text to write questions from.")
             return
         material = material[: quizgen.MAX_MATERIAL_CHARS]
-        prompt = quizgen.build_prompt(material, [(e["kind"], e["count"]) for e in items_spec], lesson_title)
+        prompt = quizgen.build_prompt(
+            material,
+            [(e["kind"], e["count"]) for e in items_spec],
+            lesson_title,
+            user_prompt,
+        )
         try:
             meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, course_id=course_id)
             raw = meter.generate(quizgen.QUIZGEN_STAGE, _quizgen_system(), prompt)
