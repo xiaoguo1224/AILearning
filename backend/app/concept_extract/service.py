@@ -30,7 +30,11 @@ def extract_lesson_concepts(content: str, title: str) -> tuple[list[str], dict[s
     if not content or not content.strip():
         return [], {}
     run_id = uuid.uuid4().hex
-    meter = MeteredLLM(get_provider(), run_id)
+    provider = get_provider()
+    # Concept extraction can be slow; allow up to 10 minutes.
+    if hasattr(provider, "timeout"):
+        provider.timeout = 600
+    meter = MeteredLLM(provider, run_id)
     prompt = f"课程标题：{title}\n\n课程内容：\n{content[:4000]}"
     raw = meter.generate(EXTRACT_STAGE, SYSTEM_PROMPT, prompt)
     try:

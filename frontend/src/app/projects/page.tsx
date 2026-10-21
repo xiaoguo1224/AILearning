@@ -74,6 +74,10 @@ export default async function ProjectsPage({ searchParams }: {
         {offset + 20 < projects.total && <Link href={`/projects?status=${status}&offset=${offset + 20}`} className="text-accent hover:underline">{t("Next")}</Link>}
       </nav>
     </>}
-    {status === "active" && <section className="space-y-4 border-t border-line pt-8"><h2 className="text-title">{t("Create project")}</h2><ProjectWorkspace /></section>}
+    {status === "active" && (
+      <div style={{ marginTop: 24 }}>
+        <CreateProjectButton />
+      </div>
+    )}
   </main>;
 }

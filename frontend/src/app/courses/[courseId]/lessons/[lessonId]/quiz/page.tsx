@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackButton } from "@/components/BackButton";
 import { notFound } from "next/navigation";
 
 import { getTranslator } from "@/lib/locale-server";
@@ -32,12 +32,9 @@ export default async function LessonQuizPage({
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-6 py-12">
-      <Link
-        href={`/courses/${courseId}/lessons/${lessonId}`}
-        className="text-small text-ink-muted hover:text-ink"
-      >
-        ← {t("Back to lesson")}
-      </Link>
+      <BackButton href={`/courses/${courseId}/lessons/${lessonId}`}>
+        {t("Back to lesson")}
+      </BackButton>
       <PageHeader
         className="mt-4"
         title={t("Questions: {0}", lesson.title)}

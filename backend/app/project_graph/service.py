@@ -75,7 +75,11 @@ def extract_relationships(
         return []
 
     run_id = uuid.uuid4().hex
-    meter = MeteredLLM(get_provider(), run_id)
+    provider = get_provider()
+    # Graph extraction is a long task; allow up to 10 minutes.
+    if hasattr(provider, "timeout"):
+        provider.timeout = 600
+    meter = MeteredLLM(provider, run_id)
     prompt = build_prompt(courses)
     raw = meter.generate(EXTRACT_STAGE, SYSTEM_PROMPT, prompt)
 

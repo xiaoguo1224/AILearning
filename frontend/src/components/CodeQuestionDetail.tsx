@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { BackButton } from "@/components/BackButton";
 import { useEffect, useState } from "react";
 
 import { Button as AntButton, Tabs, Table, Input } from "antd";
@@ -156,12 +156,9 @@ export function CodeQuestionDetail({
 
   return (
     <div className="space-y-6">
-      <Link
-        href={`/courses/${courseId}`}
-        className="text-small text-accent underline"
-      >
+      <BackButton href={`/courses/${courseId}`}>
         {t("Back to course")}
-      </Link>
+      </BackButton>
 
       <PageHeader
         title={t("Code question")}

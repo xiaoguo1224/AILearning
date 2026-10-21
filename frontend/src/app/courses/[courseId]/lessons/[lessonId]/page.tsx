@@ -4,6 +4,7 @@
 import { getTranslator } from "@/lib/locale-server";
 import type { Translator } from "@/lib/i18n";
 import Link from "next/link";
+import { BackButton } from "@/components/BackButton";
 import { notFound } from "next/navigation";
 
 import { LessonMarkdown } from "@/components/LessonMarkdown";
@@ -27,11 +28,9 @@ export const dynamic = "force-dynamic";
  */
 function backToCourseLink(courseId: string, t: Translator) {
   return (
-    <Link
-      href={`/courses/${courseId}`}
-      className="text-small text-ink-muted transition-colors duration-fast ease-standard hover:text-ink"
-    >
-      {t("← Back to course")}</Link>
+    <BackButton href={`/courses/${courseId}`}>
+      {t("Back to course")}
+    </BackButton>
   );
 }
 

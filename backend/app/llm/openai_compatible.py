@@ -46,7 +46,7 @@ class OpenAICompatibleProvider:
                     "max_tokens": max_tokens,
                     "stream": False,
                 },
-                timeout=httpx.Timeout(120, connect=10),
+                timeout=httpx.Timeout(self.timeout, connect=10),
                 follow_redirects=False,
             )
         except (httpx.HTTPError, ValueError):

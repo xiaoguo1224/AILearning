@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { BackButton } from "@/components/BackButton";
 import { notFound } from "next/navigation";
 import { SubmissionReviewPanel } from "@/components/SubmissionReviewPanel";
 import { VariantPanel } from "@/components/VariantPanel";
@@ -64,12 +64,12 @@ export default async function SubmissionDetailPage({
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-6 py-12">
       <div className="flex flex-wrap items-center gap-4 text-small">
-        <Link href={`/projects/${project}/submissions`} className="text-accent underline">
+        <BackButton href={`/projects/${project}/submissions`}>
           {t("Back to submissions")}
-        </Link>
-        <Link href={`/projects/${project}`} className="text-accent underline">
+        </BackButton>
+        <BackButton href={`/projects/${project}`}>
           {t("Back to project")}
-        </Link>
+        </BackButton>
       </div>
 
       {error ? (
