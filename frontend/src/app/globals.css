@@ -52,9 +52,9 @@
 
   /* The one accent. Reserved for focus rings, inline text links, and the active
      nav/tab indicator, never a large fill: emerald, amber and red already carry
-     meaning (correct/completed, cost alert, destructive/incorrect) and blue must
-     stay clearly not one of those. */
-  --sf-accent: oklch(54.6% 0.245 262.881); /* blue-600 */
+     meaning (correct/completed, cost alert, destructive/incorrect) and indigo must
+     stay clearly not one of those. Linear's signature indigo (#5E6AD2). */
+  --sf-accent: oklch(56% 0.15 277); /* Linear indigo */
   --sf-focus: var(--sf-accent);
 
   /* Solid fills, for buttons and anything else that needs a saturated block of
@@ -154,7 +154,7 @@
   --shadow-raise: var(--sf-shadow-raise);
   --shadow-overlay: var(--sf-shadow-overlay);
 
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-geist-sans), var(--font-noto-sans-sc), system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-mono: var(--font-geist-mono);
 }
 
@@ -288,7 +288,7 @@
       to light mode's 0.11 step between the same pair, so the muted-to-subtle step
       stays consistent across both modes. */
 
-    --sf-accent: oklch(70.7% 0.165 254.624); /* blue-400 */
+    --sf-accent: oklch(72% 0.13 277); /* indigo-300-ish, lightened for the dark page */
 
     --sf-fill: oklch(96.7% 0.001 286.375); /* zinc-100 */
     --sf-fill-hover: oklch(87.1% 0.006 286.286); /* zinc-300 */
