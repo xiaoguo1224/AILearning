@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/components/LocaleProvider";
 import { Button } from "@/components/ui/Button";
+import { Input } from "antd";
+import { Button as AntButton } from "antd";
 import {
   addCourseTextResource,
   addCourseUrlResource,
@@ -61,11 +63,10 @@ export function CourseResourcesSection({ courseId }: { courseId: number }) {
   return (
     <section aria-label={t("Reference materials")} className="mt-6 rounded-surface bg-surface p-6 shadow-raise sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button
-          type="button"
+        <AntButton
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
-          className="flex items-center gap-2 text-subtitle font-semibold hover:text-accent"
+          type="text"
         >
           <span aria-hidden>{open ? "▾" : "▸"}</span>
           {t("Reference materials")}
@@ -76,7 +77,7 @@ export function CourseResourcesSection({ courseId }: { courseId: number }) {
                 : t("{0} items", resources.length)}
             </span>
           )}
-        </button>
+        </AntButton>
       </div>
       {open && (
         <div className="mt-4">
@@ -149,20 +150,20 @@ export function CourseResourcesSection({ courseId }: { courseId: number }) {
                   }}
                 >
                   <p className="mb-2 text-small font-medium">{t("Paste text")}</p>
-                  <input
+                  <Input
                     value={textTitle}
                     onChange={(e) => setTextTitle(e.target.value)}
                     placeholder={t("Title")}
                     disabled={busy}
-                    className="mb-2 w-full rounded-control border border-line bg-surface px-3 py-2 text-small"
+                    style={{ marginBottom: 8, width: "100%" }}
                   />
-                  <textarea
+                  <Input.TextArea
                     value={textContent}
                     onChange={(e) => setTextContent(e.target.value)}
                     placeholder={t("Paste the material here")}
                     rows={4}
                     disabled={busy}
-                    className="w-full rounded-control border border-line bg-surface px-3 py-2 text-small"
+                    style={{ width: "100%" }}
                   />
                   <Button type="submit" variant="secondary" size="sm" disabled={busy} className="mt-2">
                     {t("Save")}
@@ -180,19 +181,19 @@ export function CourseResourcesSection({ courseId }: { courseId: number }) {
                   }}
                 >
                   <p className="mb-2 text-small font-medium">{t("Add a link")}</p>
-                  <input
+                  <Input
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     placeholder="https://…"
                     disabled={busy}
-                    className="mb-2 w-full rounded-control border border-line bg-surface px-3 py-2 text-small"
+                    style={{ marginBottom: 8, width: "100%" }}
                   />
-                  <input
+                  <Input
                     value={urlTitle}
                     onChange={(e) => setUrlTitle(e.target.value)}
                     placeholder={t("Title (optional)")}
                     disabled={busy}
-                    className="mb-2 w-full rounded-control border border-line bg-surface px-3 py-2 text-small"
+                    style={{ marginBottom: 8, width: "100%" }}
                   />
                   <Button type="submit" variant="secondary" size="sm" disabled={busy}>
                     {t("Save")}

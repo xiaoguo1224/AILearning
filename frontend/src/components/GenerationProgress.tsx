@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/LocaleProvider";
 import { Button } from "@/components/ui/Button";
+import { Button as AntButton } from "antd";
 import { Callout } from "@/components/ui/Callout";
 import { Card } from "@/components/ui/Card";
 import {
@@ -232,12 +233,13 @@ export function GenerationProgress({
               const isOpen = expanded.has(key);
               return (
                 <Card key={key} className={slot.status === "failed" ? "opacity-70" : undefined}>
-                  <button
-                    type="button"
+                  <AntButton
                     onClick={() => slot.lesson && toggle(key)}
-                    className="flex w-full items-center gap-3 text-left"
+                    type="text"
+                    block
                     aria-expanded={slot.lesson ? isOpen : undefined}
                     disabled={!slot.lesson}
+                    style={{ display: "flex", alignItems: "center", gap: 12, height: "auto", padding: "8px 12px", textAlign: "left" }}
                   >
                     <span aria-hidden className="flex h-6 w-6 shrink-0 items-center justify-center">
                       {slot.status === "done" ? (
@@ -269,7 +271,7 @@ export function GenerationProgress({
                         {isOpen ? "▴" : "▾"}
                       </span>
                     )}
-                  </button>
+                  </AntButton>
                   {slot.lesson && isOpen && (
                     <div className="mt-3 border-t border-line pt-3">
                       <p className="whitespace-pre-line text-sm text-ink-muted">

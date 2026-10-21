@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { Alert, Button as AntButton, Form, InputNumber, Modal, Select } from "antd";
 import { QuizSection } from "@/components/QuizSection";
 import { useI18n } from "@/components/LocaleProvider";
 import {
@@ -78,86 +79,57 @@ function QuizGenerateDialog({
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={t("Generate questions")}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
-      onClick={onClose}
+    <Modal
+      open={true}
+      onCancel={onClose}
+      title={t("Generate questions")}
+      footer={[
+        <AntButton key="cancel" onClick={onClose}>
+          {t("Cancel")}
+        </AntButton>,
+        <AntButton
+          key="generate"
+          type="primary"
+          loading={busy}
+          disabled={total === 0}
+          onClick={submit}
+        >
+          {busy ? t("Generating…") : t("Generate {0} questions", total)}
+        </AntButton>,
+      ]}
     >
-      <div
-        className="w-full max-w-md rounded-surface border border-line bg-surface p-6"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-subtitle font-semibold">{t("Generate questions")}</h2>
-        <p className="mt-1 text-small text-ink-muted">
-          {t("Pick the types and how many of each. The AI writes them from this course's lessons.")}
-        </p>
-
-        <label className="mt-4 block text-small font-medium">
-          {t("Scope")}
-          <select
+      <p>{t("Pick the types and how many of each. The AI writes them from this course's lessons.")}</p>
+      <Form layout="vertical" style={{ marginTop: 16 }}>
+        <Form.Item label={t("Scope")}>
+          <Select
             value={lessonId}
-            onChange={(e) => setLessonId(e.target.value)}
-            className="mt-1 block w-full rounded-control border border-line-strong bg-surface px-3 py-2 text-ui"
-          >
-            <option value="all">{t("Whole course")}</option>
-            {bank.modules.flatMap((m) =>
-              m.lessons.map((l) => (
-                <option key={l.id} value={String(l.id)}>
-                  {l.title}
-                </option>
-              )),
-            )}
-          </select>
-        </label>
-
-        <div className="mt-4 flex flex-col gap-2">
-          {KINDS.map((kind) => (
-            <label key={kind} className="flex items-center justify-between gap-3 text-ui">
-              <span>{t(`quiz_kind_${kind}`)}</span>
-              <input
-                type="number"
-                min={0}
-                max={20}
-                value={counts[kind]}
-                onChange={(e) =>
-                  setCounts((c) => ({
-                    ...c,
-                    [kind]: Math.max(0, Math.min(20, Number(e.target.value) || 0)),
-                  }))
-                }
-                className="w-20 rounded-control border border-line-strong bg-surface px-2 py-1 text-ui"
-              />
-            </label>
-          ))}
-        </div>
-
-        {error && (
-          <p role="alert" className="mt-3 text-small text-danger">
-            {error}
-          </p>
-        )}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-control border border-line px-4 py-2 text-ui"
-          >
-            {t("Cancel")}
-          </button>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={busy || total === 0}
-            className="rounded-control bg-accent px-4 py-2 text-ui font-medium text-white disabled:opacity-50"
-          >
-            {busy ? t("Generating…") : t("Generate {0} questions", total)}
-          </button>
-        </div>
-      </div>
-    </div>
+            onChange={(v) => setLessonId(v)}
+            options={[
+              { value: "all", label: t("Whole course") },
+              ...bank.modules.flatMap((m) =>
+                m.lessons.map((l) => ({ value: String(l.id), label: l.title }))
+              ),
+            ]}
+          />
+        </Form.Item>
+        {KINDS.map((kind) => (
+          <Form.Item key={kind} label={t(`quiz_kind_${kind}`)}>
+            <InputNumber
+              min={0}
+              max={20}
+              value={counts[kind]}
+              onChange={(v) =>
+                setCounts((c) => ({
+                  ...c,
+                  [kind]: Math.max(0, Math.min(20, Number(v) || 0)),
+                }))
+              }
+            />
+          </Form.Item>
+        ))}
+        {error && <Alert type="error" message={error} showIcon />}
+      </Form>
+    </Modal>
   );
 }
 
@@ -173,8 +145,7 @@ function VariantButton({
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   return (
-    <button
-      type="button"
+    <AntButton
       disabled={busy}
       onClick={async () => {
         setBusy(true);
@@ -197,7 +168,7 @@ function VariantButton({
       className="shrink-0 rounded-control border border-line px-2 py-1 text-small text-ink-muted transition-colors hover:text-accent disabled:opacity-50"
     >
       {busy ? t("Creating…") : t("Variant")}
-    </button>
+    </AntButton>
   );
 }
 
@@ -243,9 +214,8 @@ export function CourseQuizSection({ courseId }: { courseId: number }) {
   return (
     <section aria-label={t("Questions")} className="rounded-surface bg-surface p-6 shadow-raise sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={() => setOpen((o) => !o)}
+        <AntButton
+              onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           className="flex items-center gap-2 text-subtitle font-semibold hover:text-accent"
         >
@@ -257,14 +227,13 @@ export function CourseQuizSection({ courseId }: { courseId: number }) {
               {progress && progress.answered > 0 && ` · ${t("{0} answered", progress.answered)}`}
             </span>
           )}
-        </button>
-        <button
-          type="button"
-          onClick={() => setDialogOpen(true)}
+        </AntButton>
+        <AntButton
+              onClick={() => setDialogOpen(true)}
           className="rounded-control bg-accent px-4 py-2 text-ui font-medium text-white"
         >
           {t("Generate questions")}
-        </button>
+        </AntButton>
       </div>
 
       {error && (

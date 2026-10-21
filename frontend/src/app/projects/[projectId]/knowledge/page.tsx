@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { KnowledgeConfirmButton } from "@/components/KnowledgeConfirmButton";
 import { KnowledgeDiff } from "@/components/KnowledgeDiff";
 import { KnowledgeEditor } from "@/components/KnowledgeEditor";
+import { KnowledgeGraphSection } from "@/components/KnowledgeGraphSection";
 import { Badge } from "@/components/ui/Badge";
 import { Callout } from "@/components/ui/Callout";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -232,6 +233,7 @@ export default async function ProjectKnowledgePage({
       ) : (
         project && (
           <>
+            {list && <KnowledgeGraphSection knowledge={list} projectId={id} />}
             {archived && (
               <p className="text-small text-ink-muted">
                 {t("This project is archived, so the knowledge base is read-only.")}

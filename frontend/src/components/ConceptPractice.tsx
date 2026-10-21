@@ -3,6 +3,8 @@
 import { LocalizedText, useI18n } from "@/components/LocaleProvider";
 
 import { useEffect, useRef, useState } from "react";
+import { Button, Input, Radio } from "antd";
+import type { InputRef } from "antd";
 
 import { ApiError, getPractice, submitPractice } from "@/lib/api";
 import { formatDay, noLongerMissed } from "@/lib/copy";
@@ -226,7 +228,7 @@ export function ConceptPractice({
    * The text field, when the question has one. A multiple-choice question has no single
    * control to land on, so this stays null for those and `questionRef` catches it.
    */
-  const answerRef = useRef<HTMLInputElement>(null);
+  const answerRef = useRef<InputRef>(null);
   /**
    * The block holding the question and its controls, focusable so that "put the learner
    * back on the question" always resolves to something mounted. Without it, `answer`
@@ -481,12 +483,13 @@ export function ConceptPractice({
       {error && !run && (
         <div>
           <p className="text-[13px] text-red-800 dark:text-red-300">{error}</p>
-          <button
-            type="button"
+          <Button
             onClick={load}
             disabled={loading}
-            className="mt-2 rounded-lg border border-amber-300 px-3 py-1 text-[13px] font-medium text-amber-900 transition-colors hover:border-amber-500 disabled:opacity-60 dark:border-amber-800 dark:text-amber-200 dark:hover:border-amber-600"
-          ><LocalizedText text={" Try again "} /></button>
+            size="small"
+            color="orange"
+            style={{ marginTop: 8 }}
+          ><LocalizedText text={" Try again "} /></Button>
         </div>
       )}
 
@@ -554,7 +557,7 @@ function ActivePanel({
   error: string | null;
   onSubmit: () => void;
   onNext: () => void;
-  answerRef: React.RefObject<HTMLInputElement | null>;
+  answerRef: React.RefObject<InputRef | null>;
   questionRef: React.RefObject<HTMLDivElement | null>;
   nextRef: React.RefObject<HTMLButtonElement | null>;
   submitRef: React.RefObject<HTMLButtonElement | null>;
@@ -615,12 +618,13 @@ function ActivePanel({
               )}
             </>
           )}
-          <button
-            type="button"
+          <Button
             ref={nextRef}
             onClick={onNext}
-            className="mt-3 rounded-lg border border-amber-300 px-3.5 py-1.5 text-[13px] font-medium text-amber-900 transition-colors hover:border-amber-500 dark:border-amber-800 dark:text-amber-200 dark:hover:border-amber-600"
-          ><LocalizedText text={" Next question "} /></button>
+            size="small"
+            color="orange"
+            style={{ marginTop: 12 }}
+          ><LocalizedText text={" Next question "} /></Button>
         </div>
       ) : (
         <div
@@ -639,8 +643,7 @@ function ActivePanel({
                 <legend className="sr-only"><LocalizedText text={"Choose an answer"} /></legend>
                 {item.options.map((option) => (
                   <label key={option} className="flex cursor-pointer items-center gap-2 text-[13px]">
-                    <input
-                      type="radio"
+                    <Radio
                       name={`${baseId}-answer`}
                       value={option}
                       checked={answer === option}
@@ -653,12 +656,11 @@ function ActivePanel({
             ) : (
               <>
                 <label htmlFor={`${baseId}-answer-input`} className="sr-only"><LocalizedText text={" Your answer "} /></label>
-                <input
+                <Input
                   id={`${baseId}-answer-input`}
                   ref={answerRef}
-                  type="text"
                   value={answer}
-                  aria-invalid={error ? true : undefined}
+                  status={error ? "error" : undefined}
                   onChange={(e) => setAnswer(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter") {
@@ -667,7 +669,7 @@ function ActivePanel({
                     }
                   }}
                   placeholder={t("Your answer")}
-                  className="w-full rounded-lg border border-amber-300 bg-transparent px-3 py-1.5 text-[13px] outline-none focus:border-amber-500 dark:border-amber-800"
+                  style={{ width: "100%" }}
                 />
               </>
             )}
@@ -675,15 +677,17 @@ function ActivePanel({
 
           {error && <p className="mt-2 text-[13px] text-red-800 dark:text-red-300">{error}</p>}
 
-          <button
-            type="button"
+          <Button
             ref={submitRef}
             onClick={onSubmit}
             disabled={busy}
-            className="mt-3 rounded-lg bg-amber-800 px-4 py-1.5 text-[13px] font-medium text-white transition-colors hover:bg-amber-700 disabled:opacity-60 dark:bg-amber-200 dark:text-amber-950 dark:hover:bg-amber-100"
+            size="small"
+            color="orange"
+            variant="solid"
+            style={{ marginTop: 12 }}
           >
             {busy ? t("Checking…") : t("Check answer")}
-          </button>
+          </Button>
         </div>
       )}
       {/* No schedule promise here. The note panel this is mounted inside carries it,

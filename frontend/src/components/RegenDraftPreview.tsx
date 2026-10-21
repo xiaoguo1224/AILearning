@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "antd";
 import { useState } from "react";
 
 import { useI18n } from "@/components/LocaleProvider";

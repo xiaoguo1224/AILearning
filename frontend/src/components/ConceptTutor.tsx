@@ -6,6 +6,8 @@ import { useI18n } from "@/components/LocaleProvider";
 import type { Translator } from "@/lib/i18n";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { Button, Input } from "antd";
+import type { TextAreaRef } from "antd/es/input/TextArea";
 
 import { LessonMarkdown } from "@/components/LessonMarkdown";
 import { ApiError, getTutorConversation, sendTutorMessage } from "@/lib/api";
@@ -323,7 +325,7 @@ export function ConceptTutor({
   const baseId = useId();
   const requested = useRef(false);
   const pendingFocus = useRef<FocusTarget | null>(null);
-  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const composerRef = useRef<TextAreaRef>(null);
   const askRef = useRef<HTMLButtonElement>(null);
   const guidedRef = useRef<HTMLButtonElement>(null);
   const latestReplyRef = useRef<HTMLDivElement>(null);
@@ -560,13 +562,14 @@ export function ConceptTutor({
       {loadError && (
         <div className="mt-3">
           <p className="text-[13px] text-red-800 dark:text-red-300">{loadError}</p>
-          <button
-            type="button"
+          <Button
             onClick={load}
             disabled={loading}
-            className="mt-2 rounded-lg border border-amber-300 px-3 py-1 text-[13px] font-medium text-amber-900 transition-colors hover:border-amber-500 disabled:opacity-60 dark:border-amber-800 dark:text-amber-200 dark:hover:border-amber-600"
+            size="small"
+            color="orange"
+            style={{ marginTop: 8 }}
           >
-            {t("Try again")}</button>
+            {t("Try again")}</Button>
         </div>
       )}
 
@@ -609,12 +612,12 @@ export function ConceptTutor({
         {/* Never disabled, mid-request included. Disabling the focused control blurs it
             to the body, and a second send is already refused by the handler and by the
             button beneath it. Same rule the practice answer field follows. */}
-        <textarea
+        <Input.TextArea
           id={composerId}
           ref={composerRef}
           rows={3}
           value={draft}
-          aria-invalid={error ? true : undefined}
+          status={error ? "error" : undefined}
           onChange={(event) => setDraft(event.target.value)}
           onKeyDown={(event) => {
             // Enter inserts a newline, because a question can be a paragraph. The
@@ -629,7 +632,7 @@ export function ConceptTutor({
             }
           }}
           placeholder={t("Ask anything about {0}", conceptLabel)}
-          className="w-full resize-y rounded-lg border border-amber-300 bg-transparent px-3 py-2 text-[13px] leading-[1.5] outline-none focus:border-amber-500 dark:border-amber-800"
+          style={{ width: "100%" }}
         />
 
         {error && <p className="mt-2 text-[13px] text-red-800 dark:text-red-300">{t(error)}</p>}
@@ -649,19 +652,16 @@ export function ConceptTutor({
             commits this attribute before a second real click can land. Remove it and the
             server has nothing left holding that line.
           */}
-          <button
-            type="button"
+          <Button
             ref={askRef}
             onClick={() => void send("answer")}
             disabled={sending}
-            className={`rounded-lg bg-amber-800 px-4 py-1.5 text-[13px] font-medium text-white transition-colors dark:bg-amber-200 dark:text-amber-950 ${
-              sending
-                ? "cursor-progress opacity-60"
-                : "hover:bg-amber-700 dark:hover:bg-amber-100"
-            }`}
+            size="small"
+            color="orange"
+            variant="solid"
           >
             {sendingMode === "answer" ? t("Asking…") : t("Ask")}
-          </button>
+          </Button>
           {/*
             TWO BUTTONS, not a toggle beside one. The register is a choice about THIS
             question and the server treats it that way: any answer-mode turn breaks the
@@ -672,19 +672,15 @@ export function ConceptTutor({
             Secondary styling, because answer mode is the default: a learner who opens
             the tutor stuck on something should reach the button that answers.
           */}
-          <button
-            type="button"
+          <Button
             ref={guidedRef}
             onClick={() => void send("guided")}
             disabled={sending}
-            className={`rounded-lg border border-amber-700 px-4 py-1.5 text-[13px] font-medium text-amber-900 transition-colors dark:border-amber-500 dark:text-amber-200 ${
-              sending
-                ? "cursor-progress opacity-60"
-                : "hover:border-amber-900 hover:bg-amber-100/60 dark:hover:border-amber-300 dark:hover:bg-amber-950/50"
-            }`}
+            size="small"
+            color="orange"
           >
             {sendingMode === "guided" ? t("Working…") : t("Let me work it out")}
-          </button>
+          </Button>
           <p className="text-[12px] text-zinc-500 dark:text-zinc-500">
             {t("Ctrl or Cmd and Enter sends.")}{/* Only once the server has said what they are. Nothing here invents the
                 numbers, and until the conversation has loaded there are none to show. */}

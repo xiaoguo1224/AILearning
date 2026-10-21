@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { Button } from "antd";
 import { useRouter } from "next/navigation";
 
 import { useI18n } from "@/components/LocaleProvider";
@@ -81,13 +82,12 @@ export function MarkdownImportForm() {
         className="hidden"
         onChange={onPick}
       />
-      <button
-        type="button"
+      <Button
         onClick={() => inputRef.current?.click()}
-        className="mt-4 rounded-control border border-line-strong px-4 py-2 text-ui"
+        style={{ marginTop: 16 }}
       >
         {t("Choose folder…")}
-      </button>
+      </Button>
 
       {files.length > 0 && (
         <div className="mt-4">
@@ -104,14 +104,14 @@ export function MarkdownImportForm() {
                 </li>
               ))}
           </ul>
-          <button
-            type="button"
+          <Button
             onClick={submit}
             disabled={busy}
-            className="mt-4 rounded-control bg-accent px-4 py-2 text-ui font-medium text-white disabled:opacity-50"
+            type="primary"
+            style={{ marginTop: 16 }}
           >
             {busy ? t("Importing…") : t("Import {0} files", mdCount)}
-          </button>
+          </Button>
         </div>
       )}
 

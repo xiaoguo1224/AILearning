@@ -8,6 +8,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
+import { Button as AntButton } from "antd";
 import { ApiError, completeLesson, uncompleteLesson } from "@/lib/api";
 
 export function MarkCompleteButton({
@@ -54,12 +55,13 @@ export function MarkCompleteButton({
   return (
     <div className="flex shrink-0 flex-col items-end gap-1">
       {completed ? (
-        <button
-          type="button"
+        <AntButton
           ref={buttonRef}
           onClick={() => void run(() => uncompleteLesson(lessonId))}
           disabled={pending}
           aria-label={t("Mark this lesson as not complete")}
+          color="green"
+          variant="filled"
           /*
             Hand-rolled rather than Button: none of its variants is a success-tinted
             fill (primary's `fill` token is deliberately neutral, not accent and not a
@@ -103,7 +105,6 @@ export function MarkCompleteButton({
             straight OKLCH conversion gives #006045. That last one is why three figures
             here were previously 0.03 low.
           */
-          className="group rounded-control bg-success-surface px-4 py-2 text-ui font-medium text-success transition-colors duration-fast ease-standard hover:bg-success-surface-hover disabled:opacity-60"
         >
           {pending ? (
             t("Reopening…")
@@ -113,7 +114,7 @@ export function MarkCompleteButton({
                 {t("Undo")}</span>
             </>
           )}
-        </button>
+        </AntButton>
       ) : (
         <Button
           ref={buttonRef}

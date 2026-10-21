@@ -1,4 +1,5 @@
 
+import { Table } from "antd";
 import { LocalizedText } from "@/components/LocaleProvider";
 import { getLocale, getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
@@ -159,30 +160,42 @@ export default async function UsagePage() {
               <p className="mt-3 rounded-surface border border-dashed border-line-strong px-4 py-6 text-center text-small text-ink-muted"><LocalizedText text={" No LLM spend recorded yet. "} /></p>
             ) : (
               <div className="mt-3 overflow-x-auto">
-                <table className="w-full min-w-[560px] border-collapse text-left text-ui">
-                  <thead>
-                    <tr className="border-b border-line-strong text-micro uppercase text-ink-subtle">
-                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Attributed to "} /></th>
-                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Calls "} /></th>
-                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Input tokens "} /></th>
-                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Output tokens "} /></th>
-                      <th scope="col" className="py-2 font-medium"><LocalizedText text={" Est. cost "} /></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {usage.per_course.map((row) => (
-                      <tr key={rowKey(row)} className="border-b border-line last:border-0">
-                        <td className="py-2 pr-4">
-                          <AttributedTo row={row} />
-                        </td>
-                        <td className="py-2 pr-4 tabular-nums">{formatCount(row.calls)}</td>
-                        <td className="py-2 pr-4 tabular-nums">{formatCount(row.input_tokens)}</td>
-                        <td className="py-2 pr-4 tabular-nums">{formatCount(row.output_tokens)}</td>
-                        <td className="py-2 tabular-nums">{formatUsd(row.estimated_cost_usd)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <Table
+                  dataSource={usage.per_course}
+                  rowKey={rowKey}
+                  pagination={false}
+                  columns={[
+                    {
+                      title: <LocalizedText text={" Attributed to "} />,
+                      key: "attributed",
+                      render: (_, row) => <AttributedTo row={row} />,
+                    },
+                    {
+                      title: <LocalizedText text={" Calls "} />,
+                      dataIndex: "calls",
+                      key: "calls",
+                      render: (_, row) => formatCount(row.calls),
+                    },
+                    {
+                      title: <LocalizedText text={" Input tokens "} />,
+                      dataIndex: "input_tokens",
+                      key: "input_tokens",
+                      render: (_, row) => formatCount(row.input_tokens),
+                    },
+                    {
+                      title: <LocalizedText text={" Output tokens "} />,
+                      dataIndex: "output_tokens",
+                      key: "output_tokens",
+                      render: (_, row) => formatCount(row.output_tokens),
+                    },
+                    {
+                      title: <LocalizedText text={" Est. cost "} />,
+                      dataIndex: "estimated_cost_usd",
+                      key: "estimated_cost_usd",
+                      render: (_, row) => formatUsd(row.estimated_cost_usd),
+                    },
+                  ]}
+                />
                 {/* One note per non-course group actually present. The server writes
                     these sentences, because which one is true of a row is decided by
                     the same code that decided the row's group. */}
@@ -203,39 +216,39 @@ export default async function UsagePage() {
               <p className="mt-3 rounded-surface border border-dashed border-line-strong px-4 py-6 text-center text-small text-ink-muted"><LocalizedText text={" No LLM calls recorded yet. "} /></p>
             ) : (
               <div className="mt-3 overflow-x-auto">
-                <table className="w-full min-w-[720px] border-collapse text-left text-ui">
-                  <thead>
-                    <tr className="border-b border-line-strong text-micro uppercase text-ink-subtle">
-                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Time "} /></th>
-                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Provider "} /></th>
-                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Model "} /></th>
-                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" Stage "} /></th>
-                      <th scope="col" className="py-2 pr-4 font-medium"><LocalizedText text={" In / out tokens "} /></th>
-                      <th scope="col" className="py-2 font-medium"><LocalizedText text={" Est. cost "} /></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {usage.recent_calls.map((call) => (
-                      <tr key={call.id} className="border-b border-line last:border-0">
-                        <td className="py-2 pr-4 whitespace-nowrap tabular-nums">
-                          {formatTimestamp(call.created_at, t.locale)}
-                        </td>
-                        <td className="py-2 pr-4">{call.provider}</td>
-                        <td className="py-2 pr-4">{call.model}</td>
-                        <td className="py-2 pr-4">{call.stage}</td>
-                        <td className="py-2 pr-4 tabular-nums">
-                          {formatCount(call.input_tokens)} / {formatCount(call.output_tokens)}
-                        </td>
-                        <td className="py-2 tabular-nums">
+                <Table
+                  dataSource={usage.recent_calls}
+                  rowKey="id"
+                  pagination={false}
+                  columns={[
+                    {
+                      title: <LocalizedText text={" Time "} />,
+                      dataIndex: "created_at",
+                      key: "created_at",
+                      render: (_, call) => formatTimestamp(call.created_at, t.locale),
+                    },
+                    { title: <LocalizedText text={" Provider "} />, dataIndex: "provider", key: "provider" },
+                    { title: <LocalizedText text={" Model "} />, dataIndex: "model", key: "model" },
+                    { title: <LocalizedText text={" Stage "} />, dataIndex: "stage", key: "stage" },
+                    {
+                      title: <LocalizedText text={" In / out tokens "} />,
+                      key: "tokens",
+                      render: (_, call) => `${formatCount(call.input_tokens)} / ${formatCount(call.output_tokens)}`,
+                    },
+                    {
+                      title: <LocalizedText text={" Est. cost "} />,
+                      key: "cost",
+                      render: (_, call) => (
+                        <>
                           {formatUsd(call.estimated_cost_usd)}
                           {call.approximate && (
-                            <span className="ml-1 text-small text-ink-subtle"><LocalizedText text={"(approx.)"} /></span>
+                            <span style={{ marginLeft: 4 }}><LocalizedText text={"(approx.)"} /></span>
                           )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                        </>
+                      ),
+                    },
+                  ]}
+                />
               </div>
             )}
           </section>

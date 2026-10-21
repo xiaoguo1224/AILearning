@@ -7,6 +7,7 @@ import type { Translator } from "@/lib/i18n";
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import { Button, Input, Radio } from "antd";
 
 import { Callout } from "@/components/ui/Callout";
 import { ApiError, answerReviewCard, rateReviewCard } from "@/lib/api";
@@ -278,8 +279,7 @@ export function ReviewSession({ queue, returnHref }: { queue: ReviewQueue; retur
                       <legend className="sr-only">{t("Choose an answer")}</legend>
                       {item.options.map((option) => (
                         <label key={option} className="flex cursor-pointer items-center gap-2 text-sm">
-                          <input
-                            type="radio"
+                          <Radio
                             name={`review-${card.card_id}`}
                             value={option}
                             checked={answer === option}
@@ -294,9 +294,8 @@ export function ReviewSession({ queue, returnHref }: { queue: ReviewQueue; retur
                     <>
                       <label htmlFor={`answer-${card.card_id}`} className="sr-only">
                         {t("Your answer")}</label>
-                      <input
+                      <Input
                         id={`answer-${card.card_id}`}
-                        type="text"
                         autoFocus
                         value={answer}
                         disabled={busy}
@@ -308,27 +307,19 @@ export function ReviewSession({ queue, returnHref }: { queue: ReviewQueue; retur
                           }
                         }}
                         placeholder={t("Your answer")}
-                        /*
-                          No `outline-none` here, deliberately, where the raw version had one:
-                          globals.css's app-wide `:focus-visible` rule is unlayered, and Tailwind
-                          wraps its own utilities in `@layer utilities`, so an unlayered rule
-                          always wins over a layered one regardless of either side's specificity.
-                          Removing this utility changes no rendered pixel; it only stops shipping
-                          a rule that could never have won.
-                        */
-                        className="w-full rounded-control border border-line-strong bg-transparent px-3 py-2 text-ui text-ink transition-colors duration-fast ease-standard hover:border-line-hover focus:border-line-hover disabled:opacity-60"
+                        style={{ width: "100%" }}
                       />
                     </>
                   )}
 
-                  <button
-                    type="button"
+                  <Button
                     onClick={() => void submitAnswer()}
                     disabled={busy}
-                    className="mt-4 rounded-control bg-fill px-5 py-2 text-ui font-medium text-on-fill transition-colors duration-fast ease-standard hover:bg-fill-hover disabled:opacity-60"
+                    type="primary"
+                    style={{ marginTop: 16 }}
                   >
                     {busy ? t("Checking…") : t("Show answer")}
-                  </button>
+                  </Button>
                 </div>
               )}
 
@@ -388,18 +379,14 @@ export function ReviewSession({ queue, returnHref }: { queue: ReviewQueue; retur
                     // page to reach the only controls left on screen.
                     const takesFocus = phase.suggested === null ? index === 0 : suggested;
                     return (
-                      <button
+                      <Button
                         key={option.rating}
-                        type="button"
                         ref={takesFocus ? ratingRef : undefined}
                         disabled={busy}
                         onClick={() => void rate(option.rating)}
                         aria-label={returnHref ? `${t(style.title)}${suggested ? t(", suggested") : ""}` : t("{0}, next review in {1}{2}", t(style.title), option.label, suggested ? t(", suggested") : "")}
-                        className={`rounded-control bg-surface text-center transition-colors duration-fast ease-standard disabled:opacity-60 ${
-                          suggested
-                            ? "border-2 border-ink px-2.5 py-[13px]"
-                            : "border border-line px-2.5 py-3.5 hover:border-line-hover"
-                        }`}
+                        type={suggested ? "primary" : "default"}
+                        style={{ height: "auto", padding: "12px 10px", textAlign: "center" }}
                       >
                         <span className={`block text-sm font-semibold ${style.className}`}>
                           {t(style.title)}
@@ -410,7 +397,7 @@ export function ReviewSession({ queue, returnHref }: { queue: ReviewQueue; retur
                         {!returnHref && <span aria-hidden className="mt-1 block font-mono text-[11px] text-ink-muted">
                           {option.label}
                         </span>}
-                      </button>
+                      </Button>
                     );
                   })}
                 </div>

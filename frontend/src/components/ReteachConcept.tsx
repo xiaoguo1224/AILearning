@@ -7,6 +7,7 @@
 import { useI18n } from "@/components/LocaleProvider";
 
 import { useEffect, useRef, useState } from "react";
+import { Button } from "antd";
 
 import { ConceptPractice } from "@/components/ConceptPractice";
 import { ConceptTutor } from "@/components/ConceptTutor";
@@ -362,8 +363,7 @@ export function ReteachConcept({
         </div>
         <div className="flex shrink-0 items-center gap-3">
           <RecallBar retrievability={entry.retrievability} />
-          <button
-            type="button"
+          <Button
             ref={buttonRef}
             onClick={handleClick}
             /*
@@ -392,14 +392,10 @@ export function ReteachConcept({
             aria-label={accessibleName}
             aria-expanded={hasNote ? open : undefined}
             aria-controls={hasNote && open ? panelId : undefined}
-            className={`rounded-control border border-line-strong px-3.5 py-1.5 text-small font-medium transition-colors ${
-              busy || spent
-                ? `opacity-60 ${busy ? "cursor-progress" : "cursor-not-allowed"}`
-                : "hover:border-line-hover"
-            }`}
+            size="small"
           >
             {label}
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -459,15 +455,15 @@ export function ReteachConcept({
           <div className="flex flex-wrap items-start justify-between gap-3">
             <h3 id={`${panelId}-heading`} className="text-[15px] font-semibold">
               {t("Explained another way")}</h3>
-            <button
-              type="button"
+            <Button
               onClick={() => {
                 setOpen(false);
                 buttonRef.current?.focus();
               }}
-              className="shrink-0 rounded-lg border border-amber-300 px-3 py-1 text-[13px] font-medium text-amber-900 transition-colors hover:border-amber-500 dark:border-amber-800 dark:text-amber-200 dark:hover:border-amber-600"
+              size="small"
+              color="orange"
             >
-              {t("Hide")}</button>
+              {t("Hide")}</Button>
           </div>
 
           {/* Through LessonMarkdown, which runs react-markdown without rehype-raw: this

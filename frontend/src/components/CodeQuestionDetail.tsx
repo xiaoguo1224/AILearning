@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { Button as AntButton, Tabs, Table, Input } from "antd";
 import { useI18n } from "@/components/LocaleProvider";
 import { QuizMarkdown } from "@/components/QuizMarkdown";
 import { SubmissionReviewPanel } from "@/components/SubmissionReviewPanel";
@@ -167,26 +168,14 @@ export function CodeQuestionDetail({
         description={item.concept || undefined}
       />
 
-      <div role="tablist" aria-label={t("Code question")} className="flex gap-1 border-b border-line">
-        {tabs.map((tabItem) => (
-          <button
-            key={tabItem.id}
-            role="tab"
-            aria-selected={tab === tabItem.id}
-            onClick={() => setTab(tabItem.id)}
-            className={`px-4 py-2 text-small font-medium transition-colors ${
-              tab === tabItem.id
-                ? "border-b-2 border-accent text-ink"
-                : "text-ink-muted hover:text-ink"
-            }`}
-          >
-            {tabItem.label}
-            {tabItem.id === "history" && history.length > 0 && (
-              <span className="ml-1 text-micro text-ink-muted">({history.length})</span>
-            )}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        activeKey={tab}
+        onChange={(key) => setTab(key as Tab)}
+        items={tabs.map((tabItem) => ({
+          key: tabItem.id,
+          label: `${tabItem.label}${tabItem.id === "history" && history.length > 0 ? ` (${history.length})` : ""}`,
+        }))}
+      />
 
       {tab === "question" && (
         <section className="space-y-4">
@@ -194,9 +183,8 @@ export function CodeQuestionDetail({
             <QuizMarkdown content={item.question} />
           </div>
           <div className="rounded-surface border border-line p-4">
-            <button
-              type="button"
-              onClick={() => {
+            <AntButton
+                      onClick={() => {
                 const next = !solutionOpen;
                 setSolutionOpen(next);
                 if (next && !solution && !generatingSolution) void loadSolution();
@@ -213,7 +201,7 @@ export function CodeQuestionDetail({
               {solution && (
                 <span className="text-micro text-ink-muted">{t("AI-generated")}</span>
               )}
-            </button>
+            </AntButton>
             {solutionOpen && (
               <div className="mt-3">
                 {generatingSolution && !solution ? (
@@ -237,7 +225,7 @@ export function CodeQuestionDetail({
           {error && <ErrorState message={error} />}
           <div role="tablist" aria-label={t("Submission method")} className="flex gap-1">
             {(["paste", "upload"] as const).map((m) => (
-              <button
+              <AntButton
                 key={m}
                 role="tab"
                 aria-selected={mode === m}
@@ -249,7 +237,7 @@ export function CodeQuestionDetail({
                 }`}
               >
                 {t(m === "paste" ? "Paste" : "Upload files")}
-              </button>
+              </AntButton>
             ))}
           </div>
           {mode === "paste" ? (
@@ -364,61 +352,57 @@ export function CodeQuestionDetail({
 
       {tab === "history" && (
         <section>
-          {loadingHistory ? (
-            <p className="text-small text-ink-muted">{t("Loading…")}</p>
-          ) : history.length === 0 ? (
-            <p className="text-small text-ink-muted">{t("No submissions yet.")}</p>
-          ) : (
-            <div className="max-h-96 overflow-y-auto rounded-surface border border-line">
-              <table className="w-full text-small">
-                <thead className="sticky top-0 bg-surface-sunken">
-                  <tr className="text-left text-micro uppercase tracking-wide text-ink-muted">
-                    <th className="px-3 py-2 font-medium">{t("Version")}</th>
-                    <th className="px-3 py-2 font-medium">{t("Status")}</th>
-                    <th className="px-3 py-2 font-medium">{t("Review result")}</th>
-                    <th className="px-3 py-2 font-medium">{t("Submitted at")}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-line">
-                  {history.map((entry) => (
-                    <tr
-                      key={entry.id}
-                      onClick={() => {
-                        void selectSubmission(entry.id);
-                        setTab("review");
-                      }}
-                      className={`cursor-pointer transition-colors hover:bg-surface-sunken ${
-                        entry.id === selectedId ? "bg-surface-sunken" : ""
-                      }`}
-                    >
-                      <td className="px-3 py-2">
-                        <Badge tone={entry.id === selectedId ? "success" : "neutral"}>
-                          {t("v{0}", entry.version)}
-                        </Badge>
-                      </td>
-                      <td className="px-3 py-2 text-ink-muted">
-                        {t(entry.status === "reviewed" ? "Reviewed" : "Submitted")}
-                      </td>
-                      <td className="px-3 py-2 text-ink-muted">
-                        {entry.latest_review ? (
-                          entry.latest_review.finding_count === 0 ? (
-                            <span className="text-success">{t("No issues found")}</span>
-                          ) : (
-                            t("{0} issue(s)", entry.latest_review.finding_count)
-                          )
-                        ) : (
-                          <span className="text-ink-subtle">—</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-micro text-ink-muted">
-                        {new Date(entry.created_at).toLocaleString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <Table
+            loading={loadingHistory}
+            dataSource={history}
+            rowKey="id"
+            pagination={false}
+            scroll={{ y: 400 }}
+            onRow={(entry) => ({
+              onClick: () => {
+                void selectSubmission(entry.id);
+                setTab("review");
+              },
+            })}
+            columns={[
+              {
+                title: t("Version"),
+                dataIndex: "version",
+                key: "version",
+                render: (_, entry) => (
+                  <Badge tone={entry.id === selectedId ? "success" : "neutral"}>
+                    {t("v{0}", entry.version)}
+                  </Badge>
+                ),
+              },
+              {
+                title: t("Status"),
+                dataIndex: "status",
+                key: "status",
+                render: (_, entry) => t(entry.status === "reviewed" ? "Reviewed" : "Submitted"),
+              },
+              {
+                title: t("Review result"),
+                key: "review",
+                render: (_, entry) =>
+                  entry.latest_review ? (
+                    entry.latest_review.finding_count === 0 ? (
+                      <span style={{ color: "green" }}>{t("No issues found")}</span>
+                    ) : (
+                      t("{0} issue(s)", entry.latest_review.finding_count)
+                    )
+                  ) : (
+                    "—"
+                  ),
+              },
+              {
+                title: t("Submitted at"),
+                dataIndex: "created_at",
+                key: "created_at",
+                render: (_, entry) => new Date(entry.created_at).toLocaleString(),
+              },
+            ]}
+          />
         </section>
       )}
     </div>

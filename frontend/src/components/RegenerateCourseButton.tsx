@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Alert, Button as AntButton, Collapse, Input, Modal, Tag } from "antd";
 import { useI18n } from "@/components/LocaleProvider";
 import { Button } from "@/components/ui/Button";
 import { RegenDraftPreview } from "@/components/RegenDraftPreview";
@@ -98,107 +99,84 @@ export function RegenerateCourseButton({ courseId }: { courseId: number }) {
       <Button variant="secondary" size="sm" onClick={() => setDialogOpen(true)}>
         {t("Regenerate course")}
       </Button>
-      {dialogOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("Regenerate course")}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={close}
-        >
-          <div
-            className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-surface bg-surface p-6 shadow-raise"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {!jobId ? (
-              <>
-                <h3 className="text-subtitle font-semibold">{t("Regenerate course")}</h3>
-                <p className="mt-1 text-small text-ink-muted">
-                  {t("Each lesson is rewritten separately. You review and adopt each one.")}
-                </p>
-                {error && <p role="alert" className="mt-3 text-small text-danger">{error}</p>}
-                <textarea
-                  value={feedback}
-                  onChange={(e) => setFeedback(e.target.value)}
-                  rows={3}
-                  placeholder={t("e.g. more examples, simpler language…")}
-                  className="mt-3 block w-full rounded-control border border-line bg-transparent px-3 py-2 text-small"
-                />
-                <div className="mt-4 flex justify-end gap-2">
-                  <Button variant="secondary" onClick={close}>
-                    {t("Cancel")}
-                  </Button>
-                  <Button onClick={() => void start()}>{t("Start")}</Button>
-                </div>
-              </>
-            ) : (
-              <>
-                <h3 className="text-subtitle font-semibold">
-                  {done ? t("Regeneration complete") : t("Regenerating…")}
-                </h3>
-                {job && (
-                  <div className="mt-4">
-                    <JobProgressBar job={job} />
-                  </div>
-                )}
-                {job?.status === "failed" && (
-                  <p className="mt-2 text-small text-danger">{job.error}</p>
-                )}
-                {drafts.length > 0 && (
-                  <div className="mt-4 space-y-3">
-                    {drafts.map((entry) => (
-                      <div key={entry.lesson_id} className="rounded-surface border border-line p-4">
-                        <button
-                          type="button"
-                          onClick={() => toggleExpanded(entry.lesson_id)}
-                          aria-expanded={expanded.has(entry.lesson_id)}
-                          className="flex w-full items-center justify-between gap-2 text-left"
-                        >
-                          <span className="text-small font-medium">
-                            <span aria-hidden className="mr-1 text-ink-muted">
-                              {expanded.has(entry.lesson_id) ? "▾" : "▸"}
-                            </span>
-                            {entry.title}
-                          </span>
-                          {adopted.has(entry.lesson_id) && (
-                            <span className="text-micro text-success">{t("Adopted")}</span>
-                          )}
-                        </button>
-                        {entry.error && !entry.draft && (
-                          <p className="mt-2 text-small text-danger">{entry.error}</p>
+      <Modal
+        open={dialogOpen}
+        onCancel={close}
+        title={!jobId ? t("Regenerate course") : done ? t("Regeneration complete") : t("Regenerating…")}
+        width={900}
+        footer={
+          !jobId
+            ? [
+                <AntButton key="cancel" onClick={close}>
+                  {t("Cancel")}
+                </AntButton>,
+                <AntButton key="start" type="primary" onClick={() => void start()}>
+                  {t("Start")}
+                </AntButton>,
+              ]
+            : [
+                jobId && ["pending", "running"].includes(job?.status ?? "") && (
+                  <JobCancelButton key="cancel-job" jobId={jobId} onCancelled={close} />
+                ),
+                <AntButton key="close" onClick={close}>
+                  {t("Close")}
+                </AntButton>,
+              ]
+        }
+      >
+        {!jobId ? (
+          <>
+            <p>{t("Each lesson is rewritten separately. You review and adopt each one.")}</p>
+            {error && <Alert type="error" message={error} showIcon style={{ marginTop: 12 }} />}
+            <Input.TextArea
+              value={feedback}
+              onChange={(e) => setFeedback(e.target.value)}
+              rows={3}
+              placeholder={t("e.g. more examples, simpler language…")}
+              style={{ marginTop: 12 }}
+            />
+          </>
+        ) : (
+          <>
+            {job && <JobProgressBar job={job} />}
+            {job?.status === "failed" && <Alert type="error" message={job.error} showIcon style={{ marginTop: 12 }} />}
+            {drafts.length > 0 && (
+              <Collapse style={{ marginTop: 16 }}>
+                {drafts.map((entry) => (
+                  <Collapse.Panel
+                    key={entry.lesson_id}
+                    header={
+                      <span>
+                        {entry.title}
+                        {adopted.has(entry.lesson_id) && (
+                          <Tag color="success" style={{ marginLeft: 8 }}>{t("Adopted")}</Tag>
                         )}
-                        {expanded.has(entry.lesson_id) && entry.draft && (
-                          <div className="mt-3">
-                            <RegenDraftPreview
-                              draft={entry.draft}
-                              onAdopt={(d) => void adopt(entry, d)}
-                              onDiscard={() => toggleExpanded(entry.lesson_id)}
-                              adopting={adopting === entry.lesson_id}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <div className="mt-4 flex justify-end gap-2">
-                  {jobId && ["pending", "running"].includes(job?.status ?? "") && (
-                    <JobCancelButton jobId={jobId} onCancelled={close} />
-                  )}
-                  <Button variant="secondary" onClick={close}>
-                    {t("Close")}
-                  </Button>
-                </div>
-                {!done && (
-                  <p className="mt-2 text-small text-ink-muted">
-                    {t("You can close this dialog — the job continues in the background.")}
-                  </p>
-                )}
-              </>
+                      </span>
+                    }
+                  >
+                    {entry.error && !entry.draft && (
+                      <Alert type="error" message={entry.error} showIcon style={{ marginBottom: 12 }} />
+                    )}
+                    {entry.draft && (
+                      <RegenDraftPreview
+                        draft={entry.draft}
+                        onAdopt={(d) => void adopt(entry, d)}
+                        onDiscard={() => toggleExpanded(entry.lesson_id)}
+                        adopting={adopting === entry.lesson_id}
+                      />
+                    )}
+                  </Collapse.Panel>
+                ))}
+              </Collapse>
             )}
-          </div>
-        </div>
-      )}
+            {!done && (
+              <p style={{ marginTop: 12 }}>
+                {t("You can close this dialog — the job continues in the background.")}
+              </p>
+            )}
+          </>
+        )}
+      </Modal>
     </>
   );
 }

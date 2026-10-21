@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+import { Alert, Button as AntButton, Form, Input, Modal } from "antd";
 import { useI18n } from "@/components/LocaleProvider";
 import { ApiError, patchCourse } from "@/lib/api";
 
@@ -44,8 +45,7 @@ export function EditCourseButton({
 
   return (
     <>
-      <button
-        type="button"
+      <AntButton
         onClick={() => {
           setTitle(initialTitle);
           setDescription(initialDescription);
@@ -55,62 +55,34 @@ export function EditCourseButton({
         className="rounded-control border border-line px-3 py-1.5 text-small text-ink-muted transition-colors hover:text-ink"
       >
         {t("Edit")}
-      </button>
-      {open && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-label={t("Edit course")}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 p-4"
-          onClick={() => setOpen(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-surface border border-line bg-surface p-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h2 className="text-subtitle font-semibold">{t("Edit course")}</h2>
-            <label className="mt-4 block text-small font-medium">
-              {t("Title")}
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="mt-1 block w-full rounded-control border border-line-strong bg-surface px-3 py-2 text-ui"
-              />
-            </label>
-            <label className="mt-3 block text-small font-medium">
-              {t("Description")}
-              <textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                rows={4}
-                className="mt-1 block w-full rounded-control border border-line-strong bg-surface px-3 py-2 text-ui"
-              />
-            </label>
-            {error && (
-              <p role="alert" className="mt-3 text-small text-danger">
-                {error}
-              </p>
-            )}
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="rounded-control border border-line px-4 py-2 text-ui"
-              >
-                {t("Cancel")}
-              </button>
-              <button
-                type="button"
-                onClick={save}
-                disabled={busy}
-                className="rounded-control bg-accent px-4 py-2 text-ui font-medium text-white disabled:opacity-50"
-              >
-                {busy ? t("Saving…") : t("Save")}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      </AntButton>
+      <Modal
+        open={open}
+        onCancel={() => setOpen(false)}
+        title={t("Edit course")}
+        footer={[
+          <AntButton key="cancel" onClick={() => setOpen(false)}>
+            {t("Cancel")}
+          </AntButton>,
+          <AntButton key="save" type="primary" loading={busy} onClick={save}>
+            {busy ? t("Saving…") : t("Save")}
+          </AntButton>,
+        ]}
+      >
+        <Form layout="vertical">
+          <Form.Item label={t("Title")}>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+          </Form.Item>
+          <Form.Item label={t("Description")}>
+            <Input.TextArea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={4}
+            />
+          </Form.Item>
+          {error && <Alert type="error" message={error} showIcon />}
+        </Form>
+      </Modal>
     </>
   );
 }

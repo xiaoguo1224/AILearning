@@ -11,6 +11,9 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/Button";
+import { Button as AntButton, Input } from "antd";
+import type { InputRef } from "antd";
+import type { TextAreaRef } from "antd/es/input/TextArea";
 import { Callout } from "@/components/ui/Callout";
 import { Card } from "@/components/ui/Card";
 import {
@@ -153,35 +156,6 @@ function newRowId(prefix: string): string {
   return `${prefix}-${nextRowId}`;
 }
 
-/*
- * No `outline-none` here. What main carried was the bare, unconditional `outline-none`,
- * not `focus:outline-none`. The bare form is the broader of the two: it emits
- * `outline-style: none` in every state, not only on focus. It was inert either way,
- * because globals.css's app-wide `:focus-visible` rule is unlayered and an unlayered
- * declaration always beats Tailwind's own layered utilities whatever the specificity.
- * DaysOffControl's and DeadlineForm's FIELD_CLASS already state that reasoning.
- *
- * Removing it changes no rendered pixel. Scope that sentence to the removal, not to the
- * constant: this string is NOT pixel-identical to main's, because it newly carries
- * `transition-colors duration-fast ease-standard`, which main's two input constants did
- * not have. So the hover and focus border-colour change now animates over 120ms instead
- * of snapping. The focus RING is unaffected either way: outline-color is in the built
- * transition-colors property list, but outline-style is not, so the ring still appears at
- * full width the instant :focus-visible matches. The added utilities match the FIELD_CLASS
- * string DaysOffControl and DeadlineForm already carry on main, and globals.css zeroes
- * transition-duration under prefers-reduced-motion.
- */
-const inputClasses =
-  "mt-2 w-full rounded-control border border-line-strong bg-transparent p-2.5 text-ui text-ink " +
-  "placeholder:text-ink-subtle transition-colors duration-fast ease-standard " +
-  "hover:border-line-hover focus:border-line-hover disabled:opacity-60";
-
-/** The smaller "Label (optional)" field nested inside each source row. */
-const labelInputClasses =
-  "mt-1 w-full rounded-control border border-line-strong bg-transparent px-2.5 py-1.5 text-small text-ink " +
-  "placeholder:text-ink-subtle transition-colors duration-fast ease-standard " +
-  "hover:border-line-hover focus:border-line-hover disabled:opacity-60";
-
 export function GenerateForm() {
   const { t } = useI18n();
   const router = useRouter();
@@ -219,13 +193,13 @@ export function GenerateForm() {
   // unmounts or repositions whatever previously held focus: a row's main input (added)
   // and a row's Remove button (the successor after a removal). Keyed by row id, which
   // outlives any one render, unlike an index into rows/fileRows.
-  const inputRefs = useRef(new Map<string, HTMLTextAreaElement | HTMLInputElement>());
+  const inputRefs = useRef(new Map<string, InputRef | TextAreaRef>());
   const removeButtonRefs = useRef(new Map<string, HTMLButtonElement>());
   const focusInputIdNext = useRef<string | null>(null);
   const focusRemoveIdNext = useRef<string | null>(null);
   const focusAddTextNext = useRef(false);
 
-  function registerInputRef(id: string, el: HTMLTextAreaElement | HTMLInputElement | null) {
+  function registerInputRef(id: string, el: InputRef | TextAreaRef | null) {
     if (el) inputRefs.current.set(id, el);
     else inputRefs.current.delete(id);
   }
@@ -845,7 +819,7 @@ interface SourceRowFieldProps {
   onRemove: () => void;
   /** Reaches the row's main control (textarea or url input), so a newly added row can
    * be focused, and a row restored by state can still be found by id after re-render. */
-  inputRef: (el: HTMLTextAreaElement | HTMLInputElement | null) => void;
+  inputRef: (el: InputRef | TextAreaRef | null) => void;
   /** Reaches this row's Remove button, so removing a neighbouring row can land focus here. */
   removeButtonRef: (el: HTMLButtonElement | null) => void;
 }
@@ -888,50 +862,49 @@ function SourceRowField({
     <Card padding={4}>
       <div className="flex items-center justify-between gap-2">
         <span className="text-micro uppercase text-ink-muted">{label}</span>
-        <button
+        <AntButton
           ref={removeButtonRef}
-          type="button"
           onClick={onRemove}
           disabled={disabled}
-          className="text-xs text-ink-muted transition-colors duration-fast ease-standard hover:text-danger disabled:pointer-events-none disabled:opacity-60"
+          type="text"
+          size="small"
+          danger
         >
-          {t("Remove")}</button>
+          {t("Remove")}</AntButton>
       </div>
 
       {row.kind === "text" ? (
-        <textarea
+        <Input.TextArea
           ref={inputRef}
           value={row.value}
           onChange={(event) => onChange({ value: event.target.value })}
           disabled={disabled}
           rows={6}
-          aria-invalid={row.error ? true : undefined}
+          status={row.error ? "error" : undefined}
           aria-describedby={row.error ? errorId : undefined}
           placeholder={t("Paste lecture notes, an article, documentation - anything you want to learn.")}
-          className={inputClasses}
         />
       ) : (
-        <input
+        <Input
           ref={inputRef}
           type="url"
           value={row.value}
           onChange={(event) => onChange({ value: event.target.value })}
           disabled={disabled}
-          aria-invalid={row.error ? true : undefined}
+          status={row.error ? "error" : undefined}
           aria-describedby={row.error ? errorId : undefined}
           placeholder="https://example.com/article"
-          className={inputClasses}
         />
       )}
 
       <label className="mt-2 block text-xs text-ink-muted">
-        {t("Label (optional)")}<input
-          type="text"
+        {t("Label (optional)")}<Input
           value={row.ref}
           onChange={(event) => onChange({ ref: event.target.value })}
           disabled={disabled}
           placeholder={row.kind === "url" ? t("Defaults to the URL") : t("Defaults to a numbered label")}
-          className={labelInputClasses}
+          size="small"
+          style={{ marginTop: 4 }}
         />
       </label>
 
@@ -977,14 +950,15 @@ function FileRowField({ row, disabled, onRemove, removeButtonRef }: FileRowField
           </p>
           <p className="text-xs text-ink-muted">{formatBytes(row.file.size)}</p>
         </div>
-        <button
+        <AntButton
           ref={removeButtonRef}
-          type="button"
           onClick={onRemove}
           disabled={disabled}
-          className="shrink-0 text-xs text-ink-muted transition-colors duration-fast ease-standard hover:text-danger disabled:pointer-events-none disabled:opacity-60"
+          type="text"
+          size="small"
+          danger
         >
-          {t("Remove")}</button>
+          {t("Remove")}</AntButton>
       </div>
       {row.error && (
         <p id={errorId} className="mt-1.5 text-xs text-danger">

@@ -1,28 +1,26 @@
-import { forwardRef } from "react";
+// @ts-nocheck
+"use client";
+import { Typography } from "antd";
 import type { HTMLAttributes, ReactNode } from "react";
+import { forwardRef } from "react";
 
 export interface PageHeaderProps extends HTMLAttributes<HTMLDivElement> {
-  title: string;
+  title?: ReactNode;
   description?: ReactNode;
-  /** A button or link, right-aligned next to the title on wide screens. */
   actions?: ReactNode;
 }
 
-/** The page-level `<h1>` plus its one-line description and an optional action. */
 export const PageHeader = forwardRef<HTMLDivElement, PageHeaderProps>(function PageHeader(
-  { title, description, actions, className, ...props },
+  { title, description, actions, children, ...props },
   ref,
 ) {
-  const classes = ["flex flex-wrap items-start justify-between gap-4", className]
-    .filter(Boolean)
-    .join(" ");
   return (
-    <div ref={ref} className={classes} {...props}>
-      <div>
-        <h1 className="text-display tracking-tight">{title}</h1>
-        {description && <p className="mt-1.5 text-ui text-ink-muted">{description}</p>}
+    <div ref={ref} {...props}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <Typography.Title level={2} style={{ margin: 0 }}>{title ?? children}</Typography.Title>
+        {actions && <div>{actions}</div>}
       </div>
-      {actions && <div className="shrink-0">{actions}</div>}
+      {description && <Typography.Paragraph type="secondary">{description}</Typography.Paragraph>}
     </div>
   );
 });

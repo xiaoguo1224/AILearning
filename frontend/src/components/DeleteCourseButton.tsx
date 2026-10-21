@@ -14,6 +14,7 @@ import {
 } from "react";
 import type { ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { Button } from "antd";
 
 import { ApiError, deleteCourse, getDeletionPreview } from "@/lib/api";
 import type { CourseDeletion } from "@/lib/types";
@@ -491,11 +492,10 @@ export function DeleteCourseButton({
   if (!open) {
     return (
       <div className="mt-3 flex justify-end">
-        <button
-          type="button"
+        <Button
           ref={triggerRef}
           onClick={() => void openConfirm()}
-          className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:border-zinc-500 hover:text-zinc-900 dark:border-zinc-700 dark:text-zinc-400 dark:hover:border-zinc-500 dark:hover:text-zinc-100"
+          size="small"
         >
           {/*
             A visually hidden suffix rather than aria-label. Both compute the same
@@ -503,7 +503,7 @@ export function DeleteCourseButton({
             would restate the visible word in a second place that can drift from it,
             and because machine translation skips attributes. See issue #54.
           */}<LocalizedText text={" Delete "} /><span className="sr-only">{title}</span>
-        </button>
+        </Button>
       </div>
     );
   }
@@ -542,10 +542,10 @@ export function DeleteCourseButton({
         ><LocalizedText text={" Checking what this would delete… "} /></p>
       )}
       <div className="mt-3.5 flex flex-wrap items-center gap-3">
-        <button
-          type="button"
+        <Button
           ref={cancelRef}
           aria-describedby={consequenceId}
+          size="small"
           onClick={() => {
             // Invalidates the in-flight preview fetch (see generationRef above) so its
             // response cannot resurface after this closes the loading window: without
@@ -572,12 +572,12 @@ export function DeleteCourseButton({
           // same "am I mid-delete" test the confirming button's disabled prop is not
           // allowed to use (see confirmDelete's comment), stated the other way round.
           disabled={busy && !loadingPreview}
-          className="rounded-lg border border-zinc-300 px-3.5 py-1.5 text-xs font-medium transition-colors hover:border-zinc-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:hover:border-zinc-500"
-        ><LocalizedText text={" Cancel "} /></button>
-        <button
-          type="button"
+        ><LocalizedText text={" Cancel "} /></Button>
+        <Button
           ref={confirmRef}
           aria-describedby={consequenceId}
+          danger
+          size="small"
           onClick={() => void confirmDelete()}
           /*
            * Disabled ONLY while the preview loads. Until it lands this button cannot
@@ -588,10 +588,9 @@ export function DeleteCourseButton({
            * focused control blurs it to the body.
            */
           disabled={loadingPreview}
-          className="rounded-lg bg-red-700 px-3.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-red-800 dark:bg-red-800 dark:hover:bg-red-700"
         >
           {busy && !loadingPreview ? t("Deleting…") : t("Delete permanently")}
-        </button>
+        </Button>
       </div>
     </div>
   );

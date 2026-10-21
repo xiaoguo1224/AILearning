@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "antd";
 
 import { useI18n } from "@/components/LocaleProvider";
 import { QuizSection } from "@/components/QuizSection";
@@ -19,9 +20,9 @@ function VariantButton({
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   return (
-    <button
-      type="button"
+    <Button
       disabled={busy}
+      size="small"
       onClick={async () => {
         setBusy(true);
         try {
@@ -40,10 +41,9 @@ function VariantButton({
         }
       }}
       title={t("Create a variant of this question")}
-      className="shrink-0 rounded-control border border-line px-2 py-1 text-small text-ink-muted transition-colors hover:text-accent disabled:opacity-50"
     >
       {busy ? t("Creating…") : t("Variant")}
-    </button>
+    </Button>
   );
 }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Button } from "antd";
 
 import { useI18n } from "@/components/LocaleProvider";
 import { LessonMarkdown } from "@/components/LessonMarkdown";
@@ -77,27 +78,26 @@ export function LessonLayout({
             <h2 className="text-micro font-semibold uppercase tracking-wide text-ink-muted">
               {t("Q&A")}
             </h2>
-            <button
-              type="button"
+            <Button
               onClick={() => setQaOpen(false)}
               aria-label={t("Hide Q&A")}
-              className="rounded-control px-2 py-0.5 text-micro text-ink-muted hover:text-ink"
+              type="text"
+              size="small"
             >
               {t("Hide")}
-            </button>
+            </Button>
           </div>
           <LessonQaSection lessonId={lessonId} lessonTitle={lessonTitle} />
         </aside>
       ) : (
-        <button
-          type="button"
+        <Button
           onClick={() => setQaOpen(true)}
           aria-label={t("Show Q&A")}
-          className="shrink-0 rounded-control border border-line bg-surface px-2 py-1 text-micro text-ink-muted hover:text-ink"
-          style={{ position: "sticky", top: "1.5rem" }}
+          size="small"
+          style={{ position: "sticky", top: "1.5rem", flexShrink: 0 }}
         >
           {t("Q&A")}
-        </button>
+        </Button>
       )}
     </div>
   );

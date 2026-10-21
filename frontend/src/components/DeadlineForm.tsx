@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "antd";
 import { LocalizedText, useI18n } from "@/components/LocaleProvider";
 
 import { useEffect, useRef, useState, useTransition } from "react";

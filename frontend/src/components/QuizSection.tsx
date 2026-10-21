@@ -1,5 +1,6 @@
 "use client";
 
+import { Input } from "antd";
 import Link from "next/link";
 
 
@@ -12,7 +13,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { ApiError, answerQuiz, getQuizHint } from "@/lib/api";
+import { ApiError, getJob, startGradeJob, startHintJob } from "@/lib/api";
 import type { QuizHint } from "@/lib/api";
 import { QuizMarkdown } from "@/components/QuizMarkdown";
 import type { AttemptState, QuizItem, QuizProgress } from "@/lib/types";
@@ -194,13 +195,26 @@ export function QuizSection({
   ).length;
   const answeredCount = progress.answered + newlyAnswered;
 
+  async function pollJob(jobId: string, maxAttempts = 60): Promise<any> {
+    for (let i = 0; i < maxAttempts; i++) {
+      const job = await getJob(jobId);
+      if (job.status === "completed") return job.result;
+      if (job.status === "failed") throw new Error(job.error || "Job failed");
+      if (job.status === "cancelled") throw new Error("Job cancelled");
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+    throw new Error("Job timed out");
+  }
+
   async function requestHint(item: QuizItem) {
     const state = stateOf(item);
     const level = state.hints.length + 1;
     if (level > 3 || state.hintLoading) return;
     patch(item, { hintLoading: true });
     try {
-      const hint = await getQuizHint(item.id, level);
+      const { job_id } = await startHintJob(item.id, level);
+      const result = await pollJob(job_id);
+      const hint = result.hint;
       patch(item, (prev) => ({ hints: [...prev.hints, hint], hintLoading: false }));
     } catch (err) {
       patch(item, (prev) => ({
@@ -227,7 +241,8 @@ export function QuizSection({
     }
     patch(item, { submitting: true, error: null, errorKind: null });
     try {
-      const result = await answerQuiz(item.id, answer, elapsedSince(shownAt.current, item.id));
+      const { job_id } = await startGradeJob(item.id, answer);
+      const result = await pollJob(job_id);
       // Time a retry from this attempt, not from the first time the item appeared.
       markShown(shownAt.current, item.id, true);
       // `ever_correct`, not `result.correct`: an item solved earlier that takes another

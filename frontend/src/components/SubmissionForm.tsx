@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/LocaleProvider";
 import { Button } from "@/components/ui/Button";
+import { Input, Segmented } from "antd";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { createSubmission, uploadSubmission } from "@/lib/api";
 
@@ -96,24 +97,15 @@ export function SubmissionForm({
         </p>
       </div>
 
-      <div className="flex gap-2" role="tablist" aria-label={t("Submission method")}>
-        {(["paste", "upload"] as Mode[]).map((value) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={mode === value}
-            onClick={() => setMode(value)}
-            className={`rounded-control px-3 py-1 text-small ${
-              mode === value
-                ? "bg-surface-sunken font-medium text-ink"
-                : "text-ink-muted hover:text-ink"
-            }`}
-          >
-            {value === "paste" ? t("Paste code") : t("Upload files")}
-          </button>
-        ))}
-      </div>
+      <Segmented
+        aria-label={t("Submission method")}
+        value={mode}
+        onChange={(value) => setMode(value as Mode)}
+        options={[
+          { label: t("Paste code"), value: "paste" },
+          { label: t("Upload files"), value: "upload" },
+        ]}
+      />
 
       {variantId && (
         <p className="text-small text-ink-muted">
@@ -129,8 +121,7 @@ export function SubmissionForm({
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="space-y-1">
           <span className={LABEL}>{t("Exercise or knowledge point (optional)")}</span>
-          <input
-            className={INPUT}
+          <Input
             value={exerciseId}
             onChange={(event) => setExerciseId(event.target.value)}
             placeholder="tensor-broadcast-01"
@@ -139,8 +130,7 @@ export function SubmissionForm({
         </label>
         <label className="space-y-1">
           <span className={LABEL}>{t("Note for yourself (optional)")}</span>
-          <input
-            className={INPUT}
+          <Input
             value={note}
             onChange={(event) => setNote(event.target.value)}
             maxLength={2000}
@@ -152,8 +142,7 @@ export function SubmissionForm({
         <div className="grid gap-4">
           <label className="space-y-1">
             <span className={LABEL}>{t("Code filename")}</span>
-            <input
-              className={INPUT}
+            <Input
               value={codeName}
               onChange={(event) => setCodeName(event.target.value)}
               maxLength={120}
@@ -161,8 +150,8 @@ export function SubmissionForm({
           </label>
           <label className="space-y-1">
             <span className={LABEL}>{t("Code")}</span>
-            <textarea
-              className={`${INPUT} font-mono`}
+            <Input.TextArea
+              style={{ fontFamily: "monospace" }}
               rows={10}
               value={code}
               onChange={(event) => setCode(event.target.value)}
@@ -171,8 +160,7 @@ export function SubmissionForm({
           </label>
           <label className="space-y-1">
             <span className={LABEL}>{t("Log filename (optional)")}</span>
-            <input
-              className={INPUT}
+            <Input
               value={logName}
               onChange={(event) => setLogName(event.target.value)}
               maxLength={120}
@@ -180,8 +168,8 @@ export function SubmissionForm({
           </label>
           <label className="space-y-1">
             <span className={LABEL}>{t("Terminal output or traceback (optional)")}</span>
-            <textarea
-              className={`${INPUT} font-mono`}
+            <Input.TextArea
+              style={{ fontFamily: "monospace" }}
               rows={6}
               value={log}
               onChange={(event) => setLog(event.target.value)}

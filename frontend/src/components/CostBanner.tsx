@@ -4,6 +4,7 @@ import { LocalizedText, useI18n } from "@/components/LocaleProvider";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { Button } from "antd";
 
 import { acknowledgeCostAlert, getUsage } from "@/lib/api";
 import { formatUsd } from "@/lib/format";
@@ -66,14 +67,13 @@ export function CostBanner() {
             {formatUsd(alert.threshold_usd)}<LocalizedText text={" alert threshold. "} /></p>
           <div className="flex shrink-0 items-center gap-3">
             <Link href="/usage" className="underline underline-offset-2 hover:no-underline"><LocalizedText text={" View usage "} /></Link>
-            <button
-              type="button"
+            <Button
               onClick={() => void handleAcknowledge()}
               disabled={acking}
-              className="rounded-control border border-warning-border bg-surface px-3 py-1 font-medium text-warning transition-colors duration-fast ease-standard hover:bg-surface-sunken disabled:opacity-60"
+              size="small"
             >
               {acking ? t("Acknowledging...") : t("Acknowledge")}
-            </button>
+            </Button>
           </div>
         </div>
       )}

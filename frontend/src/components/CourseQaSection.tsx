@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { Button } from "antd";
 
 import { ConceptTutor } from "@/components/ConceptTutor";
 import { useI18n } from "@/components/LocaleProvider";
@@ -24,11 +25,12 @@ export function CourseQaSection({
 
   return (
     <section aria-label={t("Q&A")} className="rounded-surface bg-surface p-6 shadow-raise sm:p-8">
-      <button
-        type="button"
+      <Button
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 text-left"
+        type="text"
+        block
+        style={{ display: "flex", alignItems: "center", justifyContent: "space-between", height: "auto", padding: "4px 8px", textAlign: "left" }}
       >
         <span>
           <span className="text-subtitle font-semibold">{t("Q&A")}</span>
@@ -37,7 +39,7 @@ export function CourseQaSection({
           </span>
         </span>
         <span aria-hidden className="text-ink-muted">{open ? "▾" : "▸"}</span>
-      </button>
+      </Button>
       <div ref={announceRef} aria-live="polite" className="sr-only" />
       {open && (
         <div className="mt-4">
