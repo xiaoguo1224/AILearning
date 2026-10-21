@@ -9,8 +9,10 @@ import { notFound } from "next/navigation";
 import { LessonMarkdown } from "@/components/LessonMarkdown";
 import { MarkCompleteButton } from "@/components/MarkCompleteButton";
 import { EditLessonButton } from "@/components/EditLessonButton";
+import { RegenerateLessonButton } from "@/components/RegenerateLessonButton";
 import { LessonToc } from "@/components/LessonToc";
-import { QuizSection } from "@/components/QuizSection";
+import { LessonQuizPanel } from "@/components/LessonQuizPanel";
+import { LessonQaSection } from "@/components/LessonQaSection";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, getLesson } from "@/lib/api";
@@ -115,6 +117,7 @@ export default async function LessonPage(
         title={lesson.title}
         actions={
           <div className="flex items-center gap-2">
+            <RegenerateLessonButton lessonId={lesson.id} />
             <EditLessonButton
               lessonId={lesson.id}
               initialTitle={lesson.title}
@@ -146,18 +149,21 @@ export default async function LessonPage(
         </ul>
       )}
 
-      <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_220px]">
+      <div className="mt-8 grid items-start gap-8 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
           <p className="mb-4 rounded-surface border border-line p-4 text-small text-ink-muted">{t("AI-generated explanations, formulas and examples require review before being treated as authoritative. Textbook extensions are not verified course facts.")}</p>
           <LessonMarkdown content={lesson.content} title={lesson.title} />
         </div>
-        <LessonToc content={lesson.content} />
-
-        {lesson.quiz.length > 0 && (
-          <div className="mt-12 lg:col-span-2">
-            <QuizSection quiz={lesson.quiz} progress={lesson.quiz_progress} />
-          </div>
-        )}
+        <aside className="space-y-8">
+          <LessonToc content={lesson.content} />
+          <LessonQuizPanel
+            courseId={course}
+            lessonId={lesson.id}
+            initialQuiz={lesson.quiz}
+            progress={lesson.quiz_progress}
+          />
+          <LessonQaSection lessonId={lesson.id} lessonTitle={lesson.title} />
+        </aside>
       </div>
     </main>
   );

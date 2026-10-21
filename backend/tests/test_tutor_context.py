@@ -439,6 +439,7 @@ EXPECTED_FIELDS = (
     "of",
     "bucket",
     "recent_incorrect",
+    "resource_hits",
 )
 
 # Absent by design. Each is a latent scheduler value the interface never shows, so a

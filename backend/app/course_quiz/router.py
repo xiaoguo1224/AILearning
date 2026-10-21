@@ -96,6 +96,21 @@ def course_quiz_bank(course_id: CourseId, session: Db):
     return _bank(session, _course_or_404(session, course_id))
 
 
+@router.get("/quiz/{item_id}", response_model=QuizBankItem)
+def quiz_item(item_id: int, session: Db):
+    """One quiz question, for the code-question detail page.
+
+    The answer key is absent (same rule as the bank): it appears only via
+    /quiz/{item_id}/answer after an attempt.
+    """
+    from app.models import QuizItem
+
+    item = session.get(QuizItem, item_id)
+    if not item:
+        raise HTTPException(404, "Quiz item not found")
+    return QuizBankItem.model_validate(item)
+
+
 @router.post("/courses/{course_id}/quiz/generate", response_model=QuizGenerateResult, status_code=201)
 def generate_quiz_questions(course_id: CourseId, body: QuizGenerateInput, session: Db):
     """Ask the model for more practice questions.

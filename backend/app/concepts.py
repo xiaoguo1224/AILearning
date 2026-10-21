@@ -61,3 +61,21 @@ def course_scope(key: str | None) -> int | None:
     except ValueError:
         return None
     return course_id if course_id > 0 else None
+
+
+# A tutor conversation scoped to one lesson travels as "lesson:{id}", the same
+# shape as "course:{id}": history, turn caps, prompt and persistence all work
+# unchanged. The prefix survives normalize_concept, and nothing else writes keys
+# of this shape, so the branch cannot misfire on a real label.
+LESSON_SCOPE_PREFIX = "lesson:"
+
+
+def lesson_scope(key: str | None) -> int | None:
+    """The lesson id when `key` is a lesson-scoped conversation key, else None."""
+    if not key or not key.startswith(LESSON_SCOPE_PREFIX):
+        return None
+    try:
+        lesson_id = int(key[len(LESSON_SCOPE_PREFIX):])
+    except ValueError:
+        return None
+    return lesson_id if lesson_id > 0 else None

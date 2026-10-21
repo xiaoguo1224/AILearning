@@ -26,11 +26,11 @@ describe("question kind controls", () => {
     expect(screen.getByRole("radio", { name: "错误" })).toBeTruthy();
   });
 
-  test("code renders a textarea", () => {
+  test("code links to its detail page instead of answering inline", () => {
     const item = quizItem({ id: 2, kind: "code" });
-    render(<QuizSection quiz={[item]} progress={quizProgress()} />);
-    const box = screen.getByPlaceholderText(/Ctrl\+Enter/);
-    expect(box.tagName.toLowerCase()).toBe("textarea");
+    render(<QuizSection quiz={[item]} progress={quizProgress()} courseId={7} />);
+    const link = screen.getByRole("link", { name: /Open the code question/ });
+    expect(link.getAttribute("href")).toBe("/courses/7/quiz/2");
   });
 
   test("short keeps the single-line input", () => {
@@ -39,19 +39,5 @@ describe("question kind controls", () => {
     expect(container.querySelector('input[type="text"]')).toBeTruthy();
   });
 
-  test("Enter in the code textarea does not submit, Ctrl+Enter does", async () => {
-    const item = quizItem({ id: 4, kind: "code" });
-    render(<QuizSection quiz={[item]} progress={quizProgress()} />);
-    const box = screen.getByPlaceholderText(/Ctrl\+Enter/);
-    fireEvent.change(box, { target: { value: "print(1)" } });
 
-    const gate = deferred<AnswerResult>();
-    vi.mocked(answerQuiz).mockImplementationOnce(() => gate.promise as never);
-    fireEvent.keyDown(box, { key: "Enter" });
-    expect(vi.mocked(answerQuiz)).not.toHaveBeenCalled();
-
-    fireEvent.keyDown(box, { key: "Enter", ctrlKey: true });
-    expect(vi.mocked(answerQuiz)).toHaveBeenCalledTimes(1);
-    gate.resolve(answerResult({ correct: true, expected: "print(1)" }));
-  });
 });

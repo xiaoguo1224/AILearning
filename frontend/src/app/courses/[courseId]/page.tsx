@@ -12,6 +12,7 @@ import { EditCourseButton } from "@/components/EditCourseButton";
 import { RegenerateCourseButton } from "@/components/RegenerateCourseButton";
 import { CourseQaSection } from "@/components/CourseQaSection";
 import { CourseQuizSection } from "@/components/CourseQuizSection";
+import { CourseResourcesSection } from "@/components/CourseResourcesSection";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, getCourse } from "@/lib/api";
@@ -202,11 +203,14 @@ export default async function CoursePage(props: { params: Promise<{ courseId: st
           </aside>
         </div>
 
-        {/* Per-course features, laid out around the course: the question bank
-            (collapsed until opened) and the course Q&A with its conversation
-            memory. Both are scoped to this course. */}
-        <CourseQuizSection courseId={course.id} />
-        <CourseQaSection courseId={course.id} courseTitle={course.title} />
+        {/* Per-course features, laid out around the course: the question bank and
+            the course Q&A sit on the two sides, both scoped to this course;
+            reference materials span the full width below. */}
+        <div className="mt-6 grid items-start gap-6 lg:grid-cols-2">
+          <CourseQuizSection courseId={course.id} />
+          <CourseQaSection courseId={course.id} courseTitle={course.title} />
+        </div>
+        <CourseResourcesSection courseId={course.id} />
       </main>
     </CourseDeletionProvider>
   );

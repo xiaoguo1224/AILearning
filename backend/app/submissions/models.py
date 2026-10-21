@@ -35,7 +35,16 @@ class Submission(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    # Nullable: a question-scoped submission (quiz_item_id set) answers a quiz
+    # question and belongs to no project ("不放在项目里游离提交"). A project-scoped
+    # submission has project_id set and quiz_item_id NULL.
+    project_id: Mapped[int | None] = mapped_column(
+        ForeignKey("projects.id"), nullable=True, index=True
+    )
+    # The quiz question this submission answers, when question-scoped. Plain column
+    # without a foreign key: SQLite cannot add the constraint to an existing table,
+    # so an upgraded install would diverge from a fresh one (see ADDED_COLUMNS).
+    quiz_item_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     exercise_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     user_note: Mapped[str | None] = mapped_column(Text, nullable=True)

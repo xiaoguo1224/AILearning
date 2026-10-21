@@ -138,6 +138,10 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # as JSON. TEXT with a constant default, the safe shape; old rows read back as
     # "[]", which renders as "no citations" exactly as it should.
     ("tutor_messages", "refs", "TEXT NOT NULL DEFAULT '[]'"),
+    # Code questions answer in place: a submission scoped to a quiz item instead of
+    # a project. Nullable with no default — NULL means "project-scoped, the older
+    # origin". No REFERENCES clause, same SQLite reason as variant_exercises above.
+    ("submissions", "quiz_item_id", "INTEGER"),
 )
 
 
@@ -191,6 +195,64 @@ def _add_missing_columns() -> None:
             )
 
 
+def _migrate_submissions_question_scope() -> None:
+    """One-time rebuild: submissions.project_id becomes nullable, for question-scoped submissions.
+
+    Code submissions are answers to specific quiz questions ("代码提交=对指定题目的作答，
+    不放在项目里游离提交"), so a question-scoped submission has quiz_item_id set and
+    project_id NULL. SQLite cannot ALTER a column's nullability, so this rebuilds the
+    table — but ONLY when the installed schema still has project_id NOT NULL. Fresh
+    installs get the nullable shape from create_all and skip the rebuild entirely.
+    Idempotent: a second boot sees project_id already nullable and does nothing.
+    """
+    inspector = inspect(engine)
+    if "submissions" not in set(inspector.get_table_names()):
+        return
+    cols = {c["name"]: c for c in inspector.get_columns("submissions")}
+    if "quiz_item_id" not in cols:
+        return  # _add_missing_columns has not run yet; init_db calls this after it.
+    if cols["project_id"]["nullable"]:
+        return
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "CREATE TABLE submissions_new ("
+                "id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT, "
+                "project_id INTEGER REFERENCES projects(id), "
+                "exercise_id VARCHAR(100), "
+                "version INTEGER NOT NULL DEFAULT 1, "
+                "user_note TEXT, "
+                "status VARCHAR(20) NOT NULL DEFAULT 'submitted', "
+                "variant_id INTEGER, "
+                "quiz_item_id INTEGER, "
+                "created_at DATETIME, "
+                "CONSTRAINT uq_submission_version UNIQUE (project_id, exercise_id, version)"
+                ")"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO submissions_new "
+                "(id, project_id, exercise_id, version, user_note, status, "
+                "variant_id, quiz_item_id, created_at) "
+                "SELECT id, project_id, exercise_id, version, user_note, status, "
+                "variant_id, quiz_item_id, created_at FROM submissions"
+            )
+        )
+        connection.execute(text("DROP TABLE submissions"))
+        connection.execute(text("ALTER TABLE submissions_new RENAME TO submissions"))
+        # Recreate the indexes create_all would have built.
+        connection.execute(
+            text("CREATE INDEX ix_submissions_project_id ON submissions (project_id)")
+        )
+        connection.execute(
+            text("CREATE INDEX ix_submissions_exercise_id ON submissions (exercise_id)")
+        )
+        connection.execute(
+            text("CREATE INDEX ix_submissions_variant_id ON submissions (variant_id)")
+        )
+
+
 def init_db() -> None:
     from app import models  # noqa: F401  (register models with Base)
     from app.agent import models as agent_models  # noqa: F401
@@ -207,6 +269,7 @@ def init_db() -> None:
     # new table into existence; only then is it meaningful to ask an existing one which
     # columns it is missing.
     _add_missing_columns()
+    _migrate_submissions_question_scope()
     with SessionLocal() as session:
         init_fts(session)
 

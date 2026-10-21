@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { ConceptTutor } from "@/components/ConceptTutor";
 import { useI18n } from "@/components/LocaleProvider";
@@ -20,24 +20,37 @@ export function CourseQaSection({
 }) {
   const { t } = useI18n();
   const announceRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
 
   return (
-    <section aria-label={t("Q&A")} className="mt-6 rounded-surface bg-surface p-6 shadow-raise sm:p-8">
-      <h2 className="text-subtitle font-semibold">{t("Q&A")}</h2>
-      <p className="mt-1 text-small text-ink-muted">
-        {t("Ask anything about this course. Answers cite the lessons they come from.")}
-      </p>
+    <section aria-label={t("Q&A")} className="rounded-surface bg-surface p-6 shadow-raise sm:p-8">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-2 text-left"
+      >
+        <span>
+          <span className="text-subtitle font-semibold">{t("Q&A")}</span>
+          <span className="mt-1 block text-small font-normal text-ink-muted">
+            {t("Ask anything about this course. Answers cite the lessons they come from.")}
+          </span>
+        </span>
+        <span aria-hidden className="text-ink-muted">{open ? "▾" : "▸"}</span>
+      </button>
       <div ref={announceRef} aria-live="polite" className="sr-only" />
-      <div className="mt-4">
-        <ConceptTutor
-          conceptKey={`course:${courseId}`}
-          conceptLabel={courseTitle}
-          open={true}
-          onAnnounce={(message) => {
-            if (announceRef.current) announceRef.current.textContent = message;
-          }}
-        />
-      </div>
+      {open && (
+        <div className="mt-4">
+          <ConceptTutor
+            conceptKey={`course:${courseId}`}
+            conceptLabel={courseTitle}
+            open={true}
+            onAnnounce={(message) => {
+              if (announceRef.current) announceRef.current.textContent = message;
+            }}
+          />
+        </div>
+      )}
     </section>
   );
 }

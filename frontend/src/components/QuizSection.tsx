@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 
 
 
@@ -12,6 +14,7 @@ import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { ApiError, answerQuiz, getQuizHint } from "@/lib/api";
 import type { QuizHint } from "@/lib/api";
+import { QuizMarkdown } from "@/components/QuizMarkdown";
 import type { AttemptState, QuizItem, QuizProgress } from "@/lib/types";
 
 interface Feedback {
@@ -97,11 +100,14 @@ export function QuizSection({
   quiz,
   progress,
   renderItemAction,
+  courseId,
 }: {
   quiz: QuizItem[];
   progress: QuizProgress;
   /** Extra control per question, e.g. the course bank's variant button. */
   renderItemAction?: (item: QuizItem) => React.ReactNode;
+  /** When set, code questions link to their detail page instead of answering inline. */
+  courseId?: number;
 }) {
   const { t } = useI18n();
   const [answers, setAnswers] = useState<Record<number, ItemState>>({});
@@ -278,10 +284,12 @@ export function QuizSection({
                   Without the space a screen reader says "1.Which orbit shape".
                 */}
                 <div className="flex items-start justify-between gap-3">
-                  <p id={`quiz-question-${item.id}`} className="text-ui font-medium">
-                    <span className="mr-2 text-ink-subtle">{index + 1}.</span>{" "}
-                    {item.question}
-                  </p>
+                  <div id={`quiz-question-${item.id}`} className="flex gap-2 text-ui font-medium">
+                    <span className="shrink-0 text-ink-subtle">{index + 1}.</span>
+                    <div className="min-w-0 flex-1">
+                      <QuizMarkdown content={item.question} />
+                    </div>
+                  </div>
                   {renderItemAction?.(item)}
                 </div>
                 {item.concept && (
@@ -310,7 +318,7 @@ export function QuizSection({
                     {item.options.map((option) => (
                       <label
                         key={option}
-                        className="flex cursor-pointer items-center gap-2 text-ui"
+                        className="flex cursor-pointer items-start gap-2 text-ui"
                       >
                         <input
                           type="radio"
@@ -329,6 +337,7 @@ export function QuizSection({
                                 : { answer: option },
                             )
                           }
+                          className="mt-1 shrink-0"
                           ref={(el) => {
                             // Only the checked option's node is worth keeping: it is the
                             // one the focus effect looks up by the current answer, and an
@@ -341,113 +350,26 @@ export function QuizSection({
                             }
                           }}
                         />
-                        {option}
+                        <div className="min-w-0 flex-1">
+                          <QuizMarkdown content={option} />
+                        </div>
                       </label>
                     ))}
                   </div>
                 ) : item.kind === "code" ? (
-                  <textarea
-                    value={state.answer}
-                    rows={6}
-                    disabled={state.submitting || solved}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      // Same reasoning as the mcq onChange just above: a validation
-                      // complaint about the answer goes stale the moment the answer
-                      // changes, a server error does not.
-                      patch(item, (prev) =>
-                        prev.errorKind === "validation"
-                          ? { answer: value, error: null, errorKind: null }
-                          : { answer: value },
-                      );
-                    }}
-                    ref={(el) => {
-                      if (el) codeRefs.current.set(item.id, el);
-                      else codeRefs.current.delete(item.id);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                        e.preventDefault();
-                        void submit(item);
-                      }
-                    }}
-                    placeholder={t("Your answer (Ctrl+Enter to submit)")}
-                    aria-labelledby={`quiz-question-${item.id}`}
-                    /*
-                      `border-line-strong`, which is the colour this input already had:
-                      origin/main drew it in zinc-300 / zinc-700, and the bundle emits
-                      --sf-line-strong as #d4d4d8 / #3f3f46, exactly those two. So this is
-                      the pixel-identical migration, not a choice.
-
-                      An earlier draft used `border-line` here, reasoning that it restated
-                      ui/Field.tsx's recipe. It does restate it, token for token apart from
-                      mt-3 against mt-1, but that is not an argument, because Field has no
-                      consumers: nothing under src or tests imports ui/Field or renders a
-                      Field element, so the only places that exact identifier appears are
-                      its own definition and this comment. A plain grep for the substring
-                      also returns DeadlineForm's activeField and GenerateForm's
-                      SourceRowField and FileRowField, which are unrelated names that
-                      merely contain it.
-                      It is unadopted code, so it is not the app's recipe for anything. The
-                      NEUTRAL text controls that actually render all draw this boundary at
-                      that colour, through the `border-line-strong` token: DaysOffControl,
-                      DeadlineForm's FIELD_CLASS, ReviewSession's answer input, and
-                      GenerateForm's two field constants, `inputClasses` and `labelInputClasses`,
-                      which PR #36 consolidated: it added `labelInputClasses` and moved both onto
-                      the token, off the raw zinc pair the token resolves to. Only the second is
-                      new. `inputClasses` predates that merge and carried raw zinc at 49038be^1,
-                      so do not read "introduced" into the pair. That clause describes main, where
-                      PR #36 landed at 49038be. On this branch alone GenerateForm still has ONE
-                      raw-zinc constant and a raw-zinc inline field beside it, so the sentence is
-                      true of the tree this comment will live in and false of the one you may be
-                      reading it in.
-                      "Neutral" is load-bearing rather than a hedge: two other
-                      text controls render with an amber boundary instead, ConceptPractice's
-                      answer input and ConceptTutor's composer textarea, because they sit
-                      inside amber concept callouts and follow their container off the
-                      neutral scale on purpose. This input has no such container, so the
-                      neutral scale is the one it belongs to. Using
-                      `border-line` would have dropped this one input alone to 1.27:1 light
-                      and 1.33:1 dark, from 1.48 and 1.90. That is a different question
-                      from whether line-strong itself clears WCAG 1.4.11's 3:1, which it
-                      does not, and which is filed separately as one token change across
-                      every form.
-
-                      `aria-labelledby` rather than a wrapping <label>: the question above
-                      IS this input's name, but sitting next to it does not make it one.
-                      Until now the element had no labelling relationship at all and fell
-                      back to its placeholder, which stops being readable the moment the
-                      learner types. An earlier version of this comment defended that by
-                      saying a second <label> would give the input "two accessible names";
-                      an element has exactly one, and this one had none worth having.
-
-                      No `outline-none` here, where the raw version had one: globals.css's
-                      app-wide `:focus-visible` rule is unlayered, and Tailwind wraps its
-                      own utilities in `@layer utilities`, so an unlayered rule always wins
-                      over a layered one regardless of either side's specificity (same
-                      reasoning, and the same removal, as ReviewSession's answer input).
-                      Dropping it changes no rendered pixel, and it does not stop the rule
-                      shipping either, though not for the reason an earlier version of this
-                      sentence gave. That version said "six other components still use that
-                      utility". On the merge with main, six is the count of other FILES containing
-                      the string, and four of the six only name it in comments saying they do NOT
-                      use it, DaysOffControl and DeadlineForm among them. Two components actually
-                      apply it, ConceptPractice's and ConceptTutor's amber-bordered controls. On
-                      this branch alone the split is three and three, because GenerateForm's two
-                      raw-zinc fields still carry the bare utility that PR #36 removes on main.
-                      Either way they
-                      are not what keeps the rule alive: the prose is, because Tailwind's
-                      scanner reads comments, this one included. Measured on the merge with
-                      main, stripping the utility from both live usages left the emitted
-                      selector set unchanged with `.outline-none` still in the bundle, while
-                      scrubbing the comment mentions as well removed exactly two selectors,
-                      `.outline-none` and `.focus\:outline-none:focus`. The second of those has
-                      no live usage anywhere and ships from prose alone, which is a separate
-                      pre-existing wart, not something this element can fix. Removing the class
-                      here only stops THIS element carrying one that could never win.
-                    */
-                    className="mt-3 w-full rounded-control border border-line-strong bg-transparent px-3 py-2 text-ui text-ink placeholder:text-ink-subtle transition-colors duration-fast ease-standard hover:border-line-hover focus:border-line-hover disabled:opacity-60"
-                  />
+                  courseId ? (
+                    <Link
+                      href={`/courses/${courseId}/quiz/${item.id}`}
+                      className="mt-3 inline-flex items-center gap-2 rounded-control border border-line bg-surface px-4 py-2 text-small font-medium text-accent transition-colors hover:border-accent"
+                    >
+                      {t("Open the code question")}
+                      <span aria-hidden>→</span>
+                    </Link>
+                  ) : (
+                    <p className="mt-3 text-small text-ink-muted">
+                      {t("Code questions open on their own page.")}
+                    </p>
+                  )
                 ) : (
                   <input
                     type="text"

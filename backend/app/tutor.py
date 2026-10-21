@@ -44,7 +44,8 @@ from sqlalchemy.orm import Session
 
 from app import days, generation, models, remediation, review, teaching
 from app.attempts import LESSON_QUIZ_SOURCE, iso_utc
-from app.concepts import course_scope, normalize_concept
+from app.concepts import course_scope, lesson_scope, normalize_concept
+from app.resources.service import search_resources_fts
 from app.untrusted import as_data
 
 # The stage string these calls are recorded under in llm_calls, so tutor spend shows up
@@ -417,6 +418,10 @@ class TutorContext(NamedTuple):
     of: int
     bucket: str
     recent_incorrect: list[MissedAttempt]
+    # Reference-material chunks for a course-scoped question, most relevant first.
+    # Last and defaulted so existing constructions (concept lookups, tests) keep
+    # working without naming it.
+    resource_hits: list[dict] = []
 
 
 def _display_label(
@@ -485,7 +490,16 @@ def _recent_incorrect(
     ]
 
 
-def context(session: Session, concept_key: str, now: datetime | None = None) -> TutorContext:
+# How many reference-material chunks a course-scoped question may ground in.
+MAX_RESOURCE_HITS = 3
+
+
+def context(
+    session: Session,
+    concept_key: str,
+    now: datetime | None = None,
+    question: str | None = None,
+) -> TutorContext:
     """Everything the tutor may be shown about one concept. Writes nothing.
 
     The material is remediation.concept_material, reused rather than redefined: there
@@ -495,9 +509,27 @@ def context(session: Session, concept_key: str, now: datetime | None = None) -> 
     The expected answers are then withheld per item by open_answer_item_ids, which is
     the only difference between what re-teaching sees and what the tutor sees. Both are
     grounded in the same lessons and the same questions.
+
+    For a course-scoped key the question (when given) also searches the course's own
+    reference materials: a course owns its 资料 the way a project does, so the tutor
+    cites them the same way.
     """
     moment = _moment(now)
     lessons, quiz_items = remediation.concept_material(session, concept_key)
+    resource_hits: list[dict] = []
+    course_id = course_scope(concept_key)
+    if course_id is None:
+        lesson_id = lesson_scope(concept_key)
+        if lesson_id is not None:
+            lesson_row = session.get(models.Lesson, lesson_id)
+            if lesson_row is not None:
+                module_row = session.get(models.Module, lesson_row.module_id)
+                course_id = module_row.course_id if module_row else None
+    if course_id is not None and question and question.strip():
+        resource_hits = search_resources_fts(
+            session, question.strip(), course_id=course_id, limit=MAX_RESOURCE_HITS
+        )
+        _fill_hit_text(session, resource_hits)
     card = review.get_card(session, concept_key)
     withheld = open_answer_item_ids(session, concept_key, quiz_items, card)
     flagged, missed, of = _attention(session, concept_key, moment)
@@ -507,9 +539,16 @@ def context(session: Session, concept_key: str, now: datetime | None = None) -> 
         course = session.get(models.Course, course_id)
         if course and course.title:
             label = course.title
+    else:
+        lesson_id = lesson_scope(concept_key)
+        if lesson_id is not None:
+            lesson_row = session.get(models.Lesson, lesson_id)
+            if lesson_row and lesson_row.title:
+                label = lesson_row.title
     return TutorContext(
         concept_label=label,
         lessons=lessons,
+        resource_hits=resource_hits,
         items=[
             MaterialItem(
                 question=item.question,
@@ -630,7 +669,8 @@ def _read_refs(row) -> list[dict]:
     return [
         {"lesson_id": entry.get("lesson_id"), "title": entry.get("title", "")}
         for entry in data
-        if isinstance(entry, dict) and isinstance(entry.get("lesson_id"), int)
+        if isinstance(entry, dict)
+        and (entry.get("lesson_id") is None or isinstance(entry.get("lesson_id"), int))
     ]
 
 
@@ -903,16 +943,18 @@ _ANSWER_SCHEMA = """{
   "answer": str,            # required, never empty; only what the supplied material supports
   "beyond": str or null,    # optional; general knowledge the material does not cover
   "check": str or null      # optional; exactly one short recall question
-  "refs": [str] or null,      # lesson titles from the material this answer draws on, copied exactly
+  "refs": [str] or null,      # titles from the material this answer draws on, copied exactly:
+                             # lesson titles as shown, or "资料：<filename>" for reference material
 }
 All values are markdown strings, escaped the way JSON requires. Leave "beyond" or "check" out, or \
 set them to null, when they do not apply. A reply with no non-empty "answer" is thrown away and \
 the learner is shown an error, so never send one.
 
-Cite your sources: list in "refs" the exact lesson titles (as shown in the material block) that \
-support this answer, most relevant first, at most 5. Only titles that appear in the material; \
-never invent one. Omit "refs" or set it to null when the answer adds nothing beyond the \
-conversation."""
+Cite your sources: list in "refs" the exact titles (as shown in the material block) that \
+support this answer, most relevant first, at most 5: lesson titles as shown, or \
+"资料：<filename>" for a Reference material section. Only titles that appear in the \
+material; never invent one. Omit "refs" or set it to null when the answer adds nothing \
+beyond the conversation."""
 
 # Answer mode's rules block: the shared answer-first paragraph, unchanged in wording and
 # now owned by app/teaching.py so free exploration cannot state a weaker version of it.
@@ -970,16 +1012,18 @@ _GUIDED_SCHEMA = """{
   "answer": str,            # required, never empty; only what the supplied material supports
   "beyond": str or null,    # optional; general knowledge the material does not cover
   "ask": str or null,       # optional; the one move you withheld, handed back as a question
-  "refs": [str] or null,      # lesson titles from the material this answer draws on, copied exactly
+  "refs": [str] or null,      # titles from the material this answer draws on, copied exactly:
+                             # lesson titles as shown, or "资料：<filename>" for reference material
 }
 All values are markdown strings, escaped the way JSON requires. Leave "beyond" or "ask" out, or \
 set them to null, when they do not apply. A reply with no non-empty "answer" is thrown away and \
 the learner is shown an error, so never send one.
 
-Cite your sources: list in "refs" the exact lesson titles (as shown in the material block) that \
-support this answer, most relevant first, at most 5. Only titles that appear in the material; \
-never invent one. Omit "refs" or set it to null when the answer adds nothing beyond the \
-conversation."""
+Cite your sources: list in "refs" the exact titles (as shown in the material block) that \
+support this answer, most relevant first, at most 5: lesson titles as shown, or \
+"资料：<filename>" for a Reference material section. Only titles that appear in the \
+material; never invent one. Omit "refs" or set it to null when the answer adds nothing \
+beyond the conversation."""
 
 # The rung sentence, which is the only text that differs between the two rungs. Kept as one
 # sentence each rather than as two whole rule blocks, so that the rungs cannot drift apart
@@ -1138,6 +1182,25 @@ def _standing(context: TutorContext) -> str:
     return f"Where the learner stands (for choosing your level, never to repeat back): {joined}"
 
 
+def _fill_hit_text(session: Session, hits: list[dict]) -> None:
+    """Give each search hit its chunk text, clipped to the lesson budget.
+
+    The search returns a 150-char snippet with <b> markers, which is a teaser for
+    display, not grounding. The model gets the real chunk text instead.
+    """
+    from app.resources.models import ResourceChunk
+
+    ids = [hit.get("chunk_id") for hit in hits if hit.get("chunk_id")]
+    if not ids:
+        return
+    chunks = {
+        chunk.id: chunk.text or ""
+        for chunk in session.query(ResourceChunk).filter(ResourceChunk.id.in_(ids))
+    }
+    for hit in hits:
+        hit["text"] = chunks.get(hit.get("chunk_id"), "")[: remediation.MAX_LESSON_CHARS]
+
+
 def _material_block(context: TutorContext) -> str:
     """The concept, its lessons, its quiz items, and the learner's recent misses.
 
@@ -1164,6 +1227,14 @@ def _material_block(context: TutorContext) -> str:
     for lesson in context.lessons:
         content = (lesson.content or "")[: remediation.MAX_LESSON_CHARS]
         parts.append(f"--- Lesson: {_scrub(lesson.title)} ---\n{_scrub(content)}")
+
+    for hit in context.resource_hits:
+        text = hit.get("text", "")
+        if text:
+            parts.append(
+                f"--- Reference material: {_scrub(hit.get('filename', ''))} ---\n"
+                f"{_scrub(text)}"
+            )
 
     for item in context.items:
         lines = ["--- Quiz question on this concept ---", f"Question: {_scrub(item.question)}"]
@@ -1346,13 +1417,17 @@ def truncate_beyond(text: str) -> str:
     return _hard_cut("".join(pieces).strip(), BEYOND_MAX_CHARS)
 
 
-def _resolve_refs(raw_refs: object, lessons: list) -> list[dict]:
-    """Map the model's cited lesson titles onto lesson ids.
+def _resolve_refs(
+    raw_refs: object, lessons: list, resources: list[dict] | None = None
+) -> list[dict]:
+    """Map the model's cited titles onto lesson ids or reference filenames.
 
     Exact title first, then a normalized comparison, because a model asked to
-    copy exactly still occasionally trims a trailing "（上）" or a space. Titles
-    that match nothing are dropped, not guessed at: a wrong link is worse than
-    no link. Capped at MAX_REFS so a chatty model cannot stuff the row.
+    copy exactly still occasionally trims a trailing "（上）" or a space. A
+    citation of "资料：<filename>" resolves to the reference material with that
+    filename (lesson_id None — it is not a lesson). Titles that match nothing
+    are dropped, not guessed at: a wrong link is worse than no link. Capped at
+    MAX_REFS so a chatty model cannot stuff the row.
     """
     if not isinstance(raw_refs, list):
         return []
@@ -1365,17 +1440,36 @@ def _resolve_refs(raw_refs: object, lessons: list) -> list[dict]:
         norm = _normalize_title(title)
         if norm and norm not in by_norm:
             by_norm[norm] = lesson
+    by_resource: dict[str, str] = {}
+    for hit in resources or []:
+        filename = hit.get("filename") or ""
+        if filename and filename not in by_resource:
+            by_resource[filename] = filename
     resolved: list[dict] = []
-    seen: set[int] = set()
+    seen: set = set()
     for entry in raw_refs:
         if not isinstance(entry, str):
             continue
-        lesson = by_title.get(entry.strip()) or by_norm.get(_normalize_title(entry))
-        lesson_id = getattr(lesson, "id", None)
-        if lesson is None or lesson_id in seen:
-            continue
-        seen.add(lesson_id)
-        resolved.append({"lesson_id": lesson_id, "title": getattr(lesson, "title", "")})
+        stripped = entry.strip()
+        filename = None
+        if stripped.startswith("资料："):
+            candidate = stripped[len("资料："):].strip()
+            filename = by_resource.get(candidate)
+        elif stripped.startswith("资料:"):
+            candidate = stripped[len("资料:"):].strip()
+            filename = by_resource.get(candidate)
+        if filename is not None:
+            if ("resource", filename) in seen:
+                continue
+            seen.add(("resource", filename))
+            resolved.append({"lesson_id": None, "title": filename})
+        else:
+            lesson = by_title.get(stripped) or by_norm.get(_normalize_title(entry))
+            lesson_id = getattr(lesson, "id", None)
+            if lesson is None or lesson_id in seen:
+                continue
+            seen.add(lesson_id)
+            resolved.append({"lesson_id": lesson_id, "title": getattr(lesson, "title", "")})
         if len(resolved) >= MAX_REFS:
             break
     return resolved
@@ -1385,7 +1479,12 @@ def _normalize_title(title: str) -> str:
     return _WHITESPACE.sub(" ", title or "").strip().casefold()
 
 
-def parse_reply(text: str, mode: str, lessons: list | None = None) -> TutorReply:
+def parse_reply(
+    text: str,
+    mode: str,
+    lessons: list | None = None,
+    resources: list[dict] | None = None,
+) -> TutorReply:
     """The model's reply as a TutorReply, or ValueError. `mode` is the EFFECTIVE mode.
 
     `answer` is required in both modes, and its absence is a parse failure rather than
@@ -1434,5 +1533,5 @@ def parse_reply(text: str, mode: str, lessons: list | None = None) -> TutorReply
         beyond=truncate_beyond(_clean_text(parsed.get("beyond"))),
         check="" if guided else _clean_text(parsed.get("check")),
         ask=_hard_cut(_clean_text(parsed.get("ask")), ASK_MAX_CHARS) if guided else "",
-        refs=_resolve_refs(parsed.get("refs"), lessons or []),
+        refs=_resolve_refs(parsed.get("refs"), lessons or [], resources),
     )

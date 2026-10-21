@@ -45,6 +45,10 @@ class Resource(Base):
         cascade="all, delete-orphan",
         order_by="ResourceChunk.ordinal",
     )
+    courses: Mapped[list["CourseResource"]] = relationship(
+        back_populates="resource",
+        cascade="all, delete-orphan",
+    )
     projects: Mapped[list["ProjectResource"]] = relationship(
         back_populates="resource",
         cascade="all, delete-orphan",
@@ -64,6 +68,18 @@ class ProjectResource(Base):
         backref=backref("project_resources", cascade="all, delete-orphan")
     )
     resource: Mapped[Resource] = relationship(back_populates="projects")
+
+
+class CourseResource(Base):
+    __tablename__ = "course_resources"
+
+    course_id: Mapped[int] = mapped_column(ForeignKey("courses.id"), primary_key=True)
+    resource_id: Mapped[int] = mapped_column(
+        ForeignKey("resources.id"), primary_key=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    resource: Mapped[Resource] = relationship(back_populates="courses")
 
 
 class ResourceChunk(Base):

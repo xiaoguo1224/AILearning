@@ -113,9 +113,13 @@ class ReviewContext:
     exercise_id: str | None
     user_note: str | None
     artifacts: list[tuple[str, str, str]]
+    # The quiz question being answered, for question-scoped submissions. When set,
+    # the model judges the code against this question instead of reviewing it in
+    # the abstract.
+    question: str | None = None
 
 
-def build_context(submission: Submission) -> ReviewContext:
+def build_context(submission: Submission, question: str | None = None) -> ReviewContext:
     return ReviewContext(
         exercise_id=submission.exercise_id,
         user_note=submission.user_note,
@@ -123,6 +127,7 @@ def build_context(submission: Submission) -> ReviewContext:
             (artifact.filename, artifact.kind, artifact.content or "")
             for artifact in submission.artifacts
         ],
+        question=question,
     )
 
 
@@ -147,9 +152,13 @@ def _prompt(context: ReviewContext, static_findings: list[StaticFinding]) -> str
     deterministic = json.dumps(
         [finding.to_dict() for finding in static_findings], ensure_ascii=False
     )
+    question_block = (
+        f"QUESTION THE CODE ANSWERS\n{context.question}\n\n" if context.question else ""
+    )
     return (
         f"Exercise: {context.exercise_id or 'unspecified'}\n"
         f"Learner note: {context.user_note or '(none)'}\n\n"
+        f"{question_block}"
         f"CODE\n{chr(10).join(code_blocks) or '(no code uploaded)'}\n\n"
         f"LOG THE LEARNER SUPPLIED\n{chr(10).join(log_blocks) or '(no log uploaded)'}\n\n"
         f"DETERMINISTIC FINDINGS ALREADY MADE (do not repeat them verbatim; you may "

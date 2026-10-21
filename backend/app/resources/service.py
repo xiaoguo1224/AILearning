@@ -127,7 +127,13 @@ def expand_cjk_search_terms(query: str, cap: int = MAX_CJK_TERMS) -> list[str]:
     return deduped[:cap]
 
 
-def _like_search(session: Session, query: str, project_id: int | None, limit: int) -> list[dict]:
+def _like_search(
+    session: Session,
+    query: str,
+    project_id: int | None,
+    course_id: int | None,
+    limit: int,
+) -> list[dict]:
     """Ranked LIKE fallback for queries FTS cannot serve (chiefly Chinese).
 
     Only used when the FTS phrase query returned nothing. Rows are ordered by
@@ -147,6 +153,10 @@ def _like_search(session: Session, query: str, project_id: int | None, limit: in
         params["pid"] = project_id
         project_join = "JOIN project_resources pr ON pr.resource_id = r.id"
         project_where = "pr.project_id = :pid AND "
+    elif course_id is not None:
+        params["cid"] = course_id
+        project_join = "JOIN course_resources cr ON cr.resource_id = r.id"
+        project_where = "cr.course_id = :cid AND "
     else:
         project_join = ""
         project_where = ""
@@ -179,42 +189,47 @@ def _like_search(session: Session, query: str, project_id: int | None, limit: in
 
 
 def _run_fts_query(
-    session: Session, fts_query_str: str, project_id: int | None, limit: int
+    session: Session,
+    fts_query_str: str,
+    project_id: int | None,
+    course_id: int | None,
+    limit: int,
 ) -> list:
+    scope_join = ""
+    scope_where = ""
+    scope_params: dict = {}
     if project_id is not None:
-        sql = text(
-            """
-            SELECT c.id as chunk_id, r.id as resource_id, r.filename, r.kind, c.locator,
-                   snippet(resource_chunks_fts, 2, '<b>', '</b>', '...', 15) as snippet
-            FROM resource_chunks_fts
-            JOIN resource_chunks c ON c.id = resource_chunks_fts.chunk_id
-            JOIN resources r ON r.id = c.resource_id
-            JOIN project_resources pr ON pr.resource_id = r.id
-            WHERE resource_chunks_fts MATCH :query AND pr.project_id = :pid
-            ORDER BY rank
-            LIMIT :limit
-            """
-        )
-        return session.execute(
-            sql, {"query": fts_query_str, "pid": project_id, "limit": limit}
-        ).fetchall()
+        scope_join = "JOIN project_resources pr ON pr.resource_id = r.id"
+        scope_where = "AND pr.project_id = :pid"
+        scope_params["pid"] = project_id
+    elif course_id is not None:
+        scope_join = "JOIN course_resources cr ON cr.resource_id = r.id"
+        scope_where = "AND cr.course_id = :cid"
+        scope_params["cid"] = course_id
     sql = text(
-        """
+        f"""
         SELECT c.id as chunk_id, r.id as resource_id, r.filename, r.kind, c.locator,
                snippet(resource_chunks_fts, 2, '<b>', '</b>', '...', 15) as snippet
         FROM resource_chunks_fts
         JOIN resource_chunks c ON c.id = resource_chunks_fts.chunk_id
         JOIN resources r ON r.id = c.resource_id
-        WHERE resource_chunks_fts MATCH :query
+        {scope_join}
+        WHERE resource_chunks_fts MATCH :query {scope_where}
         ORDER BY rank
         LIMIT :limit
         """
     )
-    return session.execute(sql, {"query": fts_query_str, "limit": limit}).fetchall()
+    return session.execute(
+        sql, {"query": fts_query_str, "limit": limit, **scope_params}
+    ).fetchall()
 
 
 def search_resources_fts(
-    session: Session, query: str, project_id: int | None = None, limit: int = 20
+    session: Session,
+    query: str,
+    project_id: int | None = None,
+    course_id: int | None = None,
+    limit: int = 20,
 ) -> list[dict]:
     # Clean FTS query: strip special sqlite fts operators to avoid syntax error
     safe_terms = [re.sub(r"[^\w\u4e00-\u9fff]", "", t) for t in query.split()]
@@ -223,13 +238,13 @@ def search_resources_fts(
         return []
 
     fts_query_str = " ".join(f'"{t}"' for t in safe_terms)
-    results = _run_fts_query(session, fts_query_str, project_id, limit)
+    results = _run_fts_query(session, fts_query_str, project_id, course_id, limit)
 
     if not results and CJK_RE.search(query):
         # FTS5 unicode61 tokenises each maximal CJK run as a single token, so a
         # long Chinese question quoted verbatim can never match; fall back to a
         # ranked LIKE over chunk text instead.
-        results = _like_search(session, query, project_id, limit)
+        results = _like_search(session, query, project_id, course_id, limit)
 
     def _field(row, name):
         # FTS results arrive as SQLAlchemy Rows; the LIKE fallback returns dicts.

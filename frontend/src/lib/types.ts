@@ -477,7 +477,7 @@ export type TutorMessage =
       check: null;
       ask: null;
       /** Always empty on this role; citations belong to answers, not questions. */
-      refs: { lesson_id: number; title: string }[];
+      refs: { lesson_id: number | null; title: string }[];
       model: null;
       created_at: string;
     }
@@ -528,9 +528,10 @@ export type TutorMessage =
       /**
        * Lesson citations: the lessons this answer draws on, as
        * [{lesson_id, title}]. Empty when the model cited nothing. Render as
-       * "引用：第 X 节" chips linking into the lesson.
+       * "引用：第 X 节" chips linking into the lesson. A citation of a course
+       * reference material carries lesson_id null and the file's title.
        */
-      refs: { lesson_id: number; title: string }[];
+      refs: { lesson_id: number | null; title: string }[];
       /** Which model answered, or null. Provenance lives on the usage screen. */
       model: string | null;
       created_at: string;
@@ -1093,7 +1094,8 @@ export interface SubmissionArtifactDetail {
 /** The list row: enough to choose a version without fetching its artifacts. */
 export interface SubmissionSummary {
   id: number;
-  project_id: number;
+  project_id: number | null;
+  quiz_item_id: number | null;
   exercise_id: string | null;
   version: number;
   status: SubmissionStatus;
@@ -1111,7 +1113,8 @@ export interface SubmissionList {
 
 export interface SubmissionDetail {
   id: number;
-  project_id: number;
+  project_id: number | null;
+  quiz_item_id: number | null;
   exercise_id: string | null;
   version: number;
   status: SubmissionStatus;

@@ -60,7 +60,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app import days, fsrs, generation, models, review
 from app.attempts import iso_utc
-from app.concepts import course_scope, normalize_concept
+from app.concepts import course_scope, lesson_scope, normalize_concept
 from app.metering import MeteredLLM
 from app.untrusted import as_data
 
@@ -249,10 +249,19 @@ def concept_material(
     every lesson and quiz item it holds, cut to the same budget. That is what
     lets the tutor answer "explain this course to me" without a second prompt
     shape or a second material definition.
+
+    A lesson-scoped key ("lesson:{id}") grounds in that one lesson: the lesson
+    page's Q&A answers about this lesson, not the whole course.
     """
     cid = course_scope(concept_key)
     if cid is not None:
         return trim_material(_course_lessons(session, cid))
+    lid = lesson_scope(concept_key)
+    if lid is not None:
+        lesson = session.get(models.Lesson, lid)
+        if lesson is None:
+            return [], []
+        return trim_material([(lesson, list(lesson.quiz_items))])
     return trim_material(teaching_lessons(session, concept_key))
 
 

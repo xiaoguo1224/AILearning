@@ -137,13 +137,14 @@ def test_regenerate_validates_before_streaming(client, monkeypatch):
     assert response.status_code == 422
 
 
-def test_regenerate_streams_like_generate(client, monkeypatch):
+def test_regenerate_streams_per_lesson_drafts(client, monkeypatch):
     from app import main
     from app.llm.fake_provider import FakeProvider
 
     course_id = _seed_course(client, monkeypatch)
     monkeypatch.setattr(main, "get_provider", lambda: FakeProvider())
     kinds = []
+    drafts = []
     with client.stream(
         "POST",
         f"/api/courses/{course_id}/regenerate/stream",
@@ -154,25 +155,89 @@ def test_regenerate_streams_like_generate(client, monkeypatch):
         for line in response.iter_lines():
             if line.startswith("event:"):
                 kinds.append(line[len("event:"):].strip())
-    assert kinds[0] == "outline"
-    assert kinds[-1] == "done"
-    # The regenerated course is a NEW course; the original is untouched.
-    new_id = None
-    with client.stream(
-        "POST",
-        f"/api/courses/{course_id}/regenerate/stream",
-        json={"feedback": ""},
-    ) as response:
-        for line in response.iter_lines():
             if line.startswith("data:"):
                 try:
                     data = json.loads(line[len("data:"):].strip())
                 except ValueError:
                     continue
-                if isinstance(data, dict) and "id" in data and "dropped_lessons" in data:
-                    new_id = data["id"]
-    assert new_id is not None and new_id != course_id
-    course = client.get(f"/courses/{new_id}").json()
-    assert course["title"].endswith("（重新生成）")
-    original = client.get(f"/courses/{course_id}").json()
-    assert not original["title"].endswith("（重新生成）")
+                if isinstance(data, dict) and "draft" in data:
+                    drafts.append(data)
+    assert kinds[0] == "lesson_start"
+    assert kinds[-1] == "regen_done"
+    assert drafts, "each lesson streams its draft"
+    assert all("content" in d["draft"] for d in drafts)
+    # Nothing is saved: the lessons are untouched until the learner adopts.
+    from app import models
+    from app.db import SessionLocal
+
+    with SessionLocal() as session:
+        lesson_ids = [d["lesson_id"] for d in drafts]
+        assert session.query(models.Lesson).filter(models.Lesson.id.in_(lesson_ids)).count() == len(
+            lesson_ids
+        )
+
+
+def test_lesson_regenerate_returns_an_unsaved_draft(client, monkeypatch):
+    from app import main, models
+    from app.db import SessionLocal
+    from app.llm.base import LLMResult
+    import json as _json
+
+    course_id = _seed_course(client, monkeypatch)
+    with SessionLocal() as session:
+        lesson = (
+            session.query(models.Lesson)
+            .join(models.Module)
+            .filter(models.Module.course_id == course_id)
+            .first()
+        )
+        lesson_id = lesson.id
+        original_content = lesson.content
+
+    class DraftProvider:
+        name = "fake"
+        model = "stub"
+        is_paid = False
+
+        def generate(self, system, prompt, max_tokens=64000):
+            assert "Regenerate this lesson" in prompt
+            return LLMResult(
+                text=_json.dumps(
+                    {
+                        "title": "New title",
+                        "content": "# 新内容\n\n重新写过的课时。",
+                        "concepts": ["新概念"],
+                        "quiz": [],
+                    }
+                )
+            )
+
+    monkeypatch.setattr(main, "get_provider", lambda: DraftProvider())
+    kinds: list[str] = []
+    drafts: list[dict] = []
+    with client.stream(
+        "POST", f"/api/lessons/{lesson_id}/regenerate/stream", json={"feedback": "多举例子"}
+    ) as response:
+        assert response.status_code == 200, response.text
+        assert "text/event-stream" in response.headers["content-type"]
+        for line in response.iter_lines():
+            if line.startswith("event:"):
+                kinds.append(line[len("event:"):].strip())
+            if line.startswith("data:"):
+                try:
+                    data = json.loads(line[len("data:"):].strip())
+                except ValueError:
+                    continue
+                if isinstance(data, dict) and "draft" in data:
+                    drafts.append(data)
+    assert kinds[0] == "regen_started"
+    assert kinds[-1] == "regen_done"
+    assert len(drafts) == 1
+    assert drafts[0]["lesson_id"] == lesson_id
+    assert drafts[0]["draft"]["content"] == "# 新内容\n\n重新写过的课时。"
+    assert drafts[0]["draft"]["concepts"] == ["新概念"]
+    # The draft is NOT saved.
+    with SessionLocal() as session:
+        assert session.get(models.Lesson, lesson_id).content == original_content
+
+    assert client.post("/api/lessons/999999/regenerate/stream", json={}).status_code == 404

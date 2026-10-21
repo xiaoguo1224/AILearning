@@ -1,8 +1,10 @@
+import hashlib
 import logging
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session, selectinload
 
 from app.metering import CostLimitExceeded, cost_limit_detail
@@ -16,7 +18,12 @@ from app.projects.service import (
 )
 from app.submissions.llm_review import build_context, merge_findings, review_with_model
 from app.submissions.llm_variant import draft_variant
-from app.submissions.models import CodeReview, Submission, VariantExercise
+from app.submissions.models import (
+    CodeReview,
+    Submission,
+    SubmissionArtifact,
+    VariantExercise,
+)
 from app.submissions.schemas import (
     ArtifactOut,
     CodeReviewOut,
@@ -101,6 +108,7 @@ def _detail(session: Session, submission: Submission) -> SubmissionDetail:
     return SubmissionDetail(
         id=submission.id,
         project_id=submission.project_id,
+        quiz_item_id=submission.quiz_item_id,
         exercise_id=submission.exercise_id,
         version=submission.version,
         user_note=submission.user_note,
@@ -118,6 +126,7 @@ def _summary(submission: Submission) -> SubmissionSummaryOut:
     return SubmissionSummaryOut(
         id=submission.id,
         project_id=submission.project_id,
+        quiz_item_id=submission.quiz_item_id,
         exercise_id=submission.exercise_id,
         version=submission.version,
         status=submission.status,
@@ -135,6 +144,107 @@ def _summary(submission: Submission) -> SubmissionSummaryOut:
             else None
         ),
     )
+
+
+class QuestionSubmissionInput(BaseModel):
+    """Code answering one quiz question. The question IS the exercise, so no
+    exercise_id, no log, no project — just the code."""
+
+    model_config = {"extra": "forbid"}
+
+    code: str = Field(min_length=1, max_length=200_000)
+    code_filename: str = Field(default="answer.py", max_length=200)
+    user_note: str | None = Field(default=None, max_length=2000)
+
+
+@router.post(
+    "/quiz/{item_id}/submissions",
+    response_model=SubmissionDetail,
+    status_code=201,
+)
+def create_question_submission(item_id: int, body: QuestionSubmissionInput, session: Db):
+    """Submit code answering one code question.
+
+    The submission is scoped to the question (project_id NULL, quiz_item_id set):
+    it is an answer, not a free-floating project upload. Versions count per
+    question, so re-submitting creates v2, v3, ... of this question's answers.
+    """
+    from app.models import QuizItem
+
+    item = session.get(QuizItem, item_id)
+    if not item:
+        raise HTTPException(404, "Quiz item not found")
+    if item.kind != "code":
+        raise HTTPException(422, "Only code questions accept code submissions")
+
+    artifacts = text_artifacts(
+        code_filename=body.code_filename or "answer.py",
+        code_content=body.code,
+        log_filename=None,
+        log_content=None,
+    )
+    if not artifacts:
+        raise HTTPException(422, "Provide code.")
+
+    latest = (
+        session.query(Submission.version)
+        .filter_by(quiz_item_id=item_id)
+        .order_by(Submission.version.desc())
+        .first()
+    )
+    version = (latest[0] + 1) if latest else 1
+
+    submission = Submission(
+        project_id=None,
+        quiz_item_id=item_id,
+        exercise_id=None,
+        version=version,
+        user_note=(body.user_note or "").strip() or None,
+        status="submitted",
+    )
+    session.add(submission)
+    session.flush()
+    for filename, kind, content in artifacts:
+        session.add(
+            SubmissionArtifact(
+                submission_id=submission.id,
+                filename=filename,
+                kind=kind,
+                content=content,
+                size_bytes=len(content.encode("utf-8")),
+                sha256=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+            )
+        )
+    session.commit()
+    session.refresh(submission)
+    logger.info(
+        "question_submission_created item_id=%s submission_id=%s version=%s",
+        item_id,
+        submission.id,
+        version,
+    )
+    return _detail(session, submission)
+
+
+@router.get("/quiz/{item_id}/submissions", response_model=SubmissionList)
+def list_question_submissions(
+    item_id: int,
+    session: Db,
+    limit: int = Query(default=50, le=200),
+):
+    """Version history of code submitted for one question, newest first."""
+    from app.models import QuizItem
+
+    if not session.get(QuizItem, item_id):
+        raise HTTPException(404, "Quiz item not found")
+    query = (
+        session.query(Submission)
+        .filter(Submission.quiz_item_id == item_id)
+        .order_by(Submission.version.desc())
+        .limit(limit)
+    )
+    items = [_summary(s) for s in query.all()]
+    return {"items": items, "total": len(items)}
 
 
 @router.get("/projects/{project_id}/submissions", response_model=SubmissionList)
@@ -249,7 +359,8 @@ def get_submission(submission_id: int, session: Db):
 )
 def delete_submission(submission_id: int, session: Db):
     submission = _submission_or_404(session, submission_id)
-    writable_project(session, submission.project_id)
+    if submission.project_id is not None:
+        writable_project(session, submission.project_id)
     session.delete(submission)
     session.commit()
     logger.info("submission_deleted submission_id=%s", submission_id)
@@ -392,7 +503,13 @@ def trigger_submission_review(
     if use_llm:
         # The metered call writes its own row from a separate session, so this request
         # must not be holding a SQLite transaction while it runs.
-        context = build_context(submission)
+        question = None
+        if submission.quiz_item_id is not None:
+            from app.models import QuizItem
+
+            item = session.get(QuizItem, submission.quiz_item_id)
+            question = item.question if item else None
+        context = build_context(submission, question=question)
         session.rollback()
         try:
             model_review = review_with_model(context, findings)
@@ -421,8 +538,10 @@ def trigger_submission_review(
             llm_status = "unavailable"
 
     # The write lock is taken last: everything above is analysis, and holding the lock
-    # across a model call would block the metering write.
-    writable_project(session, project_id)
+    # across a model call would block the metering write. Question-scoped submissions
+    # have no project, so there is nothing to lock.
+    if project_id is not None:
+        writable_project(session, project_id)
     submission = _submission_or_404(session, submission_id)
 
     review = CodeReview(

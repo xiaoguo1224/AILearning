@@ -89,7 +89,8 @@ class LatestReviewOut(BaseModel):
 
 class SubmissionSummaryOut(BaseModel):
     id: int
-    project_id: int
+    project_id: int | None = None
+    quiz_item_id: int | None = None
     exercise_id: str | None = None
     version: int
     status: str
@@ -112,7 +113,8 @@ class SubmissionList(BaseModel):
 class SubmissionDetail(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int
-    project_id: int
+    project_id: int | None = None
+    quiz_item_id: int | None = None
     exercise_id: str | None = None
     version: int
     user_note: str | None = None

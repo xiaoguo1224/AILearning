@@ -44,7 +44,7 @@ from app.attempts import (
     _sanitize_elapsed_ms,
     iso_utc,
 )
-from app.concepts import course_scope, normalize_concept
+from app.concepts import course_scope, lesson_scope, normalize_concept
 from app.content_reviews.router import router as content_reviews_router
 from app.course_content.router import router as course_content_router
 from app.course_quiz.router import router as course_quiz_router
@@ -957,41 +957,141 @@ class RegenerateRequest(BaseModel):
     feedback: str = Field(default="", max_length=2000)
 
 
+@app.post("/api/lessons/{lesson_id}/regenerate/stream")
+def regenerate_lesson_stream(
+    lesson_id: int, body: RegenerateRequest, session: Session = Depends(get_session)
+):
+    """Regenerate one lesson's content as an SSE stream, returning a draft that is NOT saved.
+
+    The lesson's own content is the source material; the learner's feedback is
+    threaded into the prompt. Events: regen_started {lesson_id, title},
+    regen_draft {lesson_id, draft: {title, content, concepts}}, regen_done,
+    error. The frontend previews the draft (editable) and the learner chooses
+    采用 (PATCH the lesson) or 不采用 (discard). Source intake (404/422) happens
+    before the first byte, so a missing/empty lesson fails fast instead of
+    hanging the stream.
+    """
+    from app import generation as gen
+
+    lesson = session.get(models.Lesson, lesson_id)
+    if not lesson:
+        raise HTTPException(404, "Lesson not found")
+    text = (lesson.content or "").strip()
+    if not text:
+        raise HTTPException(422, "The lesson has no text to regenerate from.")
+
+    feedback = body.feedback.strip()
+    prompt_feedback = f"\nLearner feedback: {feedback}" if feedback else ""
+    title = lesson.title
+    chunks = [f"# {title}\n\n{text}"]
+
+    def event_stream():
+        yield _sse("regen_started", {"lesson_id": lesson_id, "title": title})
+        run_id = uuid.uuid4().hex
+        meter = MeteredLLM(get_provider(), run_id)
+        try:
+            draft, _ = gen.generate_lesson_with_retry(
+                meter,
+                lesson_title=title,
+                lesson_summary=f"Regenerate this lesson.{prompt_feedback}",
+                chunks=chunks,
+            )
+        except CostLimitExceeded as exc:
+            yield _sse(
+                "error",
+                {"error": "cost_limit_exceeded", **metering.cost_limit_detail(exc)},
+            )
+            return
+        except (ValueError, LLMCallError) as exc:
+            yield _sse("error", {"error": "generation_failed", "message": str(exc)[:300]})
+            return
+        yield _sse(
+            "regen_draft",
+            {
+                "lesson_id": lesson_id,
+                "draft": {
+                    "title": title,
+                    "content": draft.get("content") or "",
+                    "concepts": draft.get("concepts") or [],
+                },
+            },
+        )
+        yield _sse("regen_done", {})
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
 @app.post("/api/courses/{course_id}/regenerate/stream")
 def regenerate_course_stream(
     course_id: int, body: RegenerateRequest, session: Session = Depends(get_session)
 ):
-    """Regenerate a course the learner is unhappy with, as an SSE stream.
+    """Regenerate a course lesson by lesson, as an SSE stream of drafts.
 
-    The course's own lessons become the source material (one chunk per lesson),
-    and the learner's feedback is threaded into the outline prompt. The event
-    shapes are identical to /courses/generate/stream, so the same progress UI
-    renders both.
+    Each lesson's own content is the source material; the learner's feedback is
+    threaded into every lesson prompt. Nothing is saved: the frontend previews
+    each draft (editable) and the learner adopts (PATCH the lesson) or discards
+    it per lesson. A regeneration that comes out worse costs nothing but the run.
 
-    The result is saved as a NEW course titled "<old>（重新生成）": the original
-    is never touched, so a regeneration that comes out worse costs nothing but
-    the run. Source intake (404/422) still happens before the first byte.
+    Events: lesson_start {lesson_id, title, index, total}, lesson_draft
+    {lesson_id, draft: {title, content, concepts}}, lesson_failed {lesson_id,
+    error}, done. Source intake (404/422) still happens before the first byte.
     """
+    from app import generation as gen
+
     course = session.get(models.Course, course_id)
     if not course:
         raise HTTPException(404, "Course not found")
-    chunks: list[str] = []
+    lessons: list[models.Lesson] = []
     for module in sorted(course.modules, key=lambda m: (m.position, m.id)):
         for lesson in sorted(module.lessons, key=lambda l: (l.position, l.id)):
-            text = (lesson.content or "").strip()
-            if text:
-                chunks.append(f"# {lesson.title}\n\n{text}")
-    if not chunks:
+            if (lesson.content or "").strip():
+                lessons.append(lesson)
+    if not lessons:
         raise HTTPException(422, "The course has no lesson text to regenerate from.")
 
+    feedback = body.feedback.strip()
+    prompt_feedback = f"\nLearner feedback: {feedback}" if feedback else ""
+    total = len(lessons)
+
     def event_stream():
-        yield from _stream_course_events(
-            chunks,
-            [course.title or "course"],
-            session,
-            outline_feedback=body.feedback,
-            title_suffix="（重新生成）",
-        )
+        run_id = uuid.uuid4().hex
+        meter = MeteredLLM(get_provider(), run_id, course_id=course.id)
+        for index, lesson in enumerate(lessons):
+            yield _sse(
+                "lesson_start",
+                {"lesson_id": lesson.id, "title": lesson.title, "index": index, "total": total},
+            )
+            try:
+                draft, _ = gen.generate_lesson_with_retry(
+                    meter,
+                    lesson_title=lesson.title,
+                    lesson_summary=f"Regenerate this lesson.{prompt_feedback}",
+                    chunks=[f"# {lesson.title}\n\n{lesson.content.strip()}"],
+                )
+            except CostLimitExceeded as exc:
+                yield _sse(
+                    "error",
+                    {"error": "cost_limit_exceeded", **metering.cost_limit_detail(exc)},
+                )
+                return
+            except (ValueError, LLMCallError) as exc:
+                yield _sse(
+                    "regen_lesson_failed",
+                    {"lesson_id": lesson.id, "error": str(exc)[:300]},
+                )
+                continue
+            yield _sse(
+                "lesson_draft",
+                {
+                    "lesson_id": lesson.id,
+                    "draft": {
+                        "title": lesson.title,
+                        "content": draft.get("content") or "",
+                        "concepts": draft.get("concepts") or [],
+                    },
+                },
+            )
+        yield _sse("regen_done", {})
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -2149,7 +2249,7 @@ def post_tutor_message(body: TutorQuestion, session: Session = Depends(get_sessi
         raise _tutor_invalid("invalid_mode", INVALID_MODE_MESSAGE)
 
     now = review.now_utc()
-    context = tutor.context(session, concept_key, now=now)
+    context = tutor.context(session, concept_key, now=now, question=message)
     if not context.lessons and not context.items:
         raise _tutor_invalid("no_material", NO_MATERIAL_MESSAGE)
 
@@ -2178,8 +2278,18 @@ def post_tutor_message(body: TutorQuestion, session: Session = Depends(get_sessi
     if scoped_course is not None:
         meter_course_id = scoped_course
     else:
-        matches = remediation.teaching_lessons(session, concept_key)
-        meter_course_id = remediation.sole_course_id(session, matches)
+        scoped_lesson = lesson_scope(concept_key)
+        if scoped_lesson is not None:
+            lesson_row = session.get(models.Lesson, scoped_lesson)
+            module_row = (
+                session.get(models.Module, lesson_row.module_id)
+                if lesson_row is not None
+                else None
+            )
+            meter_course_id = module_row.course_id if module_row else None
+        else:
+            matches = remediation.teaching_lessons(session, concept_key)
+            meter_course_id = remediation.sole_course_id(session, matches)
     meter = MeteredLLM(provider, run_id, course_id=meter_course_id)
     prompt = tutor.build_prompt(context, tutor.history(session, concept_key), message)
 
@@ -2199,6 +2309,7 @@ def post_tutor_message(body: TutorQuestion, session: Session = Depends(get_sessi
             meter.generate(tutor.TUTOR_STAGE, system, prompt, tutor.MAX_TOKENS),
             mode,
             lessons=context.lessons,
+            resources=context.resource_hits,
         )
     except CostLimitExceeded as exc:
         raise _cost_limit_exceeded(exc) from exc

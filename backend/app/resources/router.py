@@ -14,7 +14,8 @@ from app.projects.service import (
     project_session,
     writable_project,
 )
-from app.resources.models import ProjectResource, Resource
+from app import models as core_models
+from app.resources.models import CourseResource, ProjectResource, Resource
 from app.resources.parser import (
     parse_docx_chunks,
     parse_markdown_or_text_chunks,
@@ -49,6 +50,102 @@ ALLOWED_EXTENSIONS = {
     ".markdown": "markdown",
     ".txt": "text",
 }
+
+
+def _ingest_upload(session: Session, filename: str, data: bytes) -> Resource:
+    """Parse bytes into a Resource row with chunks. The caller links it."""
+    ext = Path(filename).suffix.lower()
+    sha256 = hashlib.sha256(data).hexdigest()
+    kind = ALLOWED_EXTENSIONS[ext]
+    target_path = get_resource_file_path(sha256, ext)
+    if not target_path.exists():
+        target_path.write_bytes(data)
+
+    resource = session.query(Resource).filter_by(sha256=sha256).first()
+    if not resource:
+        resource = Resource(
+            filename=filename,
+            kind=kind,
+            path=str(target_path),
+            sha256=sha256,
+            parse_status="pending",
+        )
+        session.add(resource)
+        session.flush()
+        try:
+            if kind == "pdf":
+                chunks = parse_pdf_chunks(data)
+            elif kind == "docx":
+                chunks = parse_docx_chunks(data)
+            else:
+                chunks = parse_markdown_or_text_chunks(data.decode("utf-8", errors="replace"))
+            save_chunks_and_sync_fts(session, resource, chunks)
+            resource.parse_status = "completed"
+        except (OSError, ValueError, RuntimeError, Exception) as exc:  # noqa: BLE001
+            logger.error("Failed to parse resource %s: %s", resource.id, exc)
+            resource.parse_status = "failed"
+            resource.error_message = str(exc)
+        session.commit()
+    return resource
+
+
+def _ingest_text(session: Session, title: str, content: str, kind: str) -> Resource:
+    """Parse pasted text into a Resource row with chunks. The caller links it."""
+    raw_bytes = content.encode("utf-8")
+    sha256 = hashlib.sha256(raw_bytes).hexdigest()
+    ext = ".md" if kind == "markdown" else ".txt"
+    target_path = get_resource_file_path(sha256, ext)
+    if not target_path.exists():
+        target_path.write_bytes(raw_bytes)
+
+    resource = Resource(
+        filename=title.strip(),
+        kind=kind,
+        path=str(target_path),
+        sha256=sha256,
+        parse_status="pending",
+    )
+    session.add(resource)
+    session.flush()
+    try:
+        chunks = parse_markdown_or_text_chunks(content)
+        save_chunks_and_sync_fts(session, resource, chunks)
+        resource.parse_status = "completed"
+    except (OSError, ValueError, RuntimeError, Exception) as exc:  # noqa: BLE001
+        logger.error("Failed to parse text resource %s: %s", resource.id, exc)
+        resource.parse_status = "failed"
+        resource.error_message = str(exc)
+    session.commit()
+    return resource
+
+
+def _ingest_url(session: Session, url: str, title: str) -> Resource:
+    """Fetch a URL into a Resource row with chunks. The caller links it."""
+    resource = Resource(
+        filename=title,
+        kind="url",
+        source_url=url,
+        parse_status="pending",
+    )
+    session.add(resource)
+    session.flush()
+    try:
+        chunks = parse_url_chunks(url)
+        save_chunks_and_sync_fts(session, resource, chunks)
+        resource.parse_status = "completed"
+    except (OSError, ValueError, RuntimeError, Exception) as exc:  # noqa: BLE001
+        logger.error("Failed to parse URL resource %s: %s", resource.id, exc)
+        resource.parse_status = "failed"
+        resource.error_message = str(exc)
+    session.commit()
+    return resource
+
+
+def _course_or_404(session: Session, course_id: int) -> core_models.Course:
+    course = session.get(core_models.Course, course_id)
+    if not course:
+        raise project_error(404, "course_not_found", "Course not found.")
+    return course
 
 
 @router.get("/projects/{project_id}/resources", response_model=list[ResourceOut])
@@ -91,40 +188,7 @@ async def upload_resource(
     if not data:
         raise project_error(422, "empty_file", "File is empty")
 
-    sha256 = hashlib.sha256(data).hexdigest()
-    kind = ALLOWED_EXTENSIONS[ext]
-    target_path = get_resource_file_path(sha256, ext)
-    if not target_path.exists():
-        target_path.write_bytes(data)
-
-    # Check if resource already exists by sha256
-    resource = session.query(Resource).filter_by(sha256=sha256).first()
-    if not resource:
-        resource = Resource(
-            filename=filename,
-            kind=kind,
-            path=str(target_path),
-            sha256=sha256,
-            parse_status="pending",
-        )
-        session.add(resource)
-        session.flush()
-
-        try:
-            if kind == "pdf":
-                chunks = parse_pdf_chunks(data)
-            elif kind == "docx":
-                chunks = parse_docx_chunks(data)
-            else:
-                chunks = parse_markdown_or_text_chunks(data.decode("utf-8", errors="replace"))
-
-            save_chunks_and_sync_fts(session, resource, chunks)
-            resource.parse_status = "completed"
-        except (OSError, ValueError, RuntimeError, Exception) as exc:  # noqa: BLE001
-            logger.error("Failed to parse resource %s: %s", resource.id, exc)
-            resource.parse_status = "failed"
-            resource.error_message = str(exc)
-        session.commit()
+    resource = _ingest_upload(session, filename, data)
 
     # Link to project if not already linked
     pr_link = (
@@ -151,23 +215,7 @@ def add_url_resource(project_id: int, body: AddUrlResourceInput, session: Db):
     url = body.url.strip()
     title = body.title.strip() if body.title else url
 
-    resource = Resource(
-        filename=title,
-        kind="url",
-        source_url=url,
-        parse_status="pending",
-    )
-    session.add(resource)
-    session.flush()
-
-    try:
-        chunks = parse_url_chunks(url)
-        save_chunks_and_sync_fts(session, resource, chunks)
-        resource.parse_status = "completed"
-    except (OSError, ValueError, RuntimeError, Exception) as exc:  # noqa: BLE001
-        logger.error("Failed to parse URL resource %s: %s", resource.id, exc)
-        resource.parse_status = "failed"
-        resource.error_message = str(exc)
+    resource = _ingest_url(session, url, title)
 
     session.add(ProjectResource(project_id=project.id, resource_id=resource.id))
     session.commit()
@@ -182,31 +230,7 @@ def add_url_resource(project_id: int, body: AddUrlResourceInput, session: Db):
 )
 def add_text_resource(project_id: int, body: AddTextResourceInput, session: Db):
     project = writable_project(session, project_id)
-    raw_bytes = body.content.encode("utf-8")
-    sha256 = hashlib.sha256(raw_bytes).hexdigest()
-    ext = ".md" if body.kind == "markdown" else ".txt"
-    target_path = get_resource_file_path(sha256, ext)
-    if not target_path.exists():
-        target_path.write_bytes(raw_bytes)
-
-    resource = Resource(
-        filename=body.title.strip(),
-        kind=body.kind,
-        path=str(target_path),
-        sha256=sha256,
-        parse_status="pending",
-    )
-    session.add(resource)
-    session.flush()
-
-    try:
-        chunks = parse_markdown_or_text_chunks(body.content)
-        save_chunks_and_sync_fts(session, resource, chunks)
-        resource.parse_status = "completed"
-    except (OSError, ValueError, RuntimeError, Exception) as exc:  # noqa: BLE001
-        logger.error("Failed to parse text resource %s: %s", resource.id, exc)
-        resource.parse_status = "failed"
-        resource.error_message = str(exc)
+    resource = _ingest_text(session, body.title.strip(), body.content, body.kind)
 
     session.add(ProjectResource(project_id=project.id, resource_id=resource.id))
     session.commit()
@@ -253,8 +277,9 @@ def unlink_or_delete_resource(project_id: int, resource_id: int, session: Db):
     session.delete(pr_link)
     session.flush()
 
-    # Check remaining references across all projects
+    # Check remaining references across all projects and courses
     remaining = session.query(ProjectResource).filter_by(resource_id=resource_id).count()
+    remaining += session.query(CourseResource).filter_by(resource_id=resource_id).count()
     deleted_permanently = False
     if remaining == 0:
         # No more projects reference this resource, clean up chunks and FTS
@@ -281,3 +306,143 @@ def search_project_resources(
 ):
     get_project(session, project_id)
     return search_resources_fts(session, q, project_id=project_id)
+
+
+# ---------------------------------------------------------------------------
+# Course resources: a course owns its reference material the way a project
+# does. The project is a container; the course is where learning happens, so
+# this is where the materials a learner cites live.
+# ---------------------------------------------------------------------------
+
+
+@router.get("/courses/{course_id}/resources", response_model=list[ResourceOut])
+def list_course_resources(course_id: int, session: Db):
+    _course_or_404(session, course_id)
+    links = (
+        session.query(Resource)
+        .join(CourseResource, CourseResource.resource_id == Resource.id)
+        .filter(CourseResource.course_id == course_id)
+        .order_by(Resource.id.desc())
+        .all()
+    )
+    return links
+
+
+@router.post(
+    "/courses/{course_id}/resources/upload",
+    response_model=ResourceDetail,
+    status_code=201,
+    dependencies=MUTATION,
+)
+async def upload_course_resource(
+    course_id: int, session: Db, file: UploadFile = File(...)
+):
+    _course_or_404(session, course_id)
+    filename = Path(file.filename or "unknown").name
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise project_error(
+            422,
+            "unsupported_file_type",
+            f"Unsupported file extension: {ext}. Allowed: {list(ALLOWED_EXTENSIONS.keys())}",
+        )
+
+    data = await file.read()
+    if len(data) > MAX_FILE_BYTES:
+        raise project_error(
+            422, "file_too_large", f"File exceeds maximum allowed size of {MAX_FILE_BYTES} bytes"
+        )
+    if not data:
+        raise project_error(422, "empty_file", "File is empty")
+
+    resource = _ingest_upload(session, filename, data)
+
+    if not (
+        session.query(CourseResource)
+        .filter_by(course_id=course_id, resource_id=resource.id)
+        .first()
+    ):
+        session.add(CourseResource(course_id=course_id, resource_id=resource.id))
+        session.commit()
+    return resource
+
+
+@router.post(
+    "/courses/{course_id}/resources/text",
+    response_model=ResourceDetail,
+    status_code=201,
+    dependencies=MUTATION,
+)
+def add_course_text_resource(course_id: int, body: AddTextResourceInput, session: Db):
+    _course_or_404(session, course_id)
+    resource = _ingest_text(session, body.title.strip(), body.content, body.kind)
+    session.add(CourseResource(course_id=course_id, resource_id=resource.id))
+    session.commit()
+    return resource
+
+
+@router.post(
+    "/courses/{course_id}/resources/url",
+    response_model=ResourceDetail,
+    status_code=201,
+    dependencies=MUTATION,
+)
+def add_course_url_resource(course_id: int, body: AddUrlResourceInput, session: Db):
+    _course_or_404(session, course_id)
+    url = body.url.strip()
+    title = body.title.strip() if body.title else url
+    resource = _ingest_url(session, url, title)
+    session.add(CourseResource(course_id=course_id, resource_id=resource.id))
+    session.commit()
+    return resource
+
+
+@router.delete(
+    "/courses/{course_id}/resources/{resource_id}", status_code=200, dependencies=MUTATION
+)
+def unlink_course_resource(course_id: int, resource_id: int, session: Db):
+    _course_or_404(session, course_id)
+    res = session.get(Resource, resource_id)
+    if not res:
+        raise project_error(404, "resource_not_found", "Resource not found.")
+
+    cr_link = (
+        session.query(CourseResource)
+        .filter_by(course_id=course_id, resource_id=resource_id)
+        .first()
+    )
+    if not cr_link:
+        raise project_error(
+            404, "resource_not_in_course", "Resource is not linked to this course."
+        )
+
+    session.delete(cr_link)
+    session.flush()
+
+    remaining = session.query(ProjectResource).filter_by(resource_id=resource_id).count()
+    remaining += session.query(CourseResource).filter_by(resource_id=resource_id).count()
+    deleted_permanently = False
+    if remaining == 0:
+        remove_fts_resource(session, resource_id)
+        if res.path and Path(res.path).exists():
+            try:
+                Path(res.path).unlink(missing_ok=True)
+            except OSError as e:
+                logger.warning("Could not delete file %s: %s", res.path, e)
+        session.delete(res)
+        deleted_permanently = True
+
+    session.commit()
+    return {
+        "status": "success",
+        "resource_id": resource_id,
+        "deleted_permanently": deleted_permanently,
+    }
+
+
+@router.get("/courses/{course_id}/resources/search", response_model=list[ResourceSearchResult])
+def search_course_resources(
+    course_id: int, session: Db, q: str = Query(..., min_length=1)
+):
+    _course_or_404(session, course_id)
+    return search_resources_fts(session, q, course_id=course_id)

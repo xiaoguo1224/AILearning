@@ -43,7 +43,12 @@ export default async function SubmissionDetailPage({
     error = err instanceof ApiError ? err.message : t("Could not reach the server. Is the backend running?");
   }
 
-  if (detail && detail.exercise_id) {
+  if (detail?.project_id === null) {
+    // Question-scoped submissions live on the code-question detail page.
+    notFound();
+  }
+
+  if (detail && detail.exercise_id && detail.project_id !== null) {
     try {
       history = await listProjectSubmissions(
         detail.project_id,

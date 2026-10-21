@@ -509,7 +509,12 @@ export type GenerationStreamEvent =
   | { type: "lesson"; module_index: number; lesson_index: number; lesson: StreamLesson }
   | { type: "lesson_failed"; module_index: number; lesson_index: number; title: string }
   | { type: "done"; id: number; title: string; usage: GenerateResult["usage"] }
-  | { type: "error"; error: string; message?: string };
+  | { type: "error"; error: string; message?: string }
+  // Course regeneration streams per-lesson drafts (nothing is saved).
+  | { type: "lesson_start"; lesson_id: number; title: string; index: number; total: number }
+  | { type: "lesson_draft"; lesson_id: number; draft: LessonDraft }
+  | { type: "regen_lesson_failed"; lesson_id: number; error: string }
+  | { type: "regen_done" };
 
 /**
  * Open the streaming generation route and yield its events as they arrive.
@@ -603,6 +608,75 @@ async function* readSseEvents(
  * Regenerate an unsatisfactory course with the learner's feedback, as the same
  * event stream the generate route emits, so GenerationProgress renders both.
  */
+export interface LessonDraft {
+  title: string;
+  content: string;
+  concepts: string[];
+}
+
+export type LessonRegenEvent =
+  | { type: "regen_started"; lesson_id: number; title: string }
+  | { type: "regen_draft"; lesson_id: number; draft: LessonDraft }
+  | { type: "regen_done" }
+  | { type: "error"; error: string; message?: string };
+
+/**
+ * Regenerate one lesson as an SSE stream. The draft is NOT saved; the caller
+ * previews it and the learner adopts or discards it.
+ */
+export async function* streamLessonRegeneration(
+  lessonId: number,
+  feedback: string,
+  init?: { signal?: AbortSignal },
+): AsyncGenerator<LessonRegenEvent> {
+  const res = await localizedFetch(`/api/lessons/${lessonId}/regenerate/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ feedback }),
+    signal: init?.signal,
+  });
+  if (!res.ok) {
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      // Non-JSON body, so the status has to carry the meaning on its own.
+    }
+    const fallback = res.statusText || `Request failed with status ${res.status}`;
+    throw new ApiError(
+      res.status,
+      messageFromErrorBody(body, fallback, COST_LIMIT_CONSEQUENCE.generate),
+    );
+  }
+  if (!res.body) return;
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let kind = "";
+  let data = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    let newline: number;
+    while ((newline = buffer.indexOf("\n")) >= 0) {
+      const line = buffer.slice(0, newline).replace(/\r$/, "");
+      buffer = buffer.slice(newline + 1);
+      if (line.startsWith("event:")) kind = line.slice(6).trim();
+      else if (line.startsWith("data:")) data += (data ? "\n" : "") + line.slice(5).replace(/^\s/, "");
+      else if (line === "" && kind) {
+        try {
+          yield { type: kind, ...JSON.parse(data) } as LessonRegenEvent;
+        } catch {
+          // Truncated frame; the stream's own error/done still reports the outcome.
+        }
+        kind = "";
+        data = "";
+      }
+    }
+  }
+}
+
 export async function* streamCourseRegeneration(
   courseId: number,
   feedback: string,
@@ -1126,6 +1200,36 @@ export function addTextResource(projectId: number, title: string, content: strin
 export function deleteProjectResource(projectId: number, resourceId: number): Promise<{ status: string; deleted_permanently: boolean }> {
   return request(`/api/projects/${projectId}/resources/${resourceId}`, { method: "DELETE" });
 }
+
+export function listCourseResources(courseId: number, locale?: Locale): Promise<ResourceSummary[]> {
+  return get(`/api/courses/${courseId}/resources`, locale);
+}
+export function addCourseUrlResource(courseId: number, url: string, title?: string): Promise<ResourceDetail> {
+  return postJson(`/api/courses/${courseId}/resources/url`, { url, title });
+}
+export function addCourseTextResource(courseId: number, title: string, content: string, kind: "markdown" | "text" = "markdown"): Promise<ResourceDetail> {
+  return postJson(`/api/courses/${courseId}/resources/text`, { title, content, kind });
+}
+export function deleteCourseResource(courseId: number, resourceId: number): Promise<{ status: string; deleted_permanently: boolean }> {
+  return request(`/api/courses/${courseId}/resources/${resourceId}`, { method: "DELETE" });
+}
+export async function uploadCourseResource(courseId: number, file: File): Promise<ResourceDetail> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await localizedFetch(`${BASE_URL}/api/courses/${courseId}/resources/upload`, {
+    method: "POST",
+    body: form,
+  });
+  if (!res.ok) {
+    let msg = `Upload failed (${res.status})`;
+    try {
+      const data = await res.json();
+      if (data?.detail?.message) msg = data.detail.message;
+    } catch {}
+    throw new ApiError(res.status, msg);
+  }
+  return res.json() as Promise<ResourceDetail>;
+}
 export async function uploadProjectResource(projectId: number, file: File): Promise<ResourceDetail> {
   const form = new FormData();
   form.append("file", file);
@@ -1220,6 +1324,21 @@ export async function uploadSubmission(
  * pass, which may spend provider quota and may come back `unavailable`; the static pass
  * is free and always available. Neither runs the learner's code.
  */
+export function getQuizItem(itemId: number, locale?: Locale): Promise<QuizBankItem> {
+  return get(`/api/quiz/${itemId}`, locale);
+}
+
+export function createQuestionSubmission(
+  itemId: number,
+  code: string,
+): Promise<SubmissionDetail> {
+  return postJson(`/api/quiz/${itemId}/submissions`, { code });
+}
+
+export function listQuestionSubmissions(itemId: number, locale?: Locale): Promise<SubmissionList> {
+  return get(`/api/quiz/${itemId}/submissions`, locale);
+}
+
 export function triggerCodeReview(submissionId: number, useLlm = false): Promise<CodeReviewSummary> {
   return request(`/api/submissions/${submissionId}/review?use_llm=${useLlm ? "true" : "false"}`, {
     method: "POST",

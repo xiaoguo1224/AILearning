@@ -524,6 +524,7 @@ def test_upgrade_adds_the_tutor_and_explicit_project_tables(databases):
         "project_courses",
         "resources",
         "project_resources",
+        "course_resources",
         "resource_chunks",
         "submissions",
         "submission_artifacts",

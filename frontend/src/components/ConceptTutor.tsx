@@ -166,10 +166,11 @@ function TutorReply({
             </span>
             {message.refs.map((ref) => (
               <span
-                key={ref.lesson_id}
+                key={ref.lesson_id ?? `resource-${ref.title}`}
+                title={ref.lesson_id === null ? t("Reference material") : undefined}
                 className="rounded-full border border-line bg-surface px-2.5 py-0.5 text-small text-ink-muted"
               >
-                {ref.title}
+                {ref.lesson_id === null ? `📄 ${ref.title}` : ref.title}
               </span>
             ))}
           </div>

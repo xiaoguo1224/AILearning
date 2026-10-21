@@ -232,7 +232,7 @@ export function CourseQuizSection({ courseId }: { courseId: number }) {
   }, [bank]);
 
   return (
-    <section aria-label={t("Questions")} className="mt-6 rounded-surface bg-surface p-6 shadow-raise sm:p-8">
+    <section aria-label={t("Questions")} className="rounded-surface bg-surface p-6 shadow-raise sm:p-8">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
@@ -276,6 +276,7 @@ export function CourseQuizSection({ courseId }: { courseId: number }) {
                     <QuizSection
                       quiz={lesson.items.map(toQuizItem)}
                       progress={progress}
+                      courseId={courseId}
                       renderItemAction={(item) => (
                         <VariantButton
                           courseId={bank.course_id}

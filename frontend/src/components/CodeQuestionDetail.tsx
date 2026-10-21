@@ -1,0 +1,242 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
+import { useI18n } from "@/components/LocaleProvider";
+import { QuizMarkdown } from "@/components/QuizMarkdown";
+import { SubmissionReviewPanel } from "@/components/SubmissionReviewPanel";
+import { Badge } from "@/components/ui/Badge";
+import { Button } from "@/components/ui/Button";
+import { ErrorState } from "@/components/ui/ErrorState";
+import { PageHeader } from "@/components/ui/PageHeader";
+import {
+  ApiError,
+  createQuestionSubmission,
+  getSubmission,
+  listQuestionSubmissions,
+} from "@/lib/api";
+import type { QuizBankItem } from "@/lib/api";
+import type { SubmissionDetail, SubmissionSummary } from "@/lib/types";
+
+type Tab = "question" | "answer" | "review" | "history";
+
+/**
+ * Code question detail: the question, the answer editor, the AI review, and
+ * the submission history live on separate tabs — the submission page's shape,
+ * adapted for answering a question rather than a free-floating upload.
+ */
+export function CodeQuestionDetail({
+  courseId,
+  item,
+}: {
+  courseId: number;
+  item: QuizBankItem;
+}) {
+  const { t } = useI18n();
+  const [tab, setTab] = useState<Tab>("question");
+  const [code, setCode] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [history, setHistory] = useState<SubmissionSummary[]>([]);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selected, setSelected] = useState<SubmissionDetail | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  async function refreshHistory(selectId: number | null) {
+    try {
+      const list = await listQuestionSubmissions(item.id);
+      setHistory(list.items);
+      const nextId = selectId ?? list.items[0]?.id ?? null;
+      setSelectedId(nextId);
+      if (nextId !== null) {
+        try {
+          setSelected(await getSubmission(nextId));
+        } catch {
+          setSelected(null);
+        }
+      } else {
+        setSelected(null);
+      }
+    } catch {
+      // History is a convenience; the question still renders.
+    } finally {
+      setLoadingHistory(false);
+    }
+  }
+
+  async function selectSubmission(id: number) {
+    setSelectedId(id);
+    try {
+      setSelected(await getSubmission(id));
+    } catch {
+      setSelected(null);
+    }
+  }
+
+  useEffect(() => {
+    void refreshHistory(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id]);
+
+  async function submit() {
+    if (!code.trim() || submitting) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const detail = await createQuestionSubmission(item.id, code);
+      setCode("");
+      await refreshHistory(detail.id);
+      setTab("review");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : t("Could not reach the server."));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const tabs: { id: Tab; label: string }[] = [
+    { id: "question", label: t("Question") },
+    { id: "answer", label: t("Answer") },
+    { id: "review", label: t("Review") },
+    { id: "history", label: t("History") },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <Link
+        href={`/courses/${courseId}`}
+        className="text-small text-accent underline"
+      >
+        {t("Back to course")}
+      </Link>
+
+      <PageHeader
+        title={t("Code question")}
+        description={item.concept || undefined}
+      />
+
+      <div role="tablist" aria-label={t("Code question")} className="flex gap-1 border-b border-line">
+        {tabs.map((tabItem) => (
+          <button
+            key={tabItem.id}
+            role="tab"
+            aria-selected={tab === tabItem.id}
+            onClick={() => setTab(tabItem.id)}
+            className={`px-4 py-2 text-small font-medium transition-colors ${
+              tab === tabItem.id
+                ? "border-b-2 border-accent text-ink"
+                : "text-ink-muted hover:text-ink"
+            }`}
+          >
+            {tabItem.label}
+            {tabItem.id === "history" && history.length > 0 && (
+              <span className="ml-1 text-micro text-ink-muted">({history.length})</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {tab === "question" && (
+        <section className="rounded-surface border border-line p-6">
+          <QuizMarkdown content={item.question} />
+        </section>
+      )}
+
+      {tab === "answer" && (
+        <section className="space-y-4">
+          {error && <ErrorState message={error} />}
+          <textarea
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            rows={14}
+            disabled={submitting}
+            placeholder={t("Write your code here…")}
+            aria-label={t("Your code")}
+            className="block w-full rounded-control border border-line-strong bg-surface px-3 py-2 font-mono text-small"
+          />
+          <div className="flex justify-end">
+            <Button disabled={submitting || !code.trim()} onClick={() => void submit()}>
+              {submitting ? t("Submitting…") : t("Submit for review")}
+            </Button>
+          </div>
+          <p className="text-small text-ink-muted">
+            {t("The AI reviews your code against this question. Nothing runs on the server.")}
+          </p>
+        </section>
+      )}
+
+      {tab === "review" && (
+        <section className="space-y-4">
+          {loadingHistory ? (
+            <p className="text-small text-ink-muted">{t("Loading…")}</p>
+          ) : selected ? (
+            <>
+              <div className="flex items-center gap-2">
+                <Badge tone={selected.status === "reviewed" ? "success" : "neutral"}>
+                  {t("v{0}", selected.version)}
+                </Badge>
+                <span className="text-small text-ink-muted">
+                  {t(selected.status === "reviewed" ? "Reviewed" : "Submitted")}
+                </span>
+              </div>
+              {selected.artifacts.map((artifact) => (
+                <div key={artifact.id} className="rounded-surface border border-line p-4">
+                  <p className="font-mono text-small text-ink">{artifact.filename}</p>
+                  <pre className="mt-2 max-h-96 overflow-auto rounded-control bg-surface-sunken p-3 font-mono text-small">
+                    {artifact.content}
+                  </pre>
+                </div>
+              ))}
+              <SubmissionReviewPanel
+                submissionId={selected.id}
+                initialReviews={selected.reviews}
+              />
+            </>
+          ) : (
+            <p className="text-small text-ink-muted">
+              {t("No submissions yet. Write your code on the Answer tab.")}
+            </p>
+          )}
+        </section>
+      )}
+
+      {tab === "history" && (
+        <section>
+          {loadingHistory ? (
+            <p className="text-small text-ink-muted">{t("Loading…")}</p>
+          ) : history.length === 0 ? (
+            <p className="text-small text-ink-muted">{t("No submissions yet.")}</p>
+          ) : (
+            <ul className="divide-y divide-line rounded-surface border border-line">
+              {history.map((entry) => (
+                <li key={entry.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void selectSubmission(entry.id);
+                      setTab("review");
+                    }}
+                    className={`flex w-full items-center justify-between gap-3 p-3 text-left text-small transition-colors hover:bg-surface-sunken ${
+                      entry.id === selectedId ? "bg-surface-sunken" : ""
+                    }`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <Badge tone={entry.id === selectedId ? "success" : "neutral"}>
+                        {t("v{0}", entry.version)}
+                      </Badge>
+                      <span className="text-ink-muted">{entry.status}</span>
+                    </span>
+                    <span className="text-micro text-ink-muted">
+                      {new Date(entry.created_at).toLocaleString()}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
