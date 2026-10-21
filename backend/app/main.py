@@ -889,7 +889,6 @@ def generate_job(body: GenerateRequest, session: Session = Depends(get_session))
                     s.add(
                         _m.Lesson(
                             module_id=mod.id,
-                            course_id=course.id,
                             title=lesson.get("title", stub.get("title", "Lesson")),
                             content=lesson.get("content", ""),
                             concepts=lesson.get("concepts", []),

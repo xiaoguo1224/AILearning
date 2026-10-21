@@ -1747,8 +1747,9 @@ export function generateCourseOutline(
   topic: string,
   sources?: { type: string; content: string }[],
   feedback?: string,
+  difficulty?: number,
 ): Promise<{ outline: CourseOutline }> {
-  return postJson("/api/courses/outline/generate", { topic, sources, feedback });
+  return postJson("/api/courses/outline/generate", { topic, sources, feedback, difficulty });
 }
 
 export function reviseCourseOutline(
