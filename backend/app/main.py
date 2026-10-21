@@ -1100,30 +1100,7 @@ def uncomplete_lesson(lesson_id: int, session: Session = Depends(get_session)):
     return _completion_state(lesson)
 
 
-def _card_payload(
-    row: models.ReviewCard, item: models.QuizItem | None, now: datetime
-) -> dict:
-    """One queue entry: the card, the question to ask, and the four button intervals."""
-    return {
-        "card_id": row.id,
-        "concept_key": row.concept_key,
-        "concept_label": row.concept_label,
-        "state": row.state,
-        "due": iso_utc(row.due),
-        "lapses": row.lapses,
-        "retrievability": review.card_retrievability(row, now),
-        "preview": review.preview(row, now),
-        # No answer key: the learner has not answered yet, and the whole point of a
-        # review is that they retrieve it rather than recognize it.
-        "item": None
-        if item is None
-        else {
-            "id": item.id,
-            "question": item.question,
-            "kind": item.kind,
-            "options": item.options,
-        },
-    }
+_card_payload = review.card_payload
 
 
 @app.get("/review/today")

@@ -19,6 +19,7 @@ refused, and it is the most useful state the table has: a mistake with nowhere t
 the clearest possible statement that a note is missing.
 """
 
+import json
 import logging
 from datetime import datetime
 
@@ -39,9 +40,10 @@ from app.knowledge.models import (
     KnowledgeEntry,
     ProjectKnowledge,
 )
-from app.models import Attempt, Lesson, Module, ReviewCard, ReviewLog, utcnow
+from app.models import Attempt, Lesson, Module, QuizItem, ReviewCard, ReviewLog, utcnow
 from app.projects.models import ProjectCourse
 from app.projects.service import project_error, writable_project
+from app.submissions.models import CodeReview, Submission
 
 logger = logging.getLogger("studyforge.knowledge.errors")
 
@@ -239,6 +241,48 @@ def from_attempt(
         detail=detail,
         _validated_source=True,
     )
+
+
+def from_review(
+    session: Session, project_id: int, *, review_id: int, finding_index: int,
+    concept_key: str, cause: str | None = None, note: str = "",
+) -> ErrorCause:
+    review_row = session.get(CodeReview, review_id)
+    submission = session.get(Submission, review_row.submission_id) if review_row else None
+    if submission is None or submission.project_id != project_id:
+        raise project_error(404, "review_not_found", "Review not found in this project.")
+    findings = review_row.findings or []
+    if finding_index < 0 or finding_index >= len(findings):
+        raise project_error(422, "finding_not_found", "That finding does not exist.")
+    finding = findings[finding_index]
+    if finding.get("severity") == "info" or finding.get("evidence_type") == "needs_local_check":
+        raise project_error(422, "not_a_diagnosis", "Choose an error or warning with evidence.")
+    # Concept selection is the learner's mapping; the finding snapshot is server-owned.
+    detail = json.dumps({"review_id": review_id, "finding_index": finding_index,
+                         "finding": finding}, ensure_ascii=False)
+    return record(session, project_id, concept_key=concept_key, cause=cause, note=note,
+                  source_kind="submission", source_id=submission.id, detail=detail,
+                  _validated_source=True)
+
+
+def practice_queue(session: Session, project_id: int, concept_key: str) -> dict:
+    from app import review
+
+    key = normalize_concept(concept_key)
+    if not any(task["concept_key"] == key for task in tasks(session, project_id)):
+        raise project_error(404, "task_not_found", "No open review task for this concept.")
+    card = session.query(ReviewCard).filter_by(concept_key=key).one_or_none()
+    candidates = (
+        session.query(QuizItem).join(Lesson, QuizItem.lesson_id == Lesson.id)
+        .join(Module, Lesson.module_id == Module.id)
+        .join(ProjectCourse, ProjectCourse.course_id == Module.course_id)
+        .filter(ProjectCourse.project_id == project_id).all()
+    )
+    items = [item for item in candidates if normalize_concept(item.concept) == key]
+    selected = review.pick_items(session, [key], index={key: items}).get(key)
+    cards = [review.card_payload(card, selected, review.now_utc())] if card and selected else []
+    # Reading never creates a card. A concept without quiz evidence needs local practice.
+    return {"cards": cards, "due_total": len(cards), "estimated_minutes": 0}
 
 
 def dismiss(session: Session, error_id: int, now: datetime | None = None) -> ErrorCause:

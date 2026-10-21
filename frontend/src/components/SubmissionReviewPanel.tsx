@@ -6,6 +6,7 @@ import { useI18n } from "@/components/LocaleProvider";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { DiagnosisForm } from "@/components/DiagnosisForm";
 import {
   revealReviewHint,
   revealReviewSolution,
@@ -33,7 +34,7 @@ const EVIDENCE_COPY: Record<EvidenceType, string> = {
   needs_local_check: "Needs a local check",
 };
 
-function FindingRow({ finding }: { finding: Finding }) {
+function FindingRow({ finding, evidence }: { finding: Finding; evidence?: { projectId: number; review_id: number; finding_index: number } }) {
   const { t } = useI18n();
   return (
     <li className="space-y-1 rounded-control border border-line p-3">
@@ -51,6 +52,9 @@ function FindingRow({ finding }: { finding: Finding }) {
       </div>
       <p className="text-ui text-ink">{finding.description}</p>
       <p className="text-small text-ink-muted">{finding.suggestion}</p>
+      {evidence && finding.severity !== "info" && finding.evidence_type !== "needs_local_check" && (
+        <details><summary>{t("Record diagnosis")}</summary><DiagnosisForm projectId={evidence.projectId} evidence={{ review_id: evidence.review_id, finding_index: evidence.finding_index }} /></details>
+      )}
     </li>
   );
 }
@@ -63,9 +67,11 @@ function FindingRow({ finding }: { finding: Finding }) {
 export function SubmissionReviewPanel({
   submissionId,
   initialReviews,
+  projectId,
 }: {
   submissionId: number;
   initialReviews: CodeReviewSummary[];
+  projectId?: number;
 }) {
   const { t } = useI18n();
   const router = useRouter();
@@ -180,7 +186,7 @@ export function SubmissionReviewPanel({
           ) : (
             <ul className="space-y-2">
               {review.findings.map((finding, index) => (
-                <FindingRow key={`${finding.file}-${finding.line_start}-${index}`} finding={finding} />
+                <FindingRow key={`${finding.file}-${finding.line_start}-${index}`} finding={finding} evidence={projectId ? { projectId, review_id: review.id, finding_index: index } : undefined} />
               ))}
             </ul>
           )}

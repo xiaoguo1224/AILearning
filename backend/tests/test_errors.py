@@ -7,6 +7,7 @@ why one failed. These tests hold that line, then check the mapping, the grouping
 two ways a queue entry closes.
 """
 
+import json
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -371,3 +372,72 @@ def test_an_again_rating_keeps_the_diagnosis_open(client):
         review.record_review(session, "shapes", "Shapes", 1, now=datetime.now(UTC) + timedelta(seconds=1))
         session.commit()
     assert _tasks(client, project_id)["total"] == 1
+
+
+def test_review_evidence_is_server_owned_and_scoped_to_the_project(client):
+    from app.submissions.models import CodeReview, Submission
+
+    project_id = _project(client)
+    with SessionLocal() as session:
+        submission = Submission(project_id=project_id)
+        session.add(submission)
+        session.flush()
+        finding = {"severity": "warning", "evidence_type": "inferred", "description": "Shape mismatch", "file": "main.py", "line_start": 4}
+        row = CodeReview(submission_id=submission.id, summary="Shape warning", findings=[finding])
+        session.add(row); session.commit()
+        review_id, submission_id = row.id, submission.id
+    path = f"/api/projects/{project_id}/errors/from-review"
+    payload = {"review_id": review_id, "finding_index": 0, "concept_key": "matrix shapes"}
+    result = client.post(path, json=payload)
+    assert result.status_code == 201
+    assert result.json()["source_id"] == submission_id
+    assert json.loads(result.json()["detail"])["finding"] == finding
+    assert client.post(path, json={**payload, "detail": "forged"}).status_code == 422
+    assert client.post(path, json={**payload, "finding_index": 99}).status_code == 422
+    other = _project(client, "Other")
+    assert client.post(f"/api/projects/{other}/errors/from-review", json=payload).status_code == 404
+    with SessionLocal() as session:
+        row = session.get(CodeReview, review_id)
+        row.findings = [{**finding, "evidence_type": "needs_local_check"}]
+        session.commit()
+    assert client.post(path, json=payload).status_code == 422
+
+
+def test_project_practice_ignores_due_dates_and_never_uses_other_project_questions(client):
+    project_id = _project(client)
+    own_course, _ = _lesson_with_attempt()
+    foreign_course, _ = _lesson_with_attempt()
+    with SessionLocal() as session:
+        review.record_review(session, "shapes", "Shapes", 3, now=datetime.now(UTC) - timedelta(days=1))
+        card = session.query(models.ReviewCard).filter_by(concept_key="shapes").one()
+        card.due = datetime.now(UTC) + timedelta(days=90)
+        foreign_item = session.query(models.QuizItem).join(models.Lesson).join(models.Module).filter(models.Module.course_id == foreign_course).one()
+        foreign_item.question = "Another project's question"
+        session.commit()
+    _record(client, project_id, concept_key="shapes")
+    path = f"/api/projects/{project_id}/review-tasks/practice?concept=shapes"
+    # A global card and another project's question are not enough.
+    assert client.get(path).json()["cards"] == []
+    client.put(f"/api/projects/{project_id}/courses/{own_course}", json={"position": 0})
+    queue = client.get(path).json()
+    assert len(queue["cards"]) == 1
+    assert queue["cards"][0]["item"]["question"].startswith("What shape")
+    card_id = queue["cards"][0]["card_id"]
+    item_id = queue["cards"][0]["item"]["id"]
+    answered = client.post(f"/review/cards/{card_id}/answer", json={"item_id": item_id, "answer": "(3, 2)"})
+    assert answered.status_code == 200
+    assert _tasks(client, project_id)["total"] == 1
+    rated = client.post(f"/review/cards/{card_id}/rate", json={"rating": 3, "attempt_ids": [answered.json()["attempt_id"]]})
+    assert rated.status_code == 200
+    assert _tasks(client, project_id)["total"] == 0
+
+
+def test_no_card_practice_is_read_only(client):
+    project_id = _project(client)
+    _record(client, project_id, concept_key="new concept")
+    path = f"/api/projects/{project_id}/review-tasks/practice?concept=new%20concept"
+    with SessionLocal() as session:
+        before = session.query(models.ReviewCard).count(), session.query(models.ReviewLog).count()
+    assert client.get(path).json()["cards"] == []
+    with SessionLocal() as session:
+        assert before == (session.query(models.ReviewCard).count(), session.query(models.ReviewLog).count())

@@ -20,6 +20,7 @@ from app.knowledge.schemas import (
     ErrorCauseList,
     ErrorCauseOut,
     ErrorFromAttemptInput,
+    ErrorFromReviewInput,
     ReviewTaskList,
     ReviewTaskOut,
 )
@@ -101,6 +102,19 @@ def list_errors(
         total=total,
         cause_counts=service.cause_counts(session, project_id),
     )
+
+
+@router.post("/projects/{project_id}/errors/from-review", response_model=ErrorCauseOut,
+             status_code=201, dependencies=MUTATION)
+def record_error_from_review(project_id: EntityId, body: ErrorFromReviewInput, session: Db):
+    return service.from_review(session, project_id, **body.model_dump())
+
+
+@router.get("/projects/{project_id}/review-tasks/practice")
+def review_task_practice(project_id: EntityId, session: Db,
+                         concept: str = Query(min_length=1, max_length=200)):
+    get_project(session, project_id)
+    return service.practice_queue(session, project_id, concept)
 
 
 @router.post(

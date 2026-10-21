@@ -241,6 +241,17 @@ class ErrorFromAttemptInput(BaseModel):
     note: str = Field(default="", max_length=4000)
 
 
+class ErrorFromReviewInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    review_id: int = Field(strict=True, gt=0, le=2**63 - 1)
+    finding_index: int = Field(strict=True, ge=0, le=1000)
+    concept_key: str = Field(min_length=1, max_length=200)
+    cause: Literal[
+        "concept_gap", "procedure", "notation", "misread", "tooling", "careless", "unclassified"
+    ] = "unclassified"
+    note: str = Field(default="", max_length=4000)
+
+
 class ErrorCauseOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: int

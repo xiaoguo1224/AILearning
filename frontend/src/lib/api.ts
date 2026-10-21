@@ -49,6 +49,8 @@ import type {
   RemediationNote,
   ReviewAnswerResult,
   ReviewQueue,
+  ProjectReviewTasks,
+  DiagnosisCause,
   ReviewRatingResult,
   ReviewToday,
   SourceFailure,
@@ -64,6 +66,24 @@ import type {
 const BASE_URL =
   (typeof window === "undefined" ? process.env.API_INTERNAL_URL : undefined) ??
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+
+export function listProjectReviewTasks(projectId: number, locale?: Locale): Promise<ProjectReviewTasks> {
+  return get(`/api/projects/${projectId}/review-tasks`, locale);
+}
+
+export function getProjectPractice(projectId: number, concept: string, locale?: Locale): Promise<ReviewQueue> {
+  return get(`/api/projects/${projectId}/review-tasks/practice?concept=${encodeURIComponent(concept)}`, locale);
+}
+
+export function recordDiagnosis(projectId: number, data: { concept_key: string; cause: DiagnosisCause; note: string; review_id?: number; finding_index?: number }): Promise<{ id: number }> {
+  return request(`/api/projects/${projectId}/errors${data.review_id !== undefined ? "/from-review" : ""}`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(data),
+  });
+}
+
+export function dismissDiagnosis(errorId: number): Promise<{ id: number }> {
+  return request(`/api/errors/${errorId}/dismiss`, { method: "POST" });
+}
 
 /** A shared request boundary for browser calls and explicit server locale forwarding. */
 async function localizedFetch(input: RequestInfo | URL, init?: RequestInit, locale: Locale = browserLocale()): Promise<Response> {

@@ -667,6 +667,21 @@ export interface ReviewQueue {
   cards: ReviewCard[];
 }
 
+export type DiagnosisCause = "concept_gap" | "procedure" | "notation" | "misread" | "tooling" | "careless" | "unclassified";
+export interface ProjectReviewTask {
+  concept_key: string;
+  concept_label: string;
+  knowledge_id: number | null;
+  knowledge_title: string | null;
+  knowledge_status: KnowledgeStatus | null;
+  open_errors: number;
+  causes: { cause: DiagnosisCause; count: number }[];
+  latest_error_id: number;
+  latest_note: string;
+  latest_detail: string;
+}
+export interface ProjectReviewTasks { items: ProjectReviewTask[]; total: number }
+
 export interface ReviewAnswerResult {
   correct: boolean;
   /** The reference answer, shown beside the learner's own for them to judge. */

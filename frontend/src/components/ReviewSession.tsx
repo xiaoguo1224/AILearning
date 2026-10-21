@@ -66,7 +66,7 @@ function errorMessage(err: unknown, t: Translator): string {
   return err instanceof ApiError ? err.message : t("Could not reach the server.");
 }
 
-export function ReviewSession({ queue }: { queue: ReviewQueue }) {
+export function ReviewSession({ queue, returnHref }: { queue: ReviewQueue; returnHref?: string }) {
   const { t } = useI18n();
   /**
    * The session runs over this snapshot and never refetches. Every answer and every
@@ -192,7 +192,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
       <div className="border-b border-line bg-surface">
         <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-5 px-6 py-3">
           <Link
-            href="/"
+            href={returnHref ?? "/"}
             className="text-small font-medium text-ink-muted transition-colors duration-fast ease-standard hover:text-ink"
           >
             {t("End session")}</Link>
@@ -227,9 +227,9 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
           <div className="rounded-surface border border-line bg-surface p-8 text-center">
             <p className="text-lg font-medium">{t("Nothing to review right now")}</p>
             <p className="mt-1 text-ui text-ink-muted">
-              {t("Concepts come back as their recall probability drops. Finish a lesson to put new ones into the schedule.")}</p>
-            <Link href="/" className={`mt-6 ${PRIMARY_LINK_CLASSES}`}>
-              {t("Back to Today")}</Link>
+              {t(returnHref ? "There is no existing review card or course question for this concept. Read its knowledge entry or practise locally and upload your results." : "Concepts come back as their recall probability drops. Finish a lesson to put new ones into the schedule.")}</p>
+            <Link href={returnHref ?? "/"} className={`mt-6 ${PRIMARY_LINK_CLASSES}`}>
+              {t(returnHref ? "Back to review suggestions" : "Back to Today")}</Link>
           </div>
         )}
 
@@ -237,11 +237,11 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
           <div className="rounded-surface border border-line bg-surface p-8 text-center">
             <p className="text-lg font-medium">{t("Session complete")}</p>
             <p className="mt-1 text-ui text-ink-muted">
-              {t("{0} concepts reviewed and rescheduled.", total)}{queue.due_total > queue.cards.length &&
+              {t(returnHref ? "{0} concepts reviewed. Your self-rating is recorded; it does not certify a code fix." : "{0} concepts reviewed and rescheduled.", total)}{!returnHref && queue.due_total > queue.cards.length &&
                 t(" {0} more are still due: start another session when you are ready.", queue.due_total - queue.cards.length)}
             </p>
-            <Link href="/" className={`mt-6 ${PRIMARY_LINK_CLASSES}`}>
-              {t("Back to Today")}</Link>
+            <Link href={returnHref ?? "/"} className={`mt-6 ${PRIMARY_LINK_CLASSES}`}>
+              {t(returnHref ? "Back to review suggestions" : "Back to Today")}</Link>
           </div>
         )}
 
@@ -344,7 +344,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
                   {phase.alreadyAnswered ? (
                     <div className="mt-6 border-t border-line pt-5">
                       <Callout tone="warning">
-                        {t("You already answered this question earlier in this review, so it was not recorded again. Rate how well you recalled it and the card will be rescheduled.")}</Callout>
+                        {t(returnHref ? "Your answer was already recorded. Rate your recall to finish this review." : "You already answered this question earlier in this review, so it was not recorded again. Rate how well you recalled it and the card will be rescheduled.")}</Callout>
                     </div>
                   ) : (
                     <>
@@ -394,7 +394,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
                         ref={takesFocus ? ratingRef : undefined}
                         disabled={busy}
                         onClick={() => void rate(option.rating)}
-                        aria-label={t("{0}, next review in {1}{2}", t(style.title), option.label, suggested ? t(", suggested") : "")}
+                        aria-label={returnHref ? `${t(style.title)}${suggested ? t(", suggested") : ""}` : t("{0}, next review in {1}{2}", t(style.title), option.label, suggested ? t(", suggested") : "")}
                         className={`rounded-control bg-surface text-center transition-colors duration-fast ease-standard disabled:opacity-60 ${
                           suggested
                             ? "border-2 border-ink px-2.5 py-[13px]"
@@ -407,9 +407,9 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
                         {/* Rendered verbatim: the server computes it from the real
                             scheduler transition with fuzzing off, so two buttons
                             showing the same label are both telling the truth. */}
-                        <span aria-hidden className="mt-1 block font-mono text-[11px] text-ink-muted">
+                        {!returnHref && <span aria-hidden className="mt-1 block font-mono text-[11px] text-ink-muted">
                           {option.label}
-                        </span>
+                        </span>}
                       </button>
                     );
                   })}
@@ -423,8 +423,7 @@ export function ReviewSession({ queue }: { queue: ReviewQueue }) {
                   to ink-subtle: it is the lower-contrast of the two ink tokens.
                 */}
                 <p className="mt-4.5 text-center text-xs leading-relaxed text-ink-muted">
-                  {t("Intervals come from FSRS using your own history on this concept, and bunch closer together than you might expect.")}<br />
-                  {t("Rate honestly: a generous rating today costs you a forgotten concept later.")}</p>
+                  {returnHref ? t("Rate your actual recall. Review suggestions follow mistakes and your choices.") : <>{t("Intervals come from FSRS using your own history on this concept, and bunch closer together than you might expect.")}<br />{t("Rate honestly: a generous rating today costs you a forgotten concept later.")}</>}</p>
               </>
             )}
           </>

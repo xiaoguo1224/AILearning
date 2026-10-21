@@ -126,7 +126,7 @@ export default async function SubmissionDetailPage({
               ))}
             </section>
 
-            <SubmissionReviewPanel submissionId={detail.id} initialReviews={detail.reviews} />
+            <SubmissionReviewPanel submissionId={detail.id} projectId={detail.project_id} initialReviews={detail.reviews} />
 
             <VariantPanel submissionId={detail.id} projectId={detail.project_id} />
 
