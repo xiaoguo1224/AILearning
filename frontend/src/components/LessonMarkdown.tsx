@@ -154,16 +154,19 @@ export function LessonMarkdown({ content, title }: { content: string; title: str
               </h3>
             );
           },
-          code({ className, children, ...props }) {
-            const language = /language-(\w+)/.exec(className || "")?.[1];
+          pre({ children, ...props }) {
+            // Mermaid fenced blocks render as diagrams at the same block level
+            // as the surrounding article, not nested inside a <pre>.
+            const child = Array.isArray(children) ? children[0] : children;
+            const childProps = (
+              child as { props?: { className?: string; children?: unknown } } | null
+            )?.props;
+            const language = /language-(\w+)/.exec(childProps?.className || "")?.[1];
             if (language === "mermaid") {
-              return <MermaidBlock key={String(children).trim()} chart={String(children).trim()} />;
+              const chart = String(childProps?.children ?? "").trim();
+              return <MermaidBlock key={chart} chart={chart} />;
             }
-            return (
-              <code className={className} {...props}>
-                {children}
-              </code>
-            );
+            return <pre {...props}>{children}</pre>;
           },
         }}
       >
