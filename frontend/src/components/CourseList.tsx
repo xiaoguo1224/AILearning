@@ -154,7 +154,7 @@ export function CourseList({ courses }: { courses: CourseSummary[] }) {
                     {course.title}
                   </span>
                 </div>
-                <div style={{ padding: 16 }}>
+                <div style={{ padding: "16px 16px 8px" }}>
                   <p
                     style={{
                       color: "var(--ink-muted)",
@@ -164,51 +164,49 @@ export function CourseList({ courses }: { courses: CourseSummary[] }) {
                       WebkitBoxOrient: "vertical",
                       overflow: "hidden",
                       minHeight: 36,
+                      margin: 0,
                     }}
                   >
                     {course.description || "课程章节、知识讲解与实践练习"}
                   </p>
-                  {(course.opened_count || 0) > 0 && (
-                    <span
-                      style={{
-                        display: "inline-block",
-                        marginTop: 8,
-                        fontSize: 12,
-                        color: "var(--accent)",
-                        border: "1px solid var(--accent)",
-                        borderRadius: 12,
-                        padding: "2px 8px",
-                      }}
-                    >
-                      已打开 {course.opened_count} 次
-                    </span>
-                  )}
                 </div>
               </Link>
               <div
                 style={{
                   display: "flex",
-                  gap: 8,
                   alignItems: "center",
-                  padding: "0 16px 16px",
+                  justifyContent: "space-between",
+                  padding: "8px 16px 16px",
+                  borderTop: "1px solid #f5f5f5",
+                  marginTop: 8,
                 }}
               >
-                <Link
-                  href={`/courses/${course.id}`}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    padding: "6px 16px",
-                    borderRadius: 20,
-                    background: "var(--accent)",
-                    color: "#fff",
-                    fontSize: 13,
-                    fontWeight: 500,
-                  }}
-                >
-                  进入学习
-                </Link>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <Link
+                    href={`/courses/${course.id}`}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "7px 20px",
+                      borderRadius: 20,
+                      background: "var(--accent)",
+                      color: "#fff",
+                      fontSize: 13,
+                      fontWeight: 500,
+                      transition: "opacity 0.2s",
+                    }}
+                    onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.85")}
+                    onMouseLeave={(e) => (e.currentTarget.style.opacity = "1")}
+                  >
+                    进入学习
+                  </Link>
+                  {(course.opened_count || 0) > 0 && (
+                    <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+                      已学 {course.opened_count} 次
+                    </span>
+                  )}
+                </div>
                 <DeleteCourseButton courseId={course.id} title={course.title} />
               </div>
             </article>
