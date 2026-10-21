@@ -5,6 +5,7 @@ import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/LocaleProvider";
 import { Button } from "@/components/ui/Button";
+import { Empty } from "antd";
 import { Badge } from "@/components/ui/Badge";
 import { ApiError, createSuggestion, decideSuggestion, listProjects } from "@/lib/api";
 import type { ProjectList, ProjectReviewTask, SuggestionList } from "@/lib/types";
@@ -57,7 +58,17 @@ export function SuggestionsPanel({ projectId, suggestions, source, initialChoice
       {offset < initialChoices.total && <Button type="button" variant="secondary" disabled={busy} onClick={() => void more()}>{t("More projects")}</Button>}
       <Button type="submit" disabled={busy}>{t("Propose review")}</Button>
     </form>}
-    {suggestions.items.length === 0 && <p>{t("No cross-project suggestions yet.")}</p>}
+    {suggestions.items.length === 0 && (
+      <Empty
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        description={
+          <span style={{ color: "var(--ink-muted)" }}>
+            {t("No cross-project suggestions yet.")}
+          </span>
+        }
+        style={{ padding: "60px 0" }}
+      />
+    )}
     {suggestions.items.map(item => <article key={item.id} className="space-y-3 rounded-surface border border-line p-4">
       <h2 className="text-title">{item.concept_label}</h2>
       <p><Link className="text-accent underline" href={`/projects/${item.source_project_id}`}>{item.source_name}</Link> → <Link className="text-accent underline" href={`/projects/${item.target_project_id}`}>{item.target_name}</Link></p>
