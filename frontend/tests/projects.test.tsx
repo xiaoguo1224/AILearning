@@ -88,7 +88,9 @@ test("course-choice failure preserves the project and its linked courses", async
   vi.mocked(getProject).mockResolvedValue(project);
   vi.mocked(listCourses).mockRejectedValue(new Error("offline"));
   render(await ProjectPage({ params: Promise.resolve({ projectId: "1" }) }));
-  expect(screen.getByRole("heading", { name: "PyTorch" })).toBeInTheDocument();
+  // The project name now lives in the project layout's header; the page itself
+  // opens with its own section heading.
+  expect(screen.getByRole("heading", { name: "Project settings" })).toBeInTheDocument();
   expect(screen.getByRole("alert")).toHaveTextContent("Could not load course choices.");
   expect(screen.getByRole("link", { name: "Tensor course" })).toBeInTheDocument();
 });

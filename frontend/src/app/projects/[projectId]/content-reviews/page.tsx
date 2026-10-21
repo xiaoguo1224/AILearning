@@ -26,7 +26,7 @@ export default async function ContentReviewsPage({ params, searchParams }: {
     if (err instanceof ApiError && err.status === 404) notFound();
     error = err instanceof ApiError ? err.message : t("Could not reach the server.");
   }
-  return <main className="mx-auto w-full max-w-3xl space-y-6 px-6 py-12">
+  return <div className="max-w-3xl space-y-6">
     <Link href={`/projects/${id}`} className="text-accent underline">{project?.name ?? t("Project")}</Link>
     <PageHeader title={t("Content review history")} />
     <p>{t("A confirmed snapshot reviews only that exact source version. Editing the source or the review copy requires another check. No code was executed.")}</p>
@@ -42,5 +42,5 @@ export default async function ContentReviewsPage({ params, searchParams }: {
       {offset > 0 && <Link href={`/projects/${id}/content-reviews?offset=${Math.max(0, offset - 50)}`}>{t("Previous")}</Link>}
       {offset + 50 < data.total && <Link href={`/projects/${id}/content-reviews?offset=${offset + 50}`}>{t("Next")}</Link>}
     </nav>}
-  </main>;
+  </div>;
 }

@@ -220,16 +220,7 @@ export default async function ProjectKnowledgePage({
   const titles = new Map((list?.items ?? []).map((item) => [item.id, item.title]));
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-6 py-12">
-      <div className="flex flex-wrap items-center gap-4 text-small">
-        <Link href={`/projects/${id}`} className="text-accent underline">
-          {t("Back to project")}
-        </Link>
-        <Link href="/projects" className="text-accent underline">
-          {t("All projects")}
-        </Link>
-      </div>
-
+    <div className="max-w-3xl space-y-8">
       <PageHeader
         title={t("Knowledge")}
         description={t("What this project has settled. Core entries are not treated as settled until you confirm them.")}
@@ -468,6 +459,6 @@ export default async function ProjectKnowledgePage({
           </>
         )
       )}
-    </main>
+    </div>
   );
 }

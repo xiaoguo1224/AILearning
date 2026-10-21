@@ -37,7 +37,7 @@ export default async function SuggestionsPage({ params, searchParams }: {
     if (err instanceof ApiError && err.status === 404) notFound();
     error = err instanceof ApiError ? err.message : t("Could not reach the server.");
   }
-  return <main className="mx-auto w-full max-w-3xl space-y-6 px-6 py-12">
+  return <div className="max-w-3xl space-y-6">
     <Link href={`/projects/${id}`} className="text-accent underline">{project?.name ?? t("Project")}</Link>
     <PageHeader title={t("Cross-project suggestions")} />
     {error && <ErrorState message={error} />}
@@ -46,5 +46,5 @@ export default async function SuggestionsPage({ params, searchParams }: {
       {offset > 0 && <Link href={`/projects/${id}/suggestions?offset=${Math.max(0, offset - 50)}`}>{t("Previous")}</Link>}
       {offset + 50 < suggestions.total && <Link href={`/projects/${id}/suggestions?offset=${offset + 50}`}>{t("Next")}</Link>}
     </nav>}
-  </main>;
+  </div>;
 }

@@ -777,5 +777,14 @@
   "review": "复习",
   "reviews": "复习",
   "Not enough review history yet: {0} {1} so far. A percentage from a handful of reviews could only read 0, 50 or 100 and would swing day to day, so it is held back until there is enough.": "复习历史还不足：目前仅 {0} 次{1}。样本过少时百分比只会是 0、50 或 100，且每天大幅波动，因此在数据充足前暂不展示。",
-  "Over the last 30 days, across {0} reviews of concepts that were genuinely due.": "过去 30 天内，{0} 次到期概念复习的保持情况。"
+  "Over the last 30 days, across {0} reviews of concepts that were genuinely due.": "过去 30 天内，{0} 次到期概念复习的保持情况。",
+  "Overview": "总览",
+  "Learn": "学习",
+  "Explore": "探索",
+  "Submissions": "提交",
+  "Review tasks": "复习任务",
+  "Suggestions": "跨项目建议",
+  "Project settings": "项目设置",
+  "Materials": "资料",
+  "Select a session on the left, or start a new one to ask a question.": "在左侧选择一个会话，或新建会话开始提问。"
 }

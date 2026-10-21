@@ -4,10 +4,8 @@ import { notFound } from "next/navigation";
 import { ExploreChat } from "@/components/ExploreChat";
 import { ExploreSessionDeleteButton } from "@/components/ExploreSessionDeleteButton";
 import { NewExploreSessionButton } from "@/components/NewExploreSessionButton";
-import { Badge } from "@/components/ui/Badge";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, getExploreSession, getProject, listProjectSessions } from "@/lib/api";
 import { getTranslator } from "@/lib/locale-server";
 import type { ExploreSessionDetail, ExploreSessionList, ProjectDetail } from "@/lib/types";
@@ -89,26 +87,7 @@ export default async function ProjectExplorePage({
   const archived = project?.status === "archived";
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-6 py-12">
-      <div className="flex flex-wrap items-center gap-4 text-small">
-        <Link href={`/projects/${id}`} className="text-accent underline">
-          {t("Back to project")}
-        </Link>
-        <Link href="/projects" className="text-accent underline">
-          {t("All projects")}
-        </Link>
-      </div>
-
-      <PageHeader
-        title={t("Free exploration")}
-        description={
-          project
-            ? t("Questions about {0}", project.name)
-            : t("Ask questions against this project's own material.")
-        }
-        actions={archived ? <Badge>{t("Archived")}</Badge> : undefined}
-      />
-
+    <div>
       {error ? (
         <ErrorState message={error} />
       ) : (
@@ -122,76 +101,101 @@ export default async function ProjectExplorePage({
 
             {detailError && <ErrorState message={detailError} />}
 
-            {detail && (
-              <section className="space-y-4 rounded-surface border border-line p-6">
-                <div className="space-y-1">
-                  <h2 className="break-words text-title">
-                    {detail.title || t("Untitled session")}
+            <div className="flex flex-col gap-6 lg:flex-row">
+              {/* Session rail */}
+              <aside className="w-full shrink-0 lg:w-72">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-micro font-medium uppercase tracking-wider text-ink-subtle">
+                    {t("Sessions")}
                   </h2>
-                  <p className="text-micro text-ink-muted">
-                    {t("Started {0}", formatWhen(detail.created_at, t.locale))}
-                  </p>
+                  {!archived && <NewExploreSessionButton projectId={id} />}
                 </div>
-                {/* Keyed on the id so switching sessions remounts the transcript rather
-                    than reusing the previous one's state. */}
-                <ExploreChat
-                  initialQuestion={query.draft?.slice(0, 2000)}
-                  key={detail.id}
-                  sessionId={detail.id}
-                  projectId={id}
-                  initialMessages={detail.messages}
-                  readOnly={Boolean(archived)}
-                />
-              </section>
-            )}
+                <div className="mt-3">
+                  {listError ? (
+                    <ErrorState message={listError} />
+                  ) : !sessions || sessions.items.length === 0 ? (
+                    <EmptyState
+                      title={t("No sessions yet")}
+                      description={t("Start a session and ask a question about this project's material.")}
+                    />
+                  ) : (
+                    <ul className="divide-y divide-line overflow-hidden rounded-surface border border-line bg-surface">
+                      {sessions.items.map((item) => {
+                        const selected = item.id === detail?.id;
+                        return (
+                          <li key={item.id}>
+                            <Link
+                              href={`/projects/${id}/explore?session=${item.id}`}
+                              aria-current={selected ? "page" : undefined}
+                              className={
+                                selected
+                                  ? "block border-l-2 border-accent bg-surface-sunken px-4 py-3 transition-colors duration-fast ease-standard"
+                                  : "block border-l-2 border-transparent px-4 py-3 transition-colors duration-fast ease-standard hover:bg-surface-sunken"
+                              }
+                            >
+                              <span className="block truncate text-small font-medium text-ink">
+                                {item.title || t("Untitled session")}
+                              </span>
+                              <span className="mt-0.5 block text-micro text-ink-subtle">
+                                {t("{0} messages", item.message_count)}
+                              </span>
+                            </Link>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </aside>
 
-            <section className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-title">{t("Sessions")}</h2>
-                {!archived && <NewExploreSessionButton projectId={id} />}
-              </div>
-
-              {listError ? (
-                <ErrorState message={listError} />
-              ) : !sessions || sessions.items.length === 0 ? (
-                <EmptyState
-                  title={t("No sessions yet")}
-                  description={t("Start a session and ask a question about this project's material.")}
-                />
-              ) : (
-                <ul className="divide-y divide-line rounded-surface border border-line">
-                  {sessions.items.map((item) => (
-                    <li key={item.id} className="flex flex-wrap items-start justify-between gap-3 p-4">
+              {/* Conversation */}
+              <section className="min-w-0 flex-1">
+                {detail ? (
+                  <div className="rounded-surface border border-line bg-surface p-6 shadow-raise">
+                    <div className="flex items-start justify-between gap-4">
                       <div className="min-w-0 space-y-1">
-                        <Link
-                          href={`/projects/${id}/explore?session=${item.id}`}
-                          className="break-words text-ui text-accent underline"
-                        >
-                          {item.title || t("Untitled session")}
-                        </Link>
+                        <h2 className="break-words font-display text-title">
+                          {detail.title || t("Untitled session")}
+                        </h2>
                         <p className="text-micro text-ink-muted">
-                          {t("Started {0}", formatWhen(item.created_at, t.locale))} ·{" "}
-                          {t("{0} messages", item.message_count)}
+                          {t("Started {0}", formatWhen(detail.created_at, t.locale))}
                         </p>
                       </div>
-                      <div className="flex shrink-0 items-center gap-3">
-                        {item.id === detail?.id && <Badge tone="success">{t("Open now")}</Badge>}
-                        {!archived && (
-                          <ExploreSessionDeleteButton
-                            sessionId={item.id}
-                            projectId={id}
-                            active={item.id === detail?.id}
-                          />
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+                      {!archived && (
+                        <ExploreSessionDeleteButton
+                          sessionId={detail.id}
+                          projectId={id}
+                          active={false}
+                        />
+                      )}
+                    </div>
+                    {/* Keyed on the id so switching sessions remounts the transcript rather
+                        than reusing the previous one's state. */}
+                    <div className="mt-4">
+                      <ExploreChat
+                        initialQuestion={query.draft?.slice(0, 2000)}
+                        key={detail.id}
+                        sessionId={detail.id}
+                        projectId={id}
+                        initialMessages={detail.messages}
+                        readOnly={Boolean(archived)}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  !listError && (
+                    <div className="flex h-full min-h-64 items-center justify-center rounded-surface border border-dashed border-line p-8">
+                      <p className="max-w-xs text-center text-small text-ink-subtle">
+                        {t("Select a session on the left, or start a new one to ask a question.")}
+                      </p>
+                    </div>
+                  )
+                )}
+              </section>
+            </div>
           </>
         )
       )}
-    </main>
+    </div>
   );
 }

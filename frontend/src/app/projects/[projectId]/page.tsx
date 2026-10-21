@@ -1,10 +1,7 @@
 import { ProjectResourcesManager } from "@/components/ProjectResourcesManager";
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ProjectWorkspace } from "@/components/ProjectWorkspace";
-import { Badge } from "@/components/ui/Badge";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, getProject, listCourses } from "@/lib/api";
 import { getTranslator } from "@/lib/locale-server";
 import type { CourseSummary, ProjectDetail } from "@/lib/types";
@@ -29,34 +26,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     try { courses = await listCourses(t.locale); }
     catch { coursesError = t("Could not load course choices. Please retry."); }
   }
-  return <main className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-6 py-12">
-    <Link href="/projects" className="text-accent underline">{t("All projects")}</Link>
-    <PageHeader className="break-words [&>div]:min-w-0 [&_p]:whitespace-pre-wrap" title={project?.name ?? t("Project")} description={project?.goal} actions={project && <Badge>{t(project.status === "active" ? "Active" : "Archived")}</Badge>} />
-    {error ? <ErrorState message={error} /> : project && <ProjectWorkspace key={project.id} project={project} courses={courses} coursesError={coursesError} />}
-    {project && <ProjectResourcesManager projectId={project.id} isArchived={project.status === 'archived'} />}
-    {project && <div className="grid gap-4 sm:grid-cols-2">
-      <section className="space-y-2 rounded-surface border border-line p-6"><h2 className="text-title">{t("Course knowledge tree")}</h2><Link className="text-accent underline" href={`/projects/${project.id}/learn`}>{t("Open course knowledge tree")}</Link></section>
-      <section className="space-y-2 rounded-surface border border-line p-6">
-        <h2 className="text-title">{t("Code review")}</h2>
-        <p className="text-small text-ink-muted">{t("Upload code and logs from your own machine for static review.")}</p>
-        <Link href={`/projects/${project.id}/submissions`} className="text-small text-accent underline">{t("Open code review")}</Link>
-      </section>
-      <section className="space-y-2 rounded-surface border border-line p-6">
-        <h2 className="text-title">{t("Free exploration")}</h2>
-        <p className="text-small text-ink-muted">{t("Ask questions against this project's own material.")}</p>
-        <Link href={`/projects/${project.id}/explore`} className="text-small text-accent underline">{t("Open free exploration")}</Link>
-      </section>
-      <section className="space-y-2 rounded-surface border border-line p-6">
-        <h2 className="text-title">{t("Knowledge")}</h2>
-        <p className="text-small text-ink-muted">{t("What this project has settled, and what is still waiting for your confirmation.")}</p>
-        <Link href={`/projects/${project.id}/knowledge`} className="text-small text-accent underline">{t("Open knowledge review")}</Link>
-        <Link href={`/projects/${project.id}/content-reviews`} className="block text-small text-accent underline">{t("Content review history")}</Link>
-      </section>
-      <section className="space-y-2 rounded-surface border border-line p-6">
-        <h2 className="text-title">{t("Mistakes and review")}</h2>
-        <Link href={`/projects/${project.id}/review-tasks`} className="text-small text-accent underline">{t("Open review suggestions")}</Link>
-        <Link href={`/projects/${project.id}/suggestions`} className="block text-small text-accent underline">{t("Cross-project suggestions")}</Link>
-      </section>
-    </div>}
-  </main>;
+  return <div className="max-w-3xl space-y-10">
+    <section className="space-y-4">
+      <h2 className="font-display text-title">{t("Project settings")}</h2>
+      {error ? <ErrorState message={error} /> : project && <ProjectWorkspace key={project.id} project={project} courses={courses} coursesError={coursesError} />}
+    </section>
+    {project && <section className="space-y-4">
+      <h2 className="font-display text-title">{t("Materials")}</h2>
+      <ProjectResourcesManager projectId={project.id} isArchived={project.status === 'archived'} />
+    </section>}
+  </div>;
 }

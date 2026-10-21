@@ -34,11 +34,11 @@ export default async function ProjectTasksPage({ params, searchParams }: {
     error = err instanceof ApiError ? err.message : t("Could not reach the server.");
   }
   if (queue) return <ReviewSession key={concept} queue={queue} returnHref={`/projects/${id}/review-tasks`} />;
-  return <main className="mx-auto w-full max-w-3xl space-y-6 px-6 py-12">
+  return <div className="max-w-3xl space-y-6">
     <Link href={`/projects/${id}`} className="text-accent underline">{project?.name ?? t("Project")}</Link>
     <PageHeader title={t("Mistakes and review")} />
     {error && <ErrorState message={error} />}
     {concept && error && <Link href={`/projects/${id}/review-tasks`}>{t("Back to review suggestions")}</Link>}
     {tasks && project && <ProjectReviewTasks projectId={id} tasks={tasks} archived={project.status === "archived"} />}
-  </main>;
+  </div>;
 }

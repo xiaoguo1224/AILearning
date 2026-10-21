@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CurriculumTree } from "@/components/CurriculumTree";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -22,10 +21,9 @@ export default async function ProjectLearningPage({ params }: { params: Promise<
     if (err instanceof ApiError && err.status === 404) notFound();
     error = err instanceof ApiError ? err.message : t("Could not reach the server.");
   }
-  return <main className="mx-auto w-full max-w-4xl space-y-8 px-6 py-12">
-    <Link className="text-accent underline" href={`/projects/${id}`}>{project?.name ?? t("Project")}</Link>
+  return <div className="max-w-4xl space-y-8">
     <PageHeader title={t("Course knowledge tree")} />
     {error && <ErrorState message={error} />}
     {data && project && <CurriculumTree data={data} archived={project.status === "archived"} t={t} />}
-  </main>;
+  </div>;
 }

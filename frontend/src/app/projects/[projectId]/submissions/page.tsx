@@ -55,16 +55,7 @@ export default async function ProjectSubmissionsPage({
   const archived = project?.status === "archived";
 
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 space-y-8 px-6 py-12">
-      <div className="flex flex-wrap items-center gap-4 text-small">
-        <Link href={`/projects/${id}`} className="text-accent underline">
-          {t("Back to project")}
-        </Link>
-        <Link href="/projects" className="text-accent underline">
-          {t("All projects")}
-        </Link>
-      </div>
-
+    <div className="max-w-3xl space-y-8">
       <PageHeader
         title={t("Code review")}
         description={
@@ -141,6 +132,6 @@ export default async function ProjectSubmissionsPage({
           </>
         )
       )}
-    </main>
+    </div>
   );
 }
