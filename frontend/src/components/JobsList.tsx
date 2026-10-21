@@ -152,10 +152,82 @@ export function JobsList() {
             )}
             {job.result && (
               <details style={{ marginTop: 12 }}>
-                <summary>Result</summary>
-                <pre style={{ fontSize: 12, overflow: "auto" }}>
+                <summary style={{ cursor: "pointer", fontWeight: 500 }}>Result</summary>
+                <pre style={{ fontSize: 12, overflow: "auto", marginTop: 8 }}>
                   {JSON.stringify(job.result, null, 2)}
                 </pre>
+              </details>
+            )}
+            {job.trace && job.trace.entries && job.trace.entries.length > 0 && (
+              <details style={{ marginTop: 12 }} open>
+                <summary style={{ cursor: "pointer", fontWeight: 500 }}>
+                  思考过程与工具调用 ({job.trace.entries.length})
+                </summary>
+                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {job.trace.entries.map((entry, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        padding: "8px 12px",
+                        borderRadius: 8,
+                        background:
+                          entry.type === "thinking"
+                            ? "color-mix(in srgb, var(--accent) 6%, transparent)"
+                            : entry.type === "tool_call"
+                              ? "#f0f5ff"
+                              : "#f6ffed",
+                        border: "1px solid var(--line)",
+                        fontSize: 13,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 11,
+                          color: "var(--ink-muted)",
+                          marginBottom: 4,
+                          display: "flex",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <span>
+                          {entry.type === "thinking"
+                            ? "💭 思考"
+                            : entry.type === "tool_call"
+                              ? `🔧 工具调用: ${entry.tool}`
+                              : `✅ 工具返回: ${entry.tool}`}
+                        </span>
+                        <span>{entry.at}</span>
+                      </div>
+                      {entry.content && (
+                        <div style={{ whiteSpace: "pre-wrap" }}>{entry.content}</div>
+                      )}
+                      {entry.input !== undefined && entry.input !== null && (
+                        <pre
+                          style={{
+                            fontSize: 11,
+                            margin: "4px 0 0",
+                            overflow: "auto",
+                            color: "var(--ink-muted)",
+                          }}
+                        >
+                          输入: {JSON.stringify(entry.input, null, 2)}
+                        </pre>
+                      )}
+                      {entry.output !== undefined && entry.output !== null && (
+                        <pre
+                          style={{
+                            fontSize: 11,
+                            margin: "4px 0 0",
+                            overflow: "auto",
+                            color: "var(--ink-muted)",
+                          }}
+                        >
+                          输出: {JSON.stringify(entry.output, null, 2)}
+                        </pre>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </details>
             )}
           </div>

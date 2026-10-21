@@ -81,11 +81,33 @@ def _run_extraction(job_id: str, project_id: int):
     db = SessionLocal()
     try:
         courses = _course_payload(db, project_id)
+        jobs.append_trace(job_id, {
+            "type": "thinking",
+            "content": f"开始分析项目 {project_id} 的课程关系，共 {len(courses)} 门课程",
+        })
         jobs.update_progress(job_id, {"stage": "extracting", "courses": len(courses)})
+        jobs.append_trace(job_id, {
+            "type": "tool_call",
+            "tool": "extract_relationships",
+            "input": {"project_id": project_id, "course_count": len(courses)},
+        })
         result = graph_service.extract_relationships(db, project_id, courses)
         edges = result["edges"] if isinstance(result, dict) else result
+        jobs.append_trace(job_id, {
+            "type": "tool_result",
+            "tool": "extract_relationships",
+            "output": {"edge_count": len(edges)},
+        })
+        jobs.append_trace(job_id, {
+            "type": "thinking",
+            "content": f"提取完成，共 {len(edges)} 条关系边",
+        })
         jobs.complete_job(job_id, {"project_id": project_id, "edges": len(edges)})
     except Exception as exc:  # noqa: BLE001
+        jobs.append_trace(job_id, {
+            "type": "thinking",
+            "content": f"提取失败：{str(exc)[:200]}",
+        })
         jobs.fail_job(job_id, str(exc)[:500])
     finally:
         db.close()

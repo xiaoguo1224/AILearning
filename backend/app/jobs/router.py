@@ -22,6 +22,7 @@ class JobOut(BaseModel):
     status: str
     progress: dict | None = None
     result: dict | None = None
+    trace: dict | None = None
     error: str | None = None
     ref_type: str | None = None
     ref_id: int | None = None

@@ -23,6 +23,20 @@ const BUCKET_TEXT_COLORS: Record<string, string> = {
   not_started: "#6b7280",
 };
 
+// Diverse palette for not_started concepts, varied by lesson index.
+const LESSON_PALETTE = [
+  { bg: "#dbeafe", text: "#1e40af" }, // blue
+  { bg: "#e0e7ff", text: "#3730a3" }, // indigo
+  { bg: "#ede9fe", text: "#5b21b6" }, // violet
+  { bg: "#fce7f3", text: "#9d174d" }, // pink
+  { bg: "#ffedd5", text: "#9a3412" }, // orange
+  { bg: "#fef3c7", text: "#92400e" }, // amber
+  { bg: "#d1fae5", text: "#065f46" }, // emerald
+  { bg: "#ccfbf1", text: "#115e59" }, // teal
+  { bg: "#e0f2fe", text: "#0c4a6e" }, // sky
+  { bg: "#f3e8ff", text: "#6b21a8" }, // purple
+];
+
 /**
  * Treemap of AI-extracted concepts sized by importance (1-5).
  * Groups concepts by their introducing lesson.
@@ -38,21 +52,31 @@ export function ConceptTreemap({ lessons, concepts }: ConceptTreemapProps) {
     byLesson.set(c.lesson_id, arr);
   }
 
-  const data = Array.from(byLesson.entries()).map(([lessonId, nodes]) => {
+  const data = Array.from(byLesson.entries()).map(([lessonId, nodes], lessonIndex) => {
     const lesson = lessonMap.get(lessonId);
     return {
       name: lesson?.title ?? `Lesson ${lessonId}`,
-      children: nodes.map((n) => ({
-        name: n.concept_label,
-        // Importance 1-5 scaled for visible size differences.
-        value: (n as ConceptNode & { importance?: number }).importance ?? 3,
-        itemStyle: {
-          color: BUCKET_COLORS[n.bucket] ?? "#e5e7eb",
-        },
-        label: {
-          color: BUCKET_TEXT_COLORS[n.bucket] ?? "#6b7280",
-        },
-      })),
+      children: nodes.map((n) => {
+        // For not_started, use diverse lesson-based colors.
+        let bg = BUCKET_COLORS[n.bucket] ?? "#e5e7eb";
+        let textColor = BUCKET_TEXT_COLORS[n.bucket] ?? "#6b7280";
+        if (n.bucket === "not_started") {
+          const palette = LESSON_PALETTE[lessonIndex % LESSON_PALETTE.length];
+          bg = palette.bg;
+          textColor = palette.text;
+        }
+        return {
+          name: n.concept_label,
+          // Importance 1-5 scaled for visible size differences.
+          value: (n as ConceptNode & { importance?: number }).importance ?? 3,
+          itemStyle: {
+            color: bg,
+          },
+          label: {
+            color: textColor,
+          },
+        };
+      }),
     };
   });
 

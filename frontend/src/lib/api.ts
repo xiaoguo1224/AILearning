@@ -745,6 +745,16 @@ export interface Job {
     current?: string;
   } | null;
   result: Record<string, unknown> | null;
+  trace: {
+    entries: {
+      type: "thinking" | "tool_call" | "tool_result";
+      content?: string;
+      tool?: string;
+      input?: unknown;
+      output?: unknown;
+      at: string;
+    }[];
+  } | null;
   error: string | null;
   ref_type: string | null;
   ref_id: number | null;
