@@ -72,6 +72,8 @@ node node_modules/next/dist/bin/next dev --hostname 127.0.0.1
 
 项目页的「知识」入口 `/projects/:id/knowledge` 可查看自动保存的有来源问答草稿、筛选审核队列、编辑及单独确认核心内容。修改确认稿会退回待审核；版本对照保留上次确认内容。冲突编辑不会覆盖新版本，请先检查新内容再决定是否丢弃本地草稿。普通笔记不代表知识已经掌握。
 
+「错因与复习」入口 `/projects/:id/review-tasks` 按记录的错误推荐主动复习。也可在代码评审的错误/警告下选择「记录错因」，填写关联知识点，保留真实评审证据。存在课程题目和复习卡时可随时复习，不受到期日期限制；无题时先学习知识或本地实践后上传。复习自评不会证明代码已修复。
+
 ## 许可证与上游
 
 现有根 `.env` 的 `LLM_PROVIDER=gemini`、`LLM_MODEL`、`LLM_BASE_URL`、`LLM_API_KEY` 可直接用于 OpenAI 兼容网关；后端自动加载，密钥只用于后端请求。显式 `STUDYFORGE_LLM_PROVIDER` 优先（测试可设 `fake`）；不要用 backend/.env 中默认的 anthropic 覆盖想使用的网关。网关须启用 HTTPS，已有环境变量优先于 backend/.env，后者优先于根 .env。默认不自动降级到其他供应商，连接失败返回受控错误。

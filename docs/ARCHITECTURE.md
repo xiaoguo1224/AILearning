@@ -70,7 +70,7 @@ flowchart TD
 | AgentMessage | session_id, role, body, beyond, check_question, source_refs, grounded, model, run_id | 消息与出处快照（非外键，资料删除后仍可追溯） |
 | KnowledgeEntry | id, project_id?, title, body, kind, concept_key, status, provenance, updated_at | 草稿/待审/确认知识，正文存 SQLite |
 | KnowledgeRevision | knowledge_id, version, title, body, kind, concept_key, status, reason | 创建、编辑和确认的不可变快照 |
-| ErrorCause | project_id, knowledge_id?, concept_key, cause, source_kind, source_id?, detail, dismissed_at | 错因证据与主动复习队列的来源，后端已实现，界面待集成 |
+| ErrorCause | project_id, knowledge_id?, concept_key, cause, source_kind, source_id?, detail, dismissed_at | 错因证据与主动复习队列的来源，界面已集成 |
 | ProjectKnowledge | project_id, knowledge_id, relation | 知识与项目关联 |
 | KnowledgeRelation | from_id, to_id, kind | 前置依赖、相关、扩展 |
 | LearningSuggestion | id, from_project_id, to_project_id, action, state | 跨项目修改需确认 |
@@ -147,7 +147,9 @@ P4 已实现：项目自由问答和临时讲解在回答引用本项目资料�
 
 浏览器编辑与确认携带 `expected_updated_at`；服务端在项目写锁后刷新条目并比较时间点，不匹配返回 409，前端保留未保存文字，需明确操作才载入保存内容。旧 API 调用方不传令牌时保留原有语义。版本差异有长度上限，界面明确提示省略和截断。知识确认状态与学习掌握状态独立。
 
-错因服务只写 `error_causes`，不写 ReviewCard/ReviewLog。手工诊断不能伪造 Attempt/Submission 证据；错题端点检查所属项目课程、答题是否错误并快照证据。复习任务按未解决错因聚合，用户忽略会保留记录；同概念后续有效自评（rating >= 2）关闭此前错因，Again 保持任务。前端入口和提交评审证据关联仍属于 P4-04 待办，不按到期日安排学习。
+错因服务只写 `error_causes`，不写 ReviewCard/ReviewLog。手工诊断不能伪造 Attempt/Submission 证据；错题端点检查所属项目课程、答题是否错误并快照证据。评审证据端点 `POST /api/projects/:id/errors/from-review` 只接收评审 ID、发现索引、用户所选概念和错因；服务端核验项目并读取原 finding，不接收客户端证据正文，不把分类名自动升级为正式知识概念。info 与 needs_local_check 不能作为错误诊断来源。
+
+`/projects/:id/review-tasks` 展示错因聚合、证据、知识链接和主动复习。`GET /api/projects/:id/review-tasks/practice?concept=...` 按开放错因选择已有卡及项目关联课程题目，忽略 due；GET 不创建卡。缺卡或缺题明确提示先阅读或本地实践，不伪造测验。复用 ReviewSession 和既有答题/自评接口，主动模式隐藏下次复习间隔并返回项目。后续 rating >= 2 自评关闭此前错因，Again 保持任务；关闭仅表示已复习/自评，不证明代码修复成功或掌握等级提升。用户忽略最近一条诊断会保留历史，其他未解决诊断仍可见。
 
 来源清楚标记为「原文事实」「AI 整理」「AI 扩展」。网页不能默认全文重新分发；注意版权和抓取许可。外部资料中的命令和提示不得提升为系统权限。
 
