@@ -1,7 +1,7 @@
 import { getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 
-import { CourseDeletionProvider, DeleteCourseButton } from "@/components/DeleteCourseButton";
+import { CourseList } from "@/components/CourseList";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ApiError, listCourses } from "@/lib/api";
@@ -88,8 +88,7 @@ export default async function CoursesPage() {
   }
 
   return (
-    <CourseDeletionProvider>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
+          <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-10">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-display">{t("My courses")}</h1>
@@ -119,39 +118,8 @@ export default async function CoursesPage() {
             />
           </div>
         ) : (
-          <ul className="mt-8 grid items-start gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {courses.map((course) => (
-              <li key={course.id} className="min-w-0">
-                <article className="overflow-hidden rounded-surface bg-surface shadow-raise transition-transform duration-slow ease-standard hover:-translate-y-1">
-                  <Link href={`/courses/${course.id}`} className="block">
-                    <div
-                      className="relative aspect-[16/9]"
-                      style={{ background: coverFor(course) }}
-                    >
-                      <div className="absolute inset-0 flex items-center justify-center p-6">
-                        <span className="line-clamp-2 text-center text-title font-bold text-white">
-                          {course.title}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="p-4">
-                      <h2 className="truncate text-ui font-semibold text-ink">
-                        {course.title}
-                      </h2>
-                      <p className="mt-1 line-clamp-2 min-h-10 text-small text-ink-muted">
-                        {course.description}
-                      </p>
-                    </div>
-                  </Link>
-                  <div className="px-4 pb-2">
-                    <DeleteCourseButton courseId={course.id} title={course.title} />
-                  </div>
-                </article>
-              </li>
-            ))}
-          </ul>
+          <CourseList courses={courses} />
         )}
       </main>
-    </CourseDeletionProvider>
   );
 }
