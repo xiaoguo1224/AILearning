@@ -147,7 +147,6 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
         value: course.id,
         category: courseIdx,
         symbolSize: 64,
-        itemStyle: { color: "#1fae54" },
         ...(cx !== undefined ? { x: cx, y: cy } : {}),
       });
       // Chapter nodes: arranged in a circle around their course.
@@ -244,24 +243,23 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
       series: [
         {
           type: "graph",
-          layout: hasPositions ? "none" : "force",
+          layout: "none",
           data: nodes,
           links,
           categories,
           roam: true,
-          label: {
-            show: true,
-            position: "right",
-            formatter: "{b}",
-            fontSize: 11,
-          },
-          // Auto-hide overlapped labels (echarts official graph-label-overlap example).
           labelLayout: {
             hideOverlap: true,
           },
           scaleLimit: {
             min: 0.4,
             max: 2,
+          },
+          label: {
+            show: true,
+            position: "right",
+            formatter: "{b}",
+            fontSize: 11,
           },
           lineStyle: {
             color: "source",
