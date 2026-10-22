@@ -8,11 +8,12 @@ import { ReviewSession } from "@/components/ReviewSession";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ApiError, getReviewQueue } from "@/lib/api";
 import type { ReviewQueue } from "@/lib/types";
+import { BRAND_NAME } from "@/lib/brand";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Review session | StudyForge",
+  title: `Review session | ${BRAND_NAME}`,
 };
 
 /** Matches the backend's own queue default. */

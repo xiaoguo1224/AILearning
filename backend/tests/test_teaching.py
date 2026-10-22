@@ -68,8 +68,8 @@ def test_a_surface_can_add_refusals_without_rewriting_the_shared_ones():
     tutor_refusals = tutor.TUTOR_SYSTEM.split(teaching.NEVER_DO_HEADING)[1].split("\n\n")[0]
     explore_refusals = explore.EXPLORE_SYSTEM.split(teaching.NEVER_DO_HEADING)[1].split("\n\n")[0]
 
-    assert "You do not explain StudyForge itself." in tutor_refusals
-    assert "You do not explain StudyForge itself." not in explore_refusals
+    assert "You do not explain MindTrail itself." in tutor_refusals
+    assert "You do not explain MindTrail itself." not in explore_refusals
     assert "You do not run, test or verify code" in explore_refusals
     assert "You do not run, test or verify code" not in tutor_refusals
 

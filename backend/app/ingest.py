@@ -154,7 +154,7 @@ def _is_internal(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool
 def _allow_private_hosts() -> bool:
     """Whether to permit fetching private, loopback and link-local addresses.
 
-    Off by default. A self-hoster running StudyForge alongside a wiki on the same
+    Off by default. A self-hoster running MindTrail alongside a wiki on the same
     LAN has a real reason to turn it on, so this is a setting rather than a ban, but
     it must be a deliberate act: the safe default protects anyone who exposes the
     API to people they do not fully trust.
@@ -231,7 +231,7 @@ def _check_host(url: str) -> None:
             # resolve" turns the endpoint into an internal DNS oracle. The half that
             # helps a legitimate user is kept.
             raise UnsafeURLError(
-                f"{host} is on a private or local network, which StudyForge will not "
+                f"{host} is on a private or local network, which MindTrail will not "
                 "fetch. Set STUDYFORGE_ALLOW_PRIVATE_URLS=true if that is deliberate."
             )
 

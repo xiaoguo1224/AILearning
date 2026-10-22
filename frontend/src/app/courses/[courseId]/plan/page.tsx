@@ -432,7 +432,7 @@ function CalendarSection({ plan, t }: { plan: CoursePlan; t: Translator }) {
   return (
     <section aria-labelledby="plan-calendar-heading">
       <h2 id="plan-calendar-heading" className="mt-9 text-subtitle"><LocalizedText text={" Put it in your calendar "} /></h2>
-      <p className="mt-1.5 max-w-2xl text-small text-ink-muted"><LocalizedText text={" StudyForge cannot notify you. There are no accounts here and no server running when you are not using it, so nothing in this program can send you an email, a push notification, or a reminder of any kind, and that is by design. What it can do is hand you a calendar file, and let the calendar you already use do the reminding. "} /></p>
+      <p className="mt-1.5 max-w-2xl text-small text-ink-muted"><LocalizedText text={" MindTrail cannot notify you. There are no accounts here and no server running when you are not using it, so nothing in this program can send you an email, a push notification, or a reminder of any kind, and that is by design. What it can do is hand you a calendar file, and let the calendar you already use do the reminding. "} /></p>
       {plan.deadline == null ? (
         <p className="mt-3 rounded-surface border border-line px-5 py-4 text-small text-ink-muted"><LocalizedText text={" Set a deadline above and the calendar file appears here. "} /></p>
       ) : (

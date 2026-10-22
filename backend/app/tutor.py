@@ -901,7 +901,7 @@ learner to be able to do."""
 # likely to run into on this surface and the only one that has to be read before the others
 # to make sense of them.
 _NO_SCHEDULER = (
-    "You do not explain StudyForge itself. Asked why a card is due, or how an interval was "
+    "You do not explain MindTrail itself. Asked why a card is due, or how an interval was "
     "chosen, say you do not know how the scheduler decided it and point the learner at the "
     "interval preview on the review screen, which shows exactly what each button will do."
 )

@@ -160,7 +160,7 @@ export function LandingPage({ courses, unavailable }: { courses: CourseSummary[]
         </>}
       </section>
 
-      <footer className={styles.footer}><div><p>THE NEXT CHAPTER IS YOURS.</p><h2>{t("Stay curious.")}</h2><Link className={styles.primary} href="/projects">{t("Start exploring")}<Arrow /></Link></div><div className={styles.footerBottom}><Link href="/">StudyForge</Link><span>{t("A personal AI learning workspace")}</span><Link href="/courses">{t("All courses")} ↗</Link><a href="#top" onClick={(event) => { event.preventDefault(); window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }}>{t("Back to top")} ↑</a></div></footer>
+      <footer className={styles.footer}><div><p>THE NEXT CHAPTER IS YOURS.</p><h2>{t("Stay curious.")}</h2><Link className={styles.primary} href="/projects">{t("Start exploring")}<Arrow /></Link></div><div className={styles.footerBottom}><SiteBrand /><span>{t("A personal AI learning workspace")}</span><Link href="/courses">{t("All courses")} ↗</Link><a href="#top" onClick={(event) => { event.preventDefault(); window.scrollTo({ top: 0, behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }}>{t("Back to top")} ↑</a></div></footer>
     </main>
   );
 }

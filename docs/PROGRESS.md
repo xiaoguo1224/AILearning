@@ -404,3 +404,9 @@
 - 浏览器：1440/390视口，浅/深首页、课程、图谱、任务链路、主题刷新/跨页、球体自动动画及暂停均验证；无整页横向溢出、无 pageerror。实际3000首页/链路正常，/today404。详情 `test-reports/2026-10-23-dual-theme.md`。
 - 纠正恢复报告前端总数：功能恢复提交时为180 passed / 44 failed（原文字181/43为抄录错误）；原始JSON保留。
 - 下一步按用户追加要求单独更换项目名称、Logo与README，保留上游版权。
+
+
+### 2026-10-23 — 知径 MindTrail 独立品牌与 README
+- 前序功能恢复 `b5010e7`、双主题 `eb6131f` 已完成后，按用户追加要求更名为「知径 MindTrail」；书页路径 SVG、favicon、界面/元信息/API 名称统一；README 重写为使用文档，NOTICE 保留上游与第三方说明。LICENSE 和上游 README 无 Git 差异；配置、Cookie、数据库和历史标识兼容。
+- Docker 后端239+77=316 passed；前端定向26 passed，tsc/定向ESLint/生产构建通过。完整前端185 passed / 43 failed，无新增失败；完整lint14 errors / 33 warnings。后端全量Ruff未通过（含挂载执行位与既有规则问题），未降低规则；未运行完整后端pytest或付费供应商。
+- 浏览器1440/390验证中文/英文品牌标题、新Logo、favicon200、主题与工作台入口；实际3000/8000亦确认新名称，未写个人学习库。README/NOTICE链接与SVG XML检查通过。详情 `test-reports/2026-10-23-mindtrail-brand.md`。

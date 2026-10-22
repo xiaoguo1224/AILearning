@@ -114,7 +114,7 @@ def never_do(
 ) -> str:
     """The refusal list: surface-specific bullets, the shared three, then any tail.
 
-    `first` exists because order carries meaning — the tutor's "do not explain StudyForge"
+    `first` exists because order carries meaning — the tutor's "do not explain MindTrail"
     rule belongs above the general refusals, since it is the one a learner is most likely
     to hit and the one that most needs to be read before the rest.
     """

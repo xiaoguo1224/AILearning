@@ -1,7 +1,7 @@
 [project]
 name = "studyforge-backend"
 version = "0.1.0"
-description = "StudyForge backend: document ingestion, course generation, and progress API"
+description = "MindTrail backend: document ingestion, course generation, and progress API"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",

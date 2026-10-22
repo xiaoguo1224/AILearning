@@ -87,6 +87,6 @@
 - [x] REC-01：以刚同步的 `main`/`origin/main` `29b0265` 为基线，撤回本次既有工作台组件和全局主题改动；保留用户知识页宽度修改，后端/API/类型定义不改。恢复检查见 PROGRESS 与 `test-reports/2026-10-23-main-alignment.md`。
 - [x] REC-02：恢复课程生成的持久审查/续跑、任务链路实际返回与查看；后端68项、前端8项恢复回归及真实浏览器流程通过，见 generation-trace-recovery 报告。
 - [x] UI-01：功能恢复验收后，完成首页/工作台双主题，默认浅色并记住手动选择；独立浅色首屏、深色球体自动动画、艺术字体课程滚动、课程卡片/图谱/AI 链路适配。生产构建通过，测试证据见 `test-reports/2026-10-23-dual-theme.md`。
-- [-] BRAND-01：双主题完成后，为项目确定新名称、设计 Logo、重写 README，保留 MIT 与上游版权声明。
+- [x] BRAND-01：双主题提交 `eb6131f` 后，完成「知径 MindTrail」名称、书页路径 SVG Logo、favicon、界面/元信息/API 名称和 README；原 MIT/上游 README 保留。验收见 `test-reports/2026-10-23-mindtrail-brand.md`。
 
 当 `TASKS.md` 中条目完成：记录对应 Git commit、修改路径、测试命令/结果和剩余风险到 `PROGRESS.md`；必要时更新 `DECISIONS.md`。发现新需求先判断是否属于 PRD 范围，再加任务，不能悄悄扩张范围。

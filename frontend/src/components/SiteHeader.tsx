@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LanguageSwitcher, useI18n } from "./LocaleProvider";
+import { SiteBrand } from "./SiteBrand";
 
 const LINKS: { href: string; label: string }[] = [
-  { href: "/", label: "Today" },
+  { href: "/", label: "Home" },
   { href: "/projects", label: "Projects" },
   { href: "/courses", label: "Courses" },
   { href: "/usage", label: "Usage" },
@@ -28,9 +29,7 @@ export function SiteHeader() {
   return (
     <header className="border-b border-line">
       <nav className="mx-auto flex w-full max-w-4xl flex-wrap items-center justify-between gap-3 px-6 py-3">
-        <Link href="/" className="text-subtitle tracking-tight text-ink">
-          StudyForge
-        </Link>
+        <SiteBrand />
         <div className="flex flex-wrap items-center gap-4 text-ui">
           {LINKS.map((link) => {
             const active = isActive(pathname, link.href);

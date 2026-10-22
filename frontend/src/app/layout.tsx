@@ -3,6 +3,7 @@ import localFont from "next/font/local";
 import { cookies } from "next/headers";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { normalizeTheme, THEME_COOKIE, themeVariables } from "@/lib/theme";
+import { BRAND_NAME, BRAND_TITLE } from "@/lib/brand";
 
 import { CostBanner } from "@/components/CostBanner";
 import { AppShell } from "@/components/AppShell";
@@ -38,7 +39,7 @@ const notoSansSC = localFont({
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslator();
-  return { title: "StudyForge", description: t("A personal AI learning workspace") };
+  return { title: t.locale === "zh-CN" ? BRAND_TITLE : BRAND_NAME, applicationName: BRAND_NAME, description: t("A personal AI learning workspace") };
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {

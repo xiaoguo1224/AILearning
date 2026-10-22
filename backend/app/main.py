@@ -72,7 +72,7 @@ from app.suggestions.router import router as suggestions_router
 
 logger = logging.getLogger("studyforge.api")
 
-app = FastAPI(title="StudyForge", version="0.1.0")
+app = FastAPI(title="MindTrail", version="0.1.0")
 app.add_middleware(TeachingLocaleMiddleware)
 app.include_router(projects_router)
 app.include_router(resources_router)

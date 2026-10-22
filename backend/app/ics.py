@@ -181,16 +181,16 @@ def _description(plan: dict) -> str:
     if required is not None:
         return (
             f"{head} {open_days} study days left, so about {required:.1f} lessons per "
-            f"week to be ready in time. Tracked in StudyForge."
+            f"week to be ready in time. Tracked in MindTrail."
         )
     if plan["status"] == "passed":
-        return f"{head} This deadline has passed. Tracked in StudyForge."
+        return f"{head} This deadline has passed. Tracked in MindTrail."
     if plan["days_off_in_window"]:
         return (
             f"{head} Every remaining day is marked as a day off, so there is no study "
-            f"time left before this. Tracked in StudyForge."
+            f"time left before this. Tracked in MindTrail."
         )
-    return f"{head} This is today, so no study days are left before it. Tracked in StudyForge."
+    return f"{head} This is today, so no study days are left before it. Tracked in MindTrail."
 
 
 def deadline_calendar(plan: dict, now: datetime | None = None) -> str:
