@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Input, Segmented } from "antd";
 
-import { useI18n } from "@/components/LocaleProvider";
 import { CourseDeletionProvider, DeleteCourseButton } from "@/components/DeleteCourseButton";
 import type { CourseSummary } from "@/lib/types";
 
@@ -26,13 +25,12 @@ function coverFor(course: CourseSummary): string {
 type SortKey = "created" | "frequent" | "alpha";
 
 export function CourseList({ courses }: { courses: CourseSummary[] }) {
-  const { t } = useI18n();
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("frequent");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    let list = q
+    const list = q
       ? courses.filter(
           (c) =>
             c.title.toLowerCase().includes(q) ||
@@ -59,10 +57,11 @@ export function CourseList({ courses }: { courses: CourseSummary[] }) {
         style={{
           display: "flex",
           gap: 12,
+          flexWrap: "wrap",
           alignItems: "center",
           marginTop: 24,
           padding: "12px 16px",
-          background: "var(--surface)",
+          background: "var(--sf-surface)",
           borderRadius: 12,
         }}
       >
@@ -71,7 +70,7 @@ export function CourseList({ courses }: { courses: CourseSummary[] }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           allowClear
-          style={{ flex: 1 }}
+          style={{ flex: "1 1 220px" }}
         />
         <Segmented
           value={sort}
@@ -84,7 +83,7 @@ export function CourseList({ courses }: { courses: CourseSummary[] }) {
         />
       </div>
 
-      <p style={{ marginTop: 16, color: "var(--ink-muted)", fontSize: 13 }}>
+      <p style={{ marginTop: 16, color: "var(--sf-ink-muted)", fontSize: 13 }}>
         共 {filtered.length} 门课程
       </p>
 
@@ -93,7 +92,7 @@ export function CourseList({ courses }: { courses: CourseSummary[] }) {
           marginTop: 16,
           display: "grid",
           gap: 24,
-          gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
+          gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 300px), 1fr))",
         }}
       >
         {filtered.map((course) => (
@@ -103,19 +102,19 @@ export function CourseList({ courses }: { courses: CourseSummary[] }) {
               style={{
                 overflow: "hidden",
                 borderRadius: 20,
-                background: "#fff",
-                border: "1px solid #f0f0f0",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                background: "var(--sf-surface)",
+                border: "1px solid var(--sf-line)",
+                boxShadow: "var(--sf-shadow-raise)",
                 transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
                 cursor: "pointer",
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = "translateY(-4px)";
-                e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.1)";
+                e.currentTarget.style.boxShadow = "var(--sf-shadow-overlay)";
               }}
               onMouseLeave={(e) => {
                 e.currentTarget.style.transform = "translateY(0)";
-                e.currentTarget.style.boxShadow = "0 1px 3px rgba(0,0,0,0.04)";
+                e.currentTarget.style.boxShadow = "var(--sf-shadow-raise)";
               }}
             >
               <Link href={`/courses/${course.id}`} style={{ display: "block" }}>
@@ -157,7 +156,7 @@ export function CourseList({ courses }: { courses: CourseSummary[] }) {
                 <div style={{ padding: "16px 16px 8px" }}>
                   <p
                     style={{
-                      color: "var(--ink-muted)",
+                      color: "var(--sf-ink-muted)",
                       fontSize: 13,
                       display: "-webkit-box",
                       WebkitLineClamp: 2,
@@ -177,7 +176,7 @@ export function CourseList({ courses }: { courses: CourseSummary[] }) {
                   alignItems: "center",
                   justifyContent: "space-between",
                   padding: "8px 16px 16px",
-                  borderTop: "1px solid #f5f5f5",
+                  borderTop: "1px solid var(--sf-line)",
                   marginTop: 8,
                 }}
               >
@@ -190,8 +189,8 @@ export function CourseList({ courses }: { courses: CourseSummary[] }) {
                       justifyContent: "center",
                       padding: "7px 20px",
                       borderRadius: 20,
-                      background: "var(--accent)",
-                      color: "#fff",
+                      background: "var(--sf-accent)",
+                      color: "var(--sf-on-fill)",
                       fontSize: 13,
                       fontWeight: 500,
                       transition: "opacity 0.2s",
@@ -202,7 +201,7 @@ export function CourseList({ courses }: { courses: CourseSummary[] }) {
                     进入学习
                   </Link>
                   {(course.opened_count || 0) > 0 && (
-                    <span style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+                    <span style={{ fontSize: 12, color: "var(--sf-ink-muted)" }}>
                       已学 {course.opened_count} 次
                     </span>
                   )}

@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Noto_Sans_SC } from "next/font/google";
+import localFont from "next/font/local";
+import { cookies } from "next/headers";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { normalizeTheme, THEME_COOKIE, themeVariables } from "@/lib/theme";
 
 import { CostBanner } from "@/components/CostBanner";
-import { AppSidebar, MobileTopBar } from "@/components/AppSidebar";
+import { AppShell } from "@/components/AppShell";
 import { LocaleProvider } from "@/components/LocaleProvider";
 import { VantThemeProvider } from "@/components/VantThemeProvider";
 import { getTranslator } from "@/lib/locale-server";
@@ -10,48 +13,52 @@ import "./globals.css";
 import "katex/dist/katex.min.css";
 import "react-vant/bundle/index.css";
 
-const geistSans = Geist({
+const geistSans = localFont({
+  src: "../../public/fonts/Geist-Variable.woff2",
   variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
-const notoSansSC = Noto_Sans_SC({
-  variable: "--font-noto-sans-sc",
-  subsets: ["latin"],
-  weight: ["400", "500", "700"],
+  weight: "100 900",
   display: "swap",
+});
+
+const geistMono = localFont({
+  src: "../../public/fonts/GeistMono-Variable.woff2",
+  variable: "--font-geist-mono",
+  weight: "100 900",
+  display: "swap",
+});
+
+const notoSansSC = localFont({
+  src: "../../public/fonts/NotoSansSC-Variable.woff2",
+  variable: "--font-noto-sans-sc",
+  weight: "100 900",
+  display: "swap",
+  preload: false,
 });
 
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslator();
-  return { title: "StudyForge", description: t("Turn any material into a structured course with quizzes.") };
+  return { title: "StudyForge", description: t("A personal AI learning workspace") };
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const t = await getTranslator();
+  const theme = normalizeTheme((await cookies()).get(THEME_COOKIE)?.value);
   return (
     <html
       lang={t.locale}
+      data-theme={theme}
+      style={{ ...themeVariables(theme), colorScheme: theme }}
       className={`${geistSans.variable} ${geistMono.variable} ${notoSansSC.variable} h-full antialiased`}
     >
       <body className="min-h-full">
         <LocaleProvider locale={t.locale}>
+          <ThemeProvider initialTheme={theme}>
           <VantThemeProvider>
           <CostBanner />
-          <div className="flex min-h-screen items-stretch">
-            <AppSidebar />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <MobileTopBar />
-              {children}
-            </div>
-          </div>
+          <AppShell>{children}</AppShell>
           </VantThemeProvider>
+          </ThemeProvider>
         </LocaleProvider>
       </body>
     </html>

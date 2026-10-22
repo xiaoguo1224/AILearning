@@ -13,7 +13,7 @@ export function CourseListView({ courses, error, query, sort }: {
     <Cell border={false} style={{ padding: 0, background: "transparent", alignItems: "center" }} title={<Typography.Title level={1} style={{ margin: "0 0 8px", fontSize: 32, fontWeight: 700 }}>{t("My courses")}</Typography.Title>}
       label={t("Turn any material into a structured course with quizzes.")}
       extra={courses.length > 0 && <Button id="new-course" tag="a" {...{ href: "/courses/new" }} type="primary">{t("New course")}</Button>} />
-    {error ? <NoticeBar text={error} scrollable={false} wrapable color="var(--danger)" /> :
+    {error ? <NoticeBar text={error} scrollable={false} wrapable color="var(--sf-danger)" /> :
       !courses.length ? <Empty description={t("No courses yet")}>
         <Typography.Text>{t("Paste text, drop in a URL, or upload a PDF to get started.")}</Typography.Text>
         <Button id="create-first-course" tag="a" {...{ href: "/courses/new" }} type="primary">{t("Create your first course")}</Button>

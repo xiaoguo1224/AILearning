@@ -4,18 +4,13 @@ import ReactECharts from "echarts-for-react";
 import { useMemo } from "react";
 
 import type { ConceptLesson, ConceptNode, MasteryBucket } from "@/lib/types";
+import { useTheme } from "./ThemeProvider";
+import { masteryColors, THEMES } from "@/lib/theme";
 
 interface ConceptStatsProps {
   lessons: ConceptLesson[];
   concepts: ConceptNode[];
 }
-
-const MASTERY_COLORS: Record<MasteryBucket, string> = {
-  mastered: "#1fae54",
-  solid: "#7dd3a8",
-  shaky: "#f5a623",
-  not_started: "#e0e0e0",
-};
 
 const MASTERY_LABELS: Record<MasteryBucket, string> = {
   mastered: "已掌握",
@@ -31,7 +26,10 @@ const BUCKETS: MasteryBucket[] = ["mastered", "solid", "shaky", "not_started"];
  * Clean ECharts visualizations replacing the hand-written SVG concept map.
  */
 export function ConceptStats({ lessons, concepts }: ConceptStatsProps) {
+  const { theme } = useTheme();
+  const p = THEMES[theme];
   const barOption = useMemo(() => {
+    const colors = masteryColors(theme);
     const byLesson = new Map<number, Map<MasteryBucket, number>>();
     for (const c of concepts) {
       let m = byLesson.get(c.lesson_index);
@@ -46,46 +44,50 @@ export function ConceptStats({ lessons, concepts }: ConceptStatsProps) {
       name: MASTERY_LABELS[b],
       type: "bar",
       stack: "total",
-      itemStyle: { color: MASTERY_COLORS[b] },
+      itemStyle: { color: colors[b] },
       data: lessons.map((l) => byLesson.get(l.index)?.get(b) ?? 0),
     }));
     return {
-      tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
-      legend: { data: BUCKETS.map((b) => MASTERY_LABELS[b]) },
+      textStyle: { color: p.ink },
+      tooltip: { trigger: "axis", renderMode: "richText", backgroundColor: p.surface, borderColor: p.line, textStyle: { color: p.ink }, axisPointer: { type: "shadow" } },
+      legend: { textStyle: { color: p.muted }, data: BUCKETS.map((b) => MASTERY_LABELS[b]) },
       xAxis: {
         type: "category",
         data: xLabels,
-        axisLabel: { interval: 0, rotate: 20, fontSize: 11 },
+        axisLabel: { interval: 0, rotate: 20, fontSize: 11, color: p.muted },
+        axisLine: { lineStyle: { color: p.line } },
       },
-      yAxis: { type: "value", name: "知识点数" },
+      yAxis: { type: "value", name: "知识点数", axisLabel: { color: p.muted }, splitLine: { lineStyle: { color: p.line } } },
       series,
     };
-  }, [lessons, concepts]);
+  }, [lessons, concepts, theme, p]);
 
   const donutOption = useMemo(() => {
+    const colors = masteryColors(theme);
     const counts = new Map<MasteryBucket, number>();
     for (const c of concepts) {
       counts.set(c.bucket, (counts.get(c.bucket) ?? 0) + 1);
     }
     return {
-      tooltip: { trigger: "item" },
-      legend: { bottom: 0 },
+      textStyle: { color: p.ink },
+      tooltip: { trigger: "item", renderMode: "richText", backgroundColor: p.surface, borderColor: p.line, textStyle: { color: p.ink } },
+      legend: { bottom: 0, textStyle: { color: p.muted } },
       series: [
         {
           type: "pie",
           radius: ["45%", "70%"],
           avoidLabelOverlap: true,
-          itemStyle: { borderColor: "#fff", borderWidth: 2 },
-          label: { show: true, formatter: "{b}\n{d}%" },
+          itemStyle: { borderColor: p.surface, borderWidth: 2 },
+          label: { show: true, formatter: "{b}\n{d}%", color: p.ink },
           data: BUCKETS.map((b) => ({
             name: MASTERY_LABELS[b],
             value: counts.get(b) ?? 0,
-            itemStyle: { color: MASTERY_COLORS[b] },
+            itemStyle: { color: colors[b] },
           })),
         },
       ],
     };
-  }, [concepts]);
+  }, [concepts, theme, p]);
 
   return (
     <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
@@ -100,6 +102,8 @@ export function ConceptStats({ lessons, concepts }: ConceptStatsProps) {
 }
 
 export function MasteryLegend() {
+  const { theme } = useTheme();
+  const colors = masteryColors(theme);
   return (
     <div style={{ display: "flex", gap: 16, marginTop: 16, flexWrap: "wrap" }}>
       {BUCKETS.map((key) => (
@@ -109,7 +113,8 @@ export function MasteryLegend() {
               width: 12,
               height: 12,
               borderRadius: "50%",
-              backgroundColor: MASTERY_COLORS[key],
+              backgroundColor: colors[key],
+              border: "1px solid var(--sf-line-strong)",
               display: "inline-block",
             }}
           />

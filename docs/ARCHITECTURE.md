@@ -193,6 +193,13 @@ P4 已实现：项目自由问答和临时讲解在回答引用本项目资料�
 
 ## 11. 关键风险
 
+### 首页与主题
+
+- `lib/theme.ts` 是双主题颜色的唯一来源；RootLayout 使用异步 Cookie API 读取 `studyforge_theme`，直接在 HTML 输出颜色变量和 `color-scheme`，默认浅色。ThemeProvider 切换 Cookie、根变量与 React 上下文；不依赖系统深色偏好。
+- Ant Design ConfigProvider、现有 Vant 控件和 ECharts 使用相同主题；Vant 的 body 级 Portal 通过根变量适配。JobTrace 使用语义化列表、独立 360px 滚动区域和原生 details，保留调用 ID、摘要、记录顺序。
+- AppShell 仅在 `/` 隐藏侧栏，业务路由保持现有壳与入口。首页读取真实课程；后端不可用和空课程分开呈现。没有自动生成示例课程或调用模型。
+- 深色首页通过原生滚动/RAF 和 CSS 动画驱动球体及课程条；浅色首页使用原生视频及渐变降级背景。静态字体及 OFL 许可证位于 `public/fonts`，构建不访问 Google Fonts。
+
 1. `main.py` / `tutor.py` 过大，需增量模块化。
 2. 原始资料未持久化，必须优先补资源层。
 3. 原 Tutor 强绑定 Concept，不宜简单添加 Prompt 作为自由 Agent。

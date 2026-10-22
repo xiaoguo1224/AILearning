@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { render as renderReact, type RenderOptions } from "@testing-library/react";
 import { LocaleProvider } from "@/components/LocaleProvider";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 export * from "@testing-library/react";
 
@@ -8,6 +9,6 @@ export * from "@testing-library/react";
 export function render(ui: ReactElement, options?: RenderOptions) {
   const Wrapper = options?.wrapper;
   return renderReact(ui, { ...options, wrapper: ({ children }) => (
-    <LocaleProvider locale="en">{Wrapper ? <Wrapper>{children}</Wrapper> : children}</LocaleProvider>
+    <LocaleProvider locale="en"><ThemeProvider initialTheme="dark">{Wrapper ? <Wrapper>{children}</Wrapper> : children}</ThemeProvider></LocaleProvider>
   ) });
 }

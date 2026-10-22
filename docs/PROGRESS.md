@@ -396,3 +396,11 @@
 - Docker 后端定向回归 `test_staged_generation.py test_generation.py test_usage_api.py`：68 passed；前端 course-workflows 定向：8 passed（另外 3 项课程/图谱测试未选入本次定向运行）。完整前端结果详见报告，无新增失败。
 - 独立临时库与离线确定性 provider 的真实 HTTP/浏览器流程：创建→刷新恢复→修改提纲→确认→任务页继续→修改章节→逐章确认→保存课程，全部完成；实际显示19条执行记录。不使用个人数据库，不调用付费模型。
 - 功能验收后继续深浅双主题，样式改动与恢复独立提交。详情 `docs/test-reports/2026-10-23-generation-trace-recovery.md`。
+
+
+### 2026-10-23 — 首页与默认浅色的双主题验收
+- 在功能恢复提交 `b5010e7` 后完成：独立浅色首页（自然影像/居中标题/双入口）与深色球体首页；主题 Cookie/SSR 持久化；艺术字体课程自动滚动；课程卡片、知识图谱、AI 调用链路与摘要配色统一。保持工作台业务、课程计数、任务审查/续跑和图谱关系。
+- Docker：tsc 与生产构建通过；四个定向测试文件26 passed；完整185 passed / 43 failed，失败集为 main 基线的子集；完整 lint14 errors / 33 warnings，定向修改文件 ESLint 通过。未宣称全量测试/lint通过。
+- 浏览器：1440/390视口，浅/深首页、课程、图谱、任务链路、主题刷新/跨页、球体自动动画及暂停均验证；无整页横向溢出、无 pageerror。实际3000首页/链路正常，/today404。详情 `test-reports/2026-10-23-dual-theme.md`。
+- 纠正恢复报告前端总数：功能恢复提交时为180 passed / 44 failed（原文字181/43为抄录错误）；原始JSON保留。
+- 下一步按用户追加要求单独更换项目名称、Logo与README，保留上游版权。

@@ -19,18 +19,18 @@ export function BackButton({ href, children }: BackButtonProps) {
         alignItems: "center",
         gap: 6,
         fontSize: 13,
-        color: "var(--ink-muted)",
+        color: "var(--sf-ink-muted)",
         textDecoration: "none",
         padding: "6px 12px 6px 8px",
         borderRadius: 8,
         transition: "all 0.2s",
       }}
       onMouseEnter={(e) => {
-        e.currentTarget.style.color = "var(--ink)";
-        e.currentTarget.style.background = "var(--surface)";
+        e.currentTarget.style.color = "var(--sf-ink)";
+        e.currentTarget.style.background = "var(--sf-surface)";
       }}
       onMouseLeave={(e) => {
-        e.currentTarget.style.color = "var(--ink-muted)";
+        e.currentTarget.style.color = "var(--sf-ink-muted)";
         e.currentTarget.style.background = "transparent";
       }}
     >

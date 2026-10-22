@@ -16,7 +16,7 @@
 1. 修复前 `tests/test_staged_generation.py`：12 failed；修复后加调用关联测试：13 passed。
 2. Docker `python -m pytest tests/test_staged_generation.py tests/test_generation.py tests/test_usage_api.py -q`：68 passed，2 项既有 FastAPI 弃用警告。
 3. Docker `npm test -- tests/course-workflows.test.tsx -t 'resumable course generation|trace is|job list'`：8 passed；3 项不相关的课程/图谱测试未被该定向筛选选中，未删除或标记 skip。
-4. 完整 Vitest：181 passed / 43 failed；与 main 基线逐测试名比较，没有新增失败。剩余失败与课程生成恢复不同源，保留原测试。
+4. 完整 Vitest：180 passed / 44 failed；与 main 基线逐测试名比较，没有新增失败。剩余失败与课程生成恢复不同源，保留原测试。
 5. 修改的前端入口、向导、任务表、API 的 ESLint 定向检查通过。全量类型检查仍被已有 CourseBrowser/open_count 与缺少 buildCourseGraph 等错误阻止，不能宣称生产构建全绿。
 6. 后端 Ruff 执行记录存在 Windows 只读挂载文件的 EXE002，以及沿用代码的 broad-exception/noqa 诊断，未删除校验或修改规则。
 7. 启动两个独立 Docker 临时实例（8001/3001，临时 SQLite，确定性离线 provider），Playwright 完成：创建高难度全量审查 → 重载原任务 → 修改提纲 → 确认 → 从 AI 任务页继续原任务 → 修改章节 → 确认两章 → 保存课程。任务 URL 保持同一 ID，显示19条执行记录。截图：`output/playwright/recovered-generation-completed.png`（忽略目录）。

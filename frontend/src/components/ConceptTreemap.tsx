@@ -3,38 +3,20 @@
 import ReactECharts from "echarts-for-react";
 
 import type { ConceptLesson, ConceptNode } from "@/lib/types";
+import { useTheme } from "./ThemeProvider";
+import { masteryColors, THEMES } from "@/lib/theme";
 
 interface ConceptTreemapProps {
   lessons: ConceptLesson[];
   concepts: ConceptNode[];
 }
 
-const BUCKET_COLORS: Record<string, string> = {
-  mastered: "#10b981",
-  solid: "#6ee7b7",
-  shaky: "#fbbf24",
-  not_started: "#e5e7eb",
-};
-
-const BUCKET_TEXT_COLORS: Record<string, string> = {
-  mastered: "#ffffff",
-  solid: "#065f46",
-  shaky: "#92400e",
-  not_started: "#6b7280",
-};
-
-// Diverse palette for not_started concepts, varied by lesson index.
 const LESSON_PALETTE = [
-  { bg: "#dbeafe", text: "#1e40af" }, // blue
-  { bg: "#e0e7ff", text: "#3730a3" }, // indigo
-  { bg: "#ede9fe", text: "#5b21b6" }, // violet
-  { bg: "#fce7f3", text: "#9d174d" }, // pink
-  { bg: "#ffedd5", text: "#9a3412" }, // orange
-  { bg: "#fef3c7", text: "#92400e" }, // amber
-  { bg: "#d1fae5", text: "#065f46" }, // emerald
-  { bg: "#ccfbf1", text: "#115e59" }, // teal
-  { bg: "#e0f2fe", text: "#0c4a6e" }, // sky
-  { bg: "#f3e8ff", text: "#6b21a8" }, // purple
+  { dark: "#243329", light: "#e5ede1" },
+  { dark: "#243438", light: "#e3eceb" },
+  { dark: "#30312d", light: "#ecebdf" },
+  { dark: "#30312f", light: "#e8e9e2" },
+  { dark: "#293529", light: "#e0eadb" },
 ];
 
 /**
@@ -42,6 +24,9 @@ const LESSON_PALETTE = [
  * Groups concepts by their introducing lesson.
  */
 export function ConceptTreemap({ lessons, concepts }: ConceptTreemapProps) {
+  const { theme } = useTheme();
+  const p = THEMES[theme];
+  const colors = masteryColors(theme);
   const lessonMap = new Map(lessons.map((l) => [l.id, l]));
 
   // Group concepts by lesson.
@@ -58,12 +43,11 @@ export function ConceptTreemap({ lessons, concepts }: ConceptTreemapProps) {
       name: lesson?.title ?? `Lesson ${lessonId}`,
       children: nodes.map((n) => {
         // For not_started, use diverse lesson-based colors.
-        let bg = BUCKET_COLORS[n.bucket] ?? "#e5e7eb";
-        let textColor = BUCKET_TEXT_COLORS[n.bucket] ?? "#6b7280";
+        let bg: string = colors[n.bucket] ?? p.untouched;
+        const textColor = n.bucket === "not_started" ? p.ink : n.bucket === "mastered" && theme === "light" ? "#ffffff" : "#153322";
         if (n.bucket === "not_started") {
           const palette = LESSON_PALETTE[lessonIndex % LESSON_PALETTE.length];
-          bg = palette.bg;
-          textColor = palette.text;
+          bg = palette[theme];
         }
         return {
           name: n.concept_label,
@@ -82,8 +66,12 @@ export function ConceptTreemap({ lessons, concepts }: ConceptTreemapProps) {
 
   const option = {
     tooltip: {
+      renderMode: "richText",
+      backgroundColor: p.surface,
+      borderColor: p.line,
+      textStyle: { color: p.ink },
       formatter: (info: { name: string; value: number }) =>
-        `${info.name}<br/>重要程度: ${info.value}/5`,
+        `${info.name}\n重要程度: ${info.value}/5`,
     },
     series: [
       {
@@ -100,13 +88,13 @@ export function ConceptTreemap({ lessons, concepts }: ConceptTreemapProps) {
         upperLabel: {
           show: true,
           height: 32,
-          color: "#fff",
-          backgroundColor: "#059669",
+          color: p.onFill,
+          backgroundColor: p.accent,
           fontSize: 13,
           fontWeight: 500,
         },
         itemStyle: {
-          borderColor: "#fff",
+          borderColor: p.app,
           borderWidth: 2,
           gapWidth: 2,
         },
@@ -117,7 +105,7 @@ export function ConceptTreemap({ lessons, concepts }: ConceptTreemapProps) {
           },
           {
             colorSaturation: [0.3, 0.6],
-            itemStyle: { borderWidth: 2, gapWidth: 2, borderColor: "#fff" },
+            itemStyle: { borderWidth: 2, gapWidth: 2, borderColor: p.app },
           },
         ],
       },

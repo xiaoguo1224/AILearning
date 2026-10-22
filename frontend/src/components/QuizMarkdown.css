@@ -1,7 +1,7 @@
 .quiz-markdown {
   font-size: 14px;
   line-height: 1.8;
-  color: var(--ink);
+  color: var(--sf-ink);
   min-width: 0;
   overflow-wrap: break-word;
 }
@@ -19,7 +19,7 @@
 .quiz-markdown h2 {
   font-size: 16px;
   padding-bottom: 6px;
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid var(--sf-line);
 }
 .quiz-markdown h3 { font-size: 15px; }
 
@@ -34,15 +34,15 @@
 .quiz-markdown ol { list-style: decimal; }
 .quiz-markdown li { margin: 6px 0; }
 .quiz-markdown li::marker {
-  color: var(--accent);
+  color: var(--sf-accent);
   font-weight: 600;
 }
 
 .quiz-markdown code {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: 13px;
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
-  color: var(--accent);
+  background: color-mix(in srgb, var(--sf-accent) 8%, transparent);
+  color: var(--sf-accent);
   padding: 2px 6px;
   border-radius: 4px;
   word-break: break-all;
@@ -66,11 +66,11 @@
 }
 
 .quiz-markdown blockquote {
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--sf-accent);
   padding: 8px 16px;
   margin: 12px 0;
-  color: var(--ink-muted);
-  background: var(--surface);
+  color: var(--sf-ink-muted);
+  background: var(--sf-surface);
   border-radius: 0 8px 8px 0;
 }
 
@@ -82,25 +82,25 @@
 
 .quiz-markdown th,
 .quiz-markdown td {
-  border: 1px solid var(--line);
+  border: 1px solid var(--sf-line);
   padding: 8px 12px;
   text-align: left;
   font-size: 13px;
 }
 
 .quiz-markdown th {
-  background: var(--surface);
+  background: var(--sf-surface);
   font-weight: 600;
 }
 
 .quiz-markdown hr {
   border: none;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--sf-line);
   margin: 20px 0;
 }
 
 .quiz-markdown a {
-  color: var(--accent);
+  color: var(--sf-accent);
   text-decoration: underline;
 }
 

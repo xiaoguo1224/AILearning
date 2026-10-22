@@ -112,8 +112,9 @@ export function JobsList() {
       dataIndex: "created_at",
       key: "created_at",
       width: 180,
+      responsive: ["md"] as ("md")[],
       render: (ts: string) => (
-        <span style={{ fontSize: 12, color: "#666" }}>
+        <span style={{ fontSize: 12, color: "var(--sf-ink-muted)" }}>
           {new Date(ts).toLocaleString()}
         </span>
       ),
@@ -151,6 +152,8 @@ export function JobsList() {
       dataSource={jobs}
       columns={columns}
       rowKey="id"
+      tableLayout="fixed"
+      scroll={{ x: "100%" }}
       pagination={{
         current: page,
         pageSize,
@@ -166,14 +169,14 @@ export function JobsList() {
           <div style={{ padding: "8px 0" }}>
             <JobProgressBar job={job} />
             {job.error && (
-              <div style={{ marginTop: 12, color: "red" }}>
+              <div style={{ marginTop: 12, color: "var(--sf-danger)" }}>
                 <strong>Error:</strong> {job.error}
               </div>
             )}
             {job.result && (
               <details style={{ marginTop: 12 }}>
                 <summary style={{ cursor: "pointer", fontWeight: 500 }}>Result</summary>
-                <pre style={{ fontSize: 12, overflow: "auto", marginTop: 8 }}>
+                <pre style={{ fontSize: 12, overflow: "auto", marginTop: 8, padding: 16, borderRadius: 12, background: "var(--sf-surface-sunken)", color: "var(--sf-ink)" }}>
                   {JSON.stringify(job.result, null, 2)}
                 </pre>
               </details>

@@ -210,3 +210,10 @@
 - 决策：`POST /courses/generate/stream`（SSE）放在 `backend/app/main.py`，与既有的 `/courses/generate`、`/courses/generate/pdf`、`/courses/generate/multipart` 同文件。AGENTS.md 要求新业务独立模块、避免 main.py 膨胀，但流式端点复用 main.py 内 helpers（`_ingest_or_refuse`、`_save_course`、`_cost_limit_exceeded` 语义、`generation`/`ingest` 装配），抽离需整体搬运 4 个端点的共享装配，得不偿失；既有格局本就是 4 个 generate 端点同文件。
 - 追溯：并行 lesson 生成线程安全——provider 每次调用新建 httpx 连接，`MeteredLLM._record` 每次开独立 DB session；请求级 session 只在流结束后的 `_save_course` 使用。失败一节不中断全程（`lesson_failed` 事件），与同步路由 drop-one-keep-rest 一致。
 - 前端：文本/URL 来源走流式（`GenerationProgress` 渐进渲染）；PDF 仍走同步 multipart（流式 multipart 未做）。
+
+## ADR-026 — 独立浅色首页与统一的双主题
+- 日期：2026-10-23
+- 状态：Accepted
+- 决策：以 main 为基线恢复课程生成/链路后，再做双主题。默认浅色，Cookie 持久化；保留深色球体首页。浅色参考用户提供的 Naturecore SaaS 提示词，采用 `#F7F7F7`、森林绿、居中标题、双按钮与自然背景，文案围绕个人学习与知识生长。
+- 保留 Next.js、现有组件库和业务数据流。提示词中的 Vite、Framer Motion 与逐帧 Canvas 视频缓存不引入；原生视频循环降低内存占用，减少动态效果或暂停时停止播放。视频 URL 来自用户的参考提示词，加载失败保留渐变背景，没有下载或重新分发视频。
+- ECharts 仅调整主题、边框、文字与 tooltip 渲染；保留知识分组、importance、掌握统计、AI 关系与课程布局。旧 CourseBrowser 的计数字段修正为当前 API 的 `opened_count`；图谱测试改为验证当前组件的 AI 坐标契约，未恢复旧布局。

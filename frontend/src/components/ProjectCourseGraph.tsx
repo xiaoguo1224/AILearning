@@ -2,6 +2,7 @@
 
 import { Button } from "antd";
 import ReactECharts from "echarts-for-react";
+import type { GraphSeriesOption } from "echarts";
 import { useEffect, useMemo, useState } from "react";
 
 import { useI18n } from "@/components/LocaleProvider";
@@ -11,9 +12,10 @@ import {
   listJobs,
   startGraphExtractJob,
   type ProjectGraph,
-  type ProjectGraphEdge,
 } from "@/lib/api";
 import type { ProjectCurriculum } from "@/lib/types";
+import { useTheme } from "./ThemeProvider";
+import { THEMES } from "@/lib/theme";
 
 interface ProjectCourseGraphProps {
   curriculum: ProjectCurriculum;
@@ -29,7 +31,7 @@ const KIND_LABELS: Record<string, string> = {
   related: "相关",
 };
 
-const KIND_STYLES: Record<string, { color: string; width: number; type?: string }> = {
+const KIND_STYLES: Record<string, { color: string; width: number; type?: "dashed" | "solid" }> = {
   contains: { color: "#d9d9d9", width: 1, type: "dashed" },
   course_sequence: { color: "#1fae54", width: 3 },
   chapter_sequence: { color: "#52c41a", width: 2 },
@@ -44,9 +46,10 @@ const KIND_STYLES: Record<string, { color: string; width: number; type?: string 
  */
 export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: ProjectCourseGraphProps) {
   const { t } = useI18n();
+  const { theme } = useTheme();
+  const p = THEMES[theme];
   const [graph, setGraph] = useState<ProjectGraph | null>(null);
   const edges = graph?.edges ?? null;
-  const positions = graph?.positions ?? {};
   const [extracting, setExtracting] = useState(false);
 
   // On mount, check if an extraction is already running (survives refresh).
@@ -118,8 +121,9 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
   }
 
   const option = useMemo(() => {
-    const nodes: any[] = [];
-    const links: any[] = [];
+    const nodes: NonNullable<GraphSeriesOption["data"]> = [];
+    const links: NonNullable<GraphSeriesOption["links"]> = [];
+    const positions = graph?.positions ?? {};
     const nodeIds = new Set<string>();
     const categories = curriculum.courses.map((c) => ({ name: c.title }));
 
@@ -127,7 +131,6 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
     // legend lists course names; lessons take their parent course's category.
     // When AI positions exist, use them with layout 'none'. Otherwise, compute
     // a simple layered fallback so nodes don't all pile up at the center.
-    const hasPositions = Object.keys(positions).length > 0;
     const courseCount = curriculum.courses.length;
     curriculum.courses.forEach((course, courseIdx) => {
       const cid = `course-${course.id}`;
@@ -153,9 +156,6 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
       });
       // Chapter nodes: arranged in a circle around their course.
       const allLessons = (course.modules || []).flatMap((m) => m.lessons || []);
-      if (typeof window !== "undefined") {
-        console.log(`Course ${course.title}: ${allLessons.length} lessons`);
-      }
       allLessons.forEach((l, lessonIdx) => {
         {
           const lid = `lesson-${l.id}`;
@@ -251,8 +251,9 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
     }
 
     return {
-      tooltip: {},
-      legend: { data: categories.map((c) => c.name) },
+      textStyle: { color: p.ink },
+      tooltip: { renderMode: "richText", backgroundColor: p.surface, borderColor: p.line, textStyle: { color: p.ink } },
+      legend: { textStyle: { color: p.muted }, data: categories.map((c) => c.name) },
       series: [
         {
           type: "graph",
@@ -273,6 +274,7 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
             position: "right",
             formatter: "{b}",
             fontSize: 11,
+            color: p.ink,
           },
           lineStyle: {
             color: "source",
@@ -285,20 +287,20 @@ export function ProjectCourseGraph({ curriculum, projectId, onNodeClick }: Proje
         },
       ],
     };
-  }, [curriculum, edges]);
+  }, [curriculum, edges, p, graph]);
 
   return (
     <div>
       <div style={{ marginBottom: 12, display: "flex", justifyContent: "flex-end", alignItems: "center", gap: 8 }}>
         {extractError && (
-          <span style={{ color: "#f5222d", fontSize: 12 }}>{extractError}</span>
+          <span style={{ color: "var(--sf-danger)", fontSize: 12 }}>{extractError}</span>
         )}
         <Button loading={extracting} disabled={extracting} onClick={() => void reExtract()}>
           {t("Re-extract with AI")}
         </Button>
       </div>
       {edges && edges.length === 0 && (
-        <p style={{ color: "#888", marginBottom: 12 }}>
+        <p style={{ color: "var(--sf-ink-muted)", marginBottom: 12 }}>
           暂无 AI 提炼的关系，显示教学顺序。点击上方按钮用 AI 提炼。
         </p>
       )}

@@ -105,7 +105,7 @@ function LessonQuizGenerateDialog({
         <h3 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 4px" }}>
           {t("AI 出题")}
         </h3>
-        <p style={{ color: "var(--ink-muted)", fontSize: 13, margin: "0 0 20px" }}>
+        <p style={{ color: "var(--sf-ink-muted)", fontSize: 13, margin: "0 0 20px" }}>
           {t("Pick the types and how many of each.")}
         </p>
         <div style={{ display: "grid", gap: 12 }}>
@@ -121,8 +121,8 @@ function LessonQuizGenerateDialog({
                   gap: 14,
                   padding: "14px 16px",
                   borderRadius: 12,
-                  border: `1px solid ${active ? "var(--accent)" : "var(--line)"}`,
-                  background: active ? "color-mix(in srgb, var(--accent) 6%, transparent)" : "transparent",
+                  border: `1px solid ${active ? "var(--sf-accent)" : "var(--sf-line)"}`,
+                  background: active ? "color-mix(in srgb, var(--sf-accent) 6%, transparent)" : "transparent",
                   transition: "all 0.2s",
                 }}
               >
@@ -135,8 +135,8 @@ function LessonQuizGenerateDialog({
                     alignItems: "center",
                     justifyContent: "center",
                     fontSize: 18,
-                    background: active ? "var(--accent)" : "var(--surface)",
-                    color: active ? "#fff" : "var(--ink-muted)",
+                    background: active ? "var(--sf-accent)" : "var(--sf-surface)",
+                    color: active ? "var(--sf-on-fill)" : "var(--sf-ink-muted)",
                     transition: "all 0.2s",
                   }}
                 >
@@ -146,7 +146,7 @@ function LessonQuizGenerateDialog({
                   <div style={{ fontWeight: 500, fontSize: 14 }}>
                     {t(`quiz_kind_${kind}`)}
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>
+                  <div style={{ fontSize: 12, color: "var(--sf-ink-muted)" }}>
                     {meta.desc}
                   </div>
                 </div>
@@ -165,7 +165,7 @@ function LessonQuizGenerateDialog({
                       textAlign: "center",
                       fontSize: 16,
                       fontWeight: 600,
-                      color: active ? "var(--accent)" : "var(--ink-muted)",
+                      color: active ? "var(--sf-accent)" : "var(--sf-ink-muted)",
                     }}
                   >
                     {counts[kind] || 0}
@@ -189,7 +189,7 @@ function LessonQuizGenerateDialog({
               fontSize: 13,
               fontWeight: 500,
               marginBottom: 8,
-              color: "var(--ink)",
+              color: "var(--sf-ink)",
             }}
           >
             {t("出题要求（可选）")}
@@ -218,7 +218,7 @@ function LessonQuizGenerateDialog({
             marginTop: 24,
           }}
         >
-          <span style={{ fontSize: 13, color: "var(--ink-muted)" }}>
+          <span style={{ fontSize: 13, color: "var(--sf-ink-muted)" }}>
             {total > 0
               ? t("Total: {0} questions", total)
               : t("Select at least one question")}

@@ -21,7 +21,7 @@ export function CourseBrowser({ courses, initialQuery = "", initialSort = "frequ
   const [query, setQuery] = useState(initialQuery);
   const [sort, setSort] = useState<CourseSort>(initialSort);
   const matched = courses.filter(course => `${course.title}\n${course.description}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
-  if (sort === "frequent") matched.sort((a, b) => (b.open_count ?? 0) - (a.open_count ?? 0));
+  if (sort === "frequent") matched.sort((a, b) => (b.opened_count ?? 0) - (a.opened_count ?? 0));
   if (sort === "initial") matched.sort((a, b) => a.title.localeCompare(b.title, "zh-CN", { sensitivity: "base", numeric: true }));
 
   function updateUrl(search: string, order: CourseSort) {
@@ -56,7 +56,7 @@ export function CourseBrowser({ courses, initialQuery = "", initialSort = "frequ
               </Typography.Title>} />
             <Cell border={false} style={{ minHeight: 78, padding: "18px 20px 8px" }}
               title={<Typography.Text type="secondary" ellipsis={2} style={{ fontSize: 14, lineHeight: 1.6 }}>{course.description || "课程章节、知识讲解与实践练习"}</Typography.Text>} />
-            <Cell border={false} style={{ padding: "0 20px 14px" }} title={<Tag plain round color="var(--sf-accent)">已打开 {course.open_count ?? 0} 次</Tag>} />
+            <Cell border={false} style={{ padding: "0 20px 14px" }} title={<Tag plain round color="var(--sf-accent)">已打开 {course.opened_count ?? 0} 次</Tag>} />
             <Cell border={false} style={{ padding: "0 20px 20px" }}><Space wrap><Button size="small" type="primary" round onClick={() => router.push(`/courses/${course.id}`)}>进入学习</Button>
               <DeleteCourseButton courseId={course.id} title={course.title} /></Space></Cell>
           </Cell.Group>

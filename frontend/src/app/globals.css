@@ -1,105 +1,34 @@
 @import "tailwindcss";
 
-:root {
-  /*
-   * Design tokens, phase 1 of the redesign, round 2.
-   *
-   * The raw layer below is prefixed `--sf-*` on purpose. `--surface`, `--border`,
-   * `--text` and `--accent` are exactly the names a subtree is most likely to
-   * declare for its own unrelated reasons, and every token utility resolves
-   * `var(--sf-whatever)` at its USE site, not where it's declared: an unprefixed
-   * name is one collision away from silently retinting every token utility inside
-   * whatever subtree redefines it.
-   *
-   * Text colour also gets its own word, "ink", rather than "text": Tailwind
-   * reserves the `--text-*` namespace for font sizes (that's where the type scale
-   * two blocks down lives), and a colour token also named `--text-*` collided with
-   * it, which is what produced the doubled `text-text-muted` utility and made the
-   * natural `text-muted` a silent no-op.
-   *
-   * Raw values live in plain custom properties here, dark overrides sit in the
-   * existing @media (prefers-color-scheme: dark) block below, and only the mapping
-   * into Tailwind's `--color-*` namespace happens inside `@theme inline`. That
-   * indirection is what lets the dark-mode media query override a handful of plain
-   * variables and have every `bg-surface` / `text-ink-muted` / etc. utility pick
-   * the new value up live: `@theme` (without `inline`) bakes the literal value into
-   * the generated CSS, but `inline` makes the utility reference the variable
-   * instead. Same trick the very first version of this file used for
-   * `--background`/`--foreground`, which this round retires: they duplicated
-   * `--sf-surface`/`--sf-ink` exactly in both modes, so keeping both around would
-   * only have handed downstream authors two undocumented synonyms.
-   */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
-  /* Surfaces. Apple-style: the app sits on light gray (#f5f5f7) and content
-     lives on white cards. --sf-app is the page background; --sf-surface is the
-     card surface; --sf-surface-sunken is the recessed tone (same as the app bg,
-     for insets inside white cards). */
-  --sf-app: #f5f5f7;
-  --sf-surface: #ffffff;
-  --sf-surface-sunken: #f5f5f7;
-
-  /* Borders ("line", not "border": see the note above on Tailwind's own
-     `border-*` utility prefix, which "border-line" reads better against than
-     "border-border" does). Apple hairlines. */
-  --sf-line: #d2d2d7;
-  --sf-line-strong: #c7c7cc;
-  --sf-line-hover: #aeaeb2;
-
-  /* Text ("ink"). Apple's grays. */
-  --sf-ink: #1d1d1f;
-  --sf-ink-muted: #6e6e73;
-  --sf-ink-subtle: #86868b;
-
-  /* The one accent: MOOC green (modeled on icourse163's vivid grass green).
-     Used for focus rings, inline text links, the active nav/tab indicator,
-     and the primary button fill. */
-  --sf-accent: #1fae54;
-  --sf-focus: var(--sf-accent);
-
-  /* Solid fills. The neutral `fill` is the MOOC green: Button's primary
-     variant is the green capsule CTA (like icourse163's 「立即参加」).
-     `fill-hover` is a genuine second colour, not a filter: the motion policy
-     below only ever animates colour, border-colour, opacity and transform, so
-     a solid button's hover state has to be a token. */
-  --sf-fill: #1fae54;
-  --sf-fill-hover: #2bc25e;
-  --sf-on-fill: #ffffff;
-
-  /* Status tones, at the emerald/amber/red family and step already used across
-     the app for inline status text (e.g. the review rating colours and form
-     error text): the *-surface/-border pair is for boxed alerts (Callout and
-     friends), the *-fill/-on-fill pair is for solid buttons and filled badges.
-     Values are this build's actual Tailwind v4 OKLCH palette, not the v3 hex
-     approximations round 1 shipped, so `bg-danger-fill` and a raw `bg-red-700`
-     used side by side are guaranteed to match rather than merely look close. */
-  --sf-success: oklch(50.8% 0.118 165.612); /* emerald-700 */
-  --sf-success-surface: oklch(97.9% 0.021 166.113); /* emerald-50 */
-  --sf-success-border: oklch(84.5% 0.143 164.978); /* emerald-300 */
-  --sf-success-surface-hover: oklch(95% 0.052 163.051); /* emerald-100 */
-  --sf-success-fill: oklch(50.8% 0.118 165.612); /* emerald-700 */
-  --sf-success-on-fill: #ffffff;
-
-  --sf-warning: oklch(55.5% 0.163 48.998); /* amber-700 */
-  --sf-warning-surface: oklch(98.7% 0.022 95.277); /* amber-50 */
-  --sf-warning-border: oklch(87.9% 0.169 91.605); /* amber-300 */
-  --sf-warning-fill: oklch(55.5% 0.163 48.998); /* amber-700 */
-  /* Dark ink, not white: amber is a light hue at every step saturated enough to
-     read as a fill, and white text on it is the classic low-contrast pairing. */
-  --sf-warning-on-fill: oklch(21% 0.006 285.885); /* zinc-900 */
-
-  --sf-danger: oklch(50.5% 0.213 27.518); /* red-700 */
-  --sf-danger-surface: oklch(97.1% 0.013 17.38); /* red-50 */
-  --sf-danger-border: oklch(80.8% 0.114 19.571); /* red-300 */
-  --sf-danger-fill: oklch(50.5% 0.213 27.518); /* red-700 */
-  --sf-danger-fill-hover: oklch(57.7% 0.245 27.325); /* red-600 */
-  --sf-danger-on-fill: #ffffff;
-
-  /* Elevation. White cards on the gray app background carry a whisper of
-     shadow; in dark mode both resolve to `none` below and depth is expressed
-     with the card surface step instead. */
-  --sf-shadow-raise: 0 1px 2px rgb(0 0 0 / 0.05), 0 4px 12px rgb(0 0 0 / 0.05);
-  --sf-shadow-overlay: 0 8px 24px rgb(0 0 0 / 0.12);
+/* Portal content also inherits these aliases when mounted directly under body. */
+html[data-theme] {
+  --rv-primary-color: var(--sf-accent);
+  --rv-brand-color: var(--sf-accent);
+  --rv-blue: var(--sf-accent);
+  --rv-white: var(--sf-surface);
+  --rv-text-color: var(--sf-ink);
+  --rv-text-color-weak: var(--sf-ink-muted);
+  --rv-background-color: var(--sf-app);
+  --rv-background-color-light: var(--sf-surface);
+  --rv-border-color: var(--sf-line);
+  --rv-cell-background-color: var(--sf-surface);
+  --rv-cell-label-color: var(--sf-ink-muted);
+  --rv-button-primary-color: var(--sf-on-fill);
+  --rv-dialog-background-color: var(--sf-surface);
+  --rv-dialog-message-color: var(--sf-ink-muted);
+  --rv-popup-background-color: var(--sf-surface);
+  --rv-progress-color: var(--sf-accent);
+  --rv-progress-background-color: var(--sf-line);
+  --rv-typography-secondary-color: var(--sf-ink-muted);
+  --rv-field-label-color: var(--sf-ink-muted);
+  --rv-popup-description-color: var(--sf-ink-muted);
+  --rv-notice-bar-text-color: var(--sf-warning);
+  --rv-notice-bar-background-color: var(--sf-warning-surface);
 }
+
+/* Color tokens are rendered on <html> from lib/theme.ts using the saved theme cookie. */
 
 @theme inline {
   --color-app: var(--sf-app);
@@ -210,103 +139,6 @@
 }
 
 /*
- * Concept map palette. The mastery fills are the artboard's exact colours and are
- * shared by the SVG nodes and the legend swatches, so the two can never drift apart.
- *
- * No text is ever drawn on a fill, so the fills need no paired text colour: every label
- * sits on the card surface below its node. That is what lets the type meet WCAG AA.
- * Measured against the card, which is zinc-50 at 60% over white (#fcfcfc) in light and
- * zinc-900 at 40% over #0a0a0a (#101011) in dark: label text 17.27 light / 16.24 dark,
- * muted text 7.53 / 7.42. The fills themselves cannot carry meaning alone (solid
- * against shaky is 1.10), which is why every node also states its mastery in words.
- *
- * Only the not-started chip and the greys are restated for dark mode: a #f4f4f5 circle
- * on a near-black page is a spotlight, not a muted "untouched" state.
- */
-:root {
-  --concept-mastered: #059669;
-  --concept-solid: #6ee7b7;
-  --concept-shaky: #fbbf24;
-  --concept-not-started: #f4f4f5;
-  --concept-not-started-border: #d4d4d8;
-  --concept-rule: #e4e4e7;
-  --concept-label-text: #18181b;
-  --concept-muted-text: #52525b;
-  --concept-column-label: #52525b;
-  --concept-column-sublabel: #52525b;
-  /* The card surface, opaque. It is the exact colour the contrast figures above were
-     measured against (zinc-50 at 60% over white); the scroll hint needs it as a solid
-     value because it paints the map's own background over its shadows. */
-  --concept-surface: #fcfcfc;
-  /*
-   * The edge hint, not a shadow in both themes. Darkening works against a near-white
-   * page and is invisible against a near-black one: black at 60% over #101011 moves
-   * the surface by nine levels out of 255, which measured as 3.5% and read as nothing.
-   * Dark mode lightens instead. Both directions are tuned to land in the same place,
-   * about 36 levels of separation from the surface.
-   */
-  --concept-scroll-edge: rgba(24, 24, 27, 0.18);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --concept-not-started: #27272a;
-    --concept-not-started-border: #3f3f46;
-    --concept-rule: #27272a;
-    --concept-label-text: #ededed;
-    --concept-muted-text: #a1a1aa;
-    --concept-column-label: #a1a1aa;
-    --concept-column-sublabel: #a1a1aa;
-    --concept-surface: #101011;
-    --concept-scroll-edge: rgba(255, 255, 255, 0.16);
-
-    --sf-app: #000000;
-    --sf-surface: #1c1c1e;
-    --sf-surface-sunken: #2c2c2e;
-
-    --sf-line: #38383a;
-    --sf-line-strong: #48484a;
-    --sf-line-hover: #636366;
-
-    --sf-ink: #f5f5f7;
-    --sf-ink-muted: #98989d;
-    --sf-ink-subtle: #6e6e73;
-
-    --sf-accent: #3ddc74;
-
-    --sf-fill: #2bbf5c;
-    --sf-fill-hover: #3ddc74;
-    --sf-on-fill: #ffffff;
-
-    --sf-success: oklch(76.5% 0.177 163.223); /* emerald-400 */
-    --sf-success-surface: oklch(26.2% 0.051 172.552); /* emerald-950 */
-    --sf-success-border: oklch(43.2% 0.095 166.913); /* emerald-800 */
-    --sf-success-surface-hover: oklch(37.8% 0.077 168.94); /* emerald-900 */
-    --sf-success-fill: oklch(59.6% 0.145 163.225); /* emerald-600 */
-    --sf-success-on-fill: #ffffff;
-
-    --sf-warning: oklch(82.8% 0.189 84.429); /* amber-400 */
-    --sf-warning-surface: oklch(27.9% 0.077 45.635); /* amber-950 */
-    --sf-warning-border: oklch(47.3% 0.137 46.201); /* amber-800 */
-    --sf-warning-fill: oklch(66.6% 0.179 58.318); /* amber-600 */
-    --sf-warning-on-fill: oklch(21% 0.006 285.885); /* zinc-900 */
-
-    --sf-danger: oklch(70.4% 0.191 22.216); /* red-400 */
-    --sf-danger-surface: oklch(25.8% 0.092 26.042); /* red-950 */
-    --sf-danger-border: oklch(44.4% 0.177 26.899); /* red-800 */
-    --sf-danger-fill: oklch(57.7% 0.245 27.325); /* red-600 */
-    --sf-danger-fill-hover: oklch(50.5% 0.213 27.518); /* red-700 */
-    --sf-danger-on-fill: #ffffff;
-
-    /* Darkening a shadow is invisible on a near-black page (see the comment on
-       --sf-shadow-raise above); elevation is expressed with borders and
-       --color-surface-sunken instead once this is `none`. */
-    --sf-shadow-raise: none;
-    --sf-shadow-overlay: none;
-  }
-}
-
-/*
  * A horizontal scroll affordance that appears only when there is somewhere to scroll.
  *
  * A clipped concept map reads as broken rather than as scrollable, and the map is wide
@@ -385,7 +217,11 @@
 }
 
 body {
-  background: var(--sf-surface);
+  background: var(--sf-app);
   color: var(--sf-ink);
   font-family: var(--font-sans);
 }
+
+.theme-switcher { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 7px 11px; border: 1px solid var(--sf-line); border-radius: 24px; background: var(--sf-surface); color: var(--sf-ink-muted); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.theme-switcher:hover { color: var(--sf-ink); border-color: var(--sf-line-hover); }
+@media (max-width: 540px) { .theme-switcher { width: 34px; padding: 7px; flex-shrink: 0; } .theme-switcher span { display: none; } }

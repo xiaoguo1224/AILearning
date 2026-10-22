@@ -31,7 +31,7 @@ export function ProjectReviewTasks({ projectId, tasks, archived }: { projectId: 
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
         description={
-          <span style={{ color: "var(--ink-muted)" }}>
+          <span style={{ color: "var(--sf-ink-muted)" }}>
             {t("No open diagnoses. Choose any knowledge point to keep learning.")}
           </span>
         }
@@ -60,7 +60,7 @@ export function ProjectReviewTasks({ projectId, tasks, archived }: { projectId: 
           <summary
             style={{
               cursor: "pointer",
-              color: "var(--accent)",
+              color: "var(--sf-accent)",
               fontSize: 14,
               fontWeight: 500,
             }}

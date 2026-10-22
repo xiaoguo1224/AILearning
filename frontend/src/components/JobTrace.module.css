@@ -1,0 +1,21 @@
+.trace { margin-top: 20px; min-width: 0; overflow: hidden; color: var(--sf-ink); background: var(--sf-surface); border: 1px solid var(--sf-line); border-radius: 20px; }
+.trace header { padding: 20px 24px; border-bottom: 1px solid var(--sf-line); }
+.trace h3 { font-size: 15px; font-weight: 600; }
+.trace header p { margin-top: 7px; font-size: 12px; color: var(--sf-ink-muted); line-height: 1.7; }
+.scroll { height: 360px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; scrollbar-color: var(--sf-line-strong) var(--sf-surface); }
+.scroll ol { list-style: none; margin: 0; padding: 12px 24px; }
+.entry { position: relative; padding: 18px 0 18px 22px; border-left: 1px solid var(--sf-line-strong); font-size: 13px; overflow-wrap: anywhere; }
+.entry::before { content: ""; width: 7px; height: 7px; position: absolute; top: 24px; left: -4px; border-radius: 50%; background: var(--sf-accent); }
+.heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+.heading strong { font-weight: 500; }
+.heading time, .meta { color: var(--sf-ink-subtle); font-size: 11px; }
+.heading time { margin-left: auto; }
+.entry p { line-height: 1.8; margin-top: 5px; }
+.badge { padding: 3px 9px; border-radius: 14px; border: 1px solid var(--sf-line-strong); background: var(--sf-surface-sunken); color: var(--sf-ink-muted); font-size: 11px; }
+.badge[data-kind="tool_call"] { color: var(--sf-accent); }
+.badge[data-kind="tool_result"] { color: var(--sf-success); background: var(--sf-success-surface); border-color: var(--sf-success-border); }
+.payload { margin-top: 10px; border: 1px solid var(--sf-line); border-radius: 10px; background: var(--sf-surface-sunken); }
+.payload summary { padding: 9px 12px; cursor: pointer; color: var(--sf-ink-muted); }
+.payload pre { padding: 12px; border-top: 1px solid var(--sf-line); white-space: pre-wrap; overflow-wrap: anywhere; color: var(--sf-ink); font: 12px/1.8 var(--font-geist-mono), monospace; }
+.empty { padding: 42px 24px; color: var(--sf-ink-muted); text-align: center; }
+@media (max-width: 540px) { .trace header { padding: 16px; } .scroll ol { padding: 8px 16px; } .entry { padding-left: 16px; } .heading time { width: 100%; margin-left: 0; } }

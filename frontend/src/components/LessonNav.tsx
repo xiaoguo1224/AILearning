@@ -51,16 +51,16 @@ export function LessonNav({ courseId, lessonId }: LessonNavProps) {
         gap: 16,
         marginTop: 48,
         paddingTop: 24,
-        borderTop: "1px solid var(--line)",
+        borderTop: "1px solid var(--sf-line)",
       }}
     >
       <div style={{ flex: 1 }}>
         {prev && (
           <Link
             href={`/courses/${courseId}/lessons/${prev.id}`}
-            style={{ color: "var(--ink-muted)", fontSize: 14 }}
+            style={{ color: "var(--sf-ink-muted)", fontSize: 14 }}
           >
-            <span style={{ display: "block", fontSize: 12, color: "var(--ink-faint)" }}>
+            <span style={{ display: "block", fontSize: 12, color: "var(--sf-ink-subtle)" }}>
               ← 上一章节
             </span>
             <span style={{ fontWeight: 500 }}>{prev.title}</span>
@@ -71,9 +71,9 @@ export function LessonNav({ courseId, lessonId }: LessonNavProps) {
         {next && (
           <Link
             href={`/courses/${courseId}/lessons/${next.id}`}
-            style={{ color: "var(--ink-muted)", fontSize: 14 }}
+            style={{ color: "var(--sf-ink-muted)", fontSize: 14 }}
           >
-            <span style={{ display: "block", fontSize: 12, color: "var(--ink-faint)" }}>
+            <span style={{ display: "block", fontSize: 12, color: "var(--sf-ink-subtle)" }}>
               下一章节 →
             </span>
             <span style={{ fontWeight: 500 }}>{next.title}</span>

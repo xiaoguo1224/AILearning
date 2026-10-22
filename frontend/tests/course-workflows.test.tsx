@@ -6,18 +6,18 @@ import { CourseOpenTracker } from "@/components/CourseOpenTracker";
 import { JobTrace } from "@/components/JobTrace";
 import { JobsList } from "@/components/JobsList";
 import { StagedGenerateWizard } from "@/components/StagedGenerateWizard";
-import { buildCourseGraph } from "@/components/ProjectCourseGraph";
-import { getJob, listJobs, recordCourseOpen, retryGeneration, reviewGeneration, startStagedGeneration, type Job } from "@/lib/api";
+import { ProjectCourseGraph } from "@/components/ProjectCourseGraph";
+import { getJob, getProjectGraph, listJobs, recordCourseOpen, retryGeneration, reviewGeneration, startStagedGeneration, type Job } from "@/lib/api";
 import NewCoursePage from "@/app/courses/new/page";
 import type { ProjectCurriculum } from "@/lib/types";
 
 const { push, replace } = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push, replace, refresh: vi.fn() }) }));
-vi.mock("echarts-for-react", () => ({ default: () => null }));
+vi.mock("echarts-for-react", () => ({ default: ({ option }: { option: unknown }) => <output data-testid="project-graph">{JSON.stringify(option)}</output> }));
 vi.mock("@/components/LessonMarkdown", () => ({ LessonMarkdown: ({ content }: { content: string }) => content }));
 vi.mock("@/components/DeleteCourseButton", () => ({ DeleteCourseButton: () => null }));
 vi.mock("@/lib/api", async original => ({ ...await original<typeof import("@/lib/api")>(),
-  getJob: vi.fn(), listJobs: vi.fn(), recordCourseOpen: vi.fn(), retryGeneration: vi.fn(), reviewGeneration: vi.fn(), startStagedGeneration: vi.fn(),
+  getJob: vi.fn(), getProjectGraph: vi.fn(), listJobs: vi.fn(), recordCourseOpen: vi.fn(), retryGeneration: vi.fn(), reviewGeneration: vi.fn(), startStagedGeneration: vi.fn(),
 }));
 
 function task(): Job {
@@ -91,11 +91,11 @@ describe("resumable course generation", () => {
   });
 });
 
-test("trace is an independent Vant list with a scrollbar", () => {
+test("trace is an independent keyboard-accessible list with a scrollbar", () => {
   render(<JobTrace job={task()} />);
   expect(screen.getByText(/AI 调用链路与执行记录/)).toBeInTheDocument();
   expect(screen.getByText("llm.outline")).toBeInTheDocument();
-  expect(document.querySelector(".job-trace-scroll")).toHaveStyle({ height: "360px", overflowY: "auto" });
+  expect(screen.getByRole("region", { name: "调用记录列表" })).toHaveAttribute("tabindex", "0");
 });
 
 test("job list opens the exact review task and displays its trace", async () => {
@@ -118,9 +118,9 @@ test("job list requests the selected server page so older traces remain reachabl
 
 test("course search and three sorts operate independently, default frequent", () => {
   render(<CourseBrowser courses={[
-    { id: 1, title: "Banana", description: "advanced", open_count: 2 },
-    { id: 2, title: "Zebra", description: "base", open_count: 8 },
-    { id: 3, title: "Apple", description: "base", open_count: 0 },
+    { id: 1, title: "Banana", description: "advanced", opened_count: 2 },
+    { id: 2, title: "Zebra", description: "base", opened_count: 8 },
+    { id: 3, title: "Apple", description: "base", opened_count: 0 },
   ]} />);
   const titles = () => screen.getAllByRole("link").map(element => element.textContent);
   expect(titles()).toEqual(["Zebra", "Banana", "Apple"]);
@@ -136,25 +136,32 @@ test("course search and three sorts operate independently, default frequent", ()
 });
 
 test("actual course visits count once under StrictMode", async () => {
-  vi.mocked(recordCourseOpen).mockResolvedValue({ course_id: 3, open_count: 1 });
+  vi.mocked(recordCourseOpen).mockResolvedValue({ opened_count: 1 });
   render(<StrictMode><CourseOpenTracker courseId={3} /></StrictMode>);
   await waitFor(() => expect(recordCourseOpen).toHaveBeenCalledTimes(1));
 });
 
-test("graph always includes spaced chapter nodes regardless of AI positions or missing edges", () => {
+test("graph preserves AI course positions, chapter nodes and valid relationships", async () => {
   const curriculum: ProjectCurriculum = { project_id: 1, points: [], pathway: [], courses: [1, 2].map(id => ({
     id, title: `Course ${id}`, modules: [{ id, title: "Module", lessons: Array.from({ length: 16 }, (_, index) => ({
       id: id * 100 + index, title: `Chapter ${index}`, completed: false, concept_keys: [],
     })) }],
   })) };
-  const layout = buildCourseGraph(curriculum, { positions: { "course-1": { x: 99999, y: -99999 } }, edges: [
+  vi.mocked(getProjectGraph).mockResolvedValue({ positions: { "course-1": { x: 10, y: 20 } }, edges: [
     { id: 1, from_type: "course", from_id: 1, to_type: "course", to_id: 9999, kind: "related", reason: "stale" },
   ] });
-  expect(layout.nodes).toHaveLength(34);
-  const chapterNodes = layout.nodes.filter(node => node.id.startsWith("lesson-"));
-  for (const a of chapterNodes) for (const b of chapterNodes) if (a.id !== b.id)
-    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(150);
-  const ids = new Set(layout.nodes.map(node => node.id));
-  expect(layout.links.every(link => ids.has(link.source) && ids.has(link.target))).toBe(true);
-  expect(layout.width).toBeGreaterThan(1600);
+  vi.mocked(listJobs).mockResolvedValue({ items: [], total: 0 });
+  render(<ProjectCourseGraph curriculum={curriculum} projectId={1} />);
+  await waitFor(() => {
+    const option = JSON.parse(screen.getByTestId("project-graph").textContent!);
+    expect(option.series[0].data[0]).toMatchObject({ id: "course-1", x: 200, y: 400 });
+  });
+  const graph = JSON.parse(screen.getByTestId("project-graph").textContent!).series[0] as {
+    data: { id: string; x: number; y: number }[]; links: { source: string; target: string }[];
+  };
+  expect(graph.data).toHaveLength(34);
+  const chapters = graph.data.filter(node => node.id.startsWith("lesson-1"));
+  expect(new Set(chapters.map(node => `${node.x},${node.y}`)).size).toBe(16);
+  const ids = new Set(graph.data.map(node => node.id));
+  expect(graph.links.every(link => ids.has(link.source) && ids.has(link.target))).toBe(true);
 });

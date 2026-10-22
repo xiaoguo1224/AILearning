@@ -37,7 +37,7 @@ export function KnowledgeGraphSection({ curriculum, projectId }: KnowledgeGraphS
     >
       {view === "graph" ? (
         <>
-          <p style={{ color: "#888", marginBottom: 12 }}>
+          <p style={{ color: "var(--sf-ink-muted)", marginBottom: 12 }}>
             按课程与章节的教学顺序自动生成，无需手动指定关系。
           </p>
           <ProjectCourseGraph
@@ -49,7 +49,7 @@ export function KnowledgeGraphSection({ curriculum, projectId }: KnowledgeGraphS
           />
         </>
       ) : (
-        <p style={{ color: "#888" }}>List view is shown below.</p>
+        <p style={{ color: "var(--sf-ink-muted)" }}>List view is shown below.</p>
       )}
     </Card>
   );

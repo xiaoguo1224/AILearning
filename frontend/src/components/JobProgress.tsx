@@ -68,7 +68,7 @@ export function JobProgressBar({ job }: { job: Job }) {
       {job.status === "completed" && t("Done")}
       {job.status === "cancelled" && t("Cancelled")}
     </Typography.Text>
-    {job.status === "failed" && <NoticeBar color="var(--danger)" text={job.error || t("Failed")} scrollable={false} wrapable />}
+    {job.status === "failed" && <NoticeBar color="var(--sf-danger)" text={job.error || t("Failed")} scrollable={false} wrapable />}
   </Space>;
 }
 

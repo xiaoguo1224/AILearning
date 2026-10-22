@@ -1,0 +1,3 @@
+.brand { display: inline-flex; align-items: center; gap: 9px; color: var(--sf-ink); font-size: 23px; font-weight: 650; letter-spacing: -1px; white-space: nowrap; }
+.icon { width: 32px; height: 32px; color: var(--sf-accent); flex-shrink: 0; }
+@media (max-width: 540px) { .brand { font-size: 19px; gap: 6px; } .icon { width: 26px; height: 26px; } }

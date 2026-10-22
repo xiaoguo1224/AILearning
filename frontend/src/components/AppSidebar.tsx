@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { LanguageSwitcher, useI18n } from "./LocaleProvider";
+import { ThemeSwitcher } from "./ThemeProvider";
+import { SiteBrand } from "./SiteBrand";
 
 /** "/" only matches itself; every other tab owns its whole subtree. */
 function isActive(pathname: string, href: string): boolean {
@@ -31,7 +33,7 @@ function Icon({ d }: { d: string }) {
 }
 
 const NAV: { href: string; labelKey: string; icon: string }[] = [
-  { href: "/", labelKey: "Today", icon: "M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z" },
+  { href: "/", labelKey: "Home", icon: "M2 7 8 2l6 5v7h-4v-4H6v4H2z" },
   { href: "/projects", labelKey: "Projects", icon: "M2 4.5A1.5 1.5 0 0 1 3.5 3h3L8 4.5h4.5A1.5 1.5 0 0 1 14 6v5.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 11.5z" },
   { href: "/courses", labelKey: "Courses", icon: "M3 2.5h8.5A1.5 1.5 0 0 1 13 4v9.5a1 1 0 0 1-1.7.7L8 11l-3.3 3.2a1 1 0 0 1-1.7-.7zM3 2.5v9M6 5.5h4" },
   { href: "/usage", labelKey: "Usage", icon: "M2.5 13.5v-4M6.5 13.5v-7M10.5 13.5V4.5M14.5 13.5v-10" },
@@ -128,14 +130,13 @@ function ProjectRows() {
 export function AppSidebar() {
   return (
     <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface/70 px-3 py-4 backdrop-blur-xl lg:flex">
-      <Link href="/" className="px-2.5 text-subtitle font-semibold tracking-tight text-ink">
-        StudyForge
-      </Link>
+      <div className="px-2.5"><SiteBrand /></div>
       <div className="mt-5">
         <NavRows />
       </div>
       <ProjectRows />
-      <div className="mt-auto pt-4">
+      <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
+        <ThemeSwitcher />
         <LanguageSwitcher />
       </div>
     </aside>
@@ -148,10 +149,8 @@ export function MobileTopBar() {
   return (
     <header className="border-b border-line bg-surface/70 backdrop-blur-xl lg:hidden">
       <div className="flex items-center justify-between px-4 py-2.5">
-        <Link href="/" className="text-subtitle font-semibold tracking-tight text-ink">
-          StudyForge
-        </Link>
-        <LanguageSwitcher />
+        <SiteBrand />
+        <div className="flex items-center gap-2"><ThemeSwitcher /><LanguageSwitcher /></div>
       </div>
       <nav aria-label={t("Primary")} className="flex gap-1 overflow-x-auto px-4 pb-2.5">
         {NAV.map((item) => {

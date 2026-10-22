@@ -62,7 +62,7 @@ export function SuggestionsPanel({ projectId, suggestions, source, initialChoice
       <Empty
         image={Empty.PRESENTED_IMAGE_SIMPLE}
         description={
-          <span style={{ color: "var(--ink-muted)" }}>
+          <span style={{ color: "var(--sf-ink-muted)" }}>
             {t("No cross-project suggestions yet.")}
           </span>
         }
