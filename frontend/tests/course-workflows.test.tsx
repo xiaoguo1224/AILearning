@@ -7,7 +7,8 @@ import { JobTrace } from "@/components/JobTrace";
 import { JobsList } from "@/components/JobsList";
 import { StagedGenerateWizard } from "@/components/StagedGenerateWizard";
 import { buildCourseGraph } from "@/components/ProjectCourseGraph";
-import { getJob, listJobs, recordCourseOpen, reviewGeneration, startStagedGeneration, type Job } from "@/lib/api";
+import { getJob, listJobs, recordCourseOpen, retryGeneration, reviewGeneration, startStagedGeneration, type Job } from "@/lib/api";
+import NewCoursePage from "@/app/courses/new/page";
 import type { ProjectCurriculum } from "@/lib/types";
 
 const { push, replace } = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
@@ -16,7 +17,7 @@ vi.mock("echarts-for-react", () => ({ default: () => null }));
 vi.mock("@/components/LessonMarkdown", () => ({ LessonMarkdown: ({ content }: { content: string }) => content }));
 vi.mock("@/components/DeleteCourseButton", () => ({ DeleteCourseButton: () => null }));
 vi.mock("@/lib/api", async original => ({ ...await original<typeof import("@/lib/api")>(),
-  getJob: vi.fn(), listJobs: vi.fn(), recordCourseOpen: vi.fn(), reviewGeneration: vi.fn(), startStagedGeneration: vi.fn(),
+  getJob: vi.fn(), listJobs: vi.fn(), recordCourseOpen: vi.fn(), retryGeneration: vi.fn(), reviewGeneration: vi.fn(), startStagedGeneration: vi.fn(),
 }));
 
 function task(): Job {
@@ -30,6 +31,23 @@ function task(): Job {
 beforeEach(() => { vi.clearAllMocks(); window.history.replaceState(null, "", "/courses"); });
 
 describe("resumable course generation", () => {
+  test("the new-course route forwards the saved task id instead of starting over", async () => {
+    vi.mocked(getJob).mockResolvedValue(task());
+    render(await NewCoursePage({ searchParams: Promise.resolve({ job: "test-job" }) }));
+    await screen.findByText("Tensor course");
+    expect(getJob).toHaveBeenCalledWith("test-job");
+    expect(startStagedGeneration).not.toHaveBeenCalled();
+  });
+
+  test("retries the failed task and resumes its saved checkpoint", async () => {
+    vi.mocked(getJob).mockResolvedValue({ ...task(), status: "failed", error: "Temporary failure" });
+    vi.mocked(retryGeneration).mockResolvedValue({ job_id: "test-job" });
+    render(<StagedGenerateWizard initialJobId="test-job" />);
+    fireEvent.click(await screen.findByRole("button", { name: "重试未完成步骤" }));
+    await waitFor(() => expect(retryGeneration).toHaveBeenCalledWith("test-job"));
+    expect(startStagedGeneration).not.toHaveBeenCalled();
+  });
+
   test("submits selected mode and difficulty and stores the resumable URL", async () => {
     vi.mocked(startStagedGeneration).mockResolvedValue({ job_id: "new-job" });
     vi.mocked(getJob).mockResolvedValue({ ...task(), id: "new-job", status: "running" });
@@ -87,6 +105,15 @@ test("job list opens the exact review task and displays its trace", async () => 
   fireEvent.click(await screen.findByRole("button", { name: "继续审查" }));
   expect(push).toHaveBeenCalledWith("/courses/new?job=test-job");
   expect(screen.getByText("llm.outline")).toBeInTheDocument();
+});
+
+test("job list requests the selected server page so older traces remain reachable", async () => {
+  vi.mocked(listJobs).mockResolvedValue({ items: [task()], total: 21 });
+  render(<JobsList />);
+  await screen.findByText("课程生成与审查");
+  expect(listJobs).toHaveBeenCalledWith(undefined, 10, 0);
+  fireEvent.click(screen.getByTitle("Next Page"));
+  await waitFor(() => expect(listJobs).toHaveBeenCalledWith(undefined, 10, 10));
 });
 
 test("course search and three sorts operate independently, default frequent", () => {

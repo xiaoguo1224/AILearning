@@ -118,6 +118,23 @@ def test_trace_persists_every_append_and_api_returns_it(client):
     assert client.get("/api/jobs?limit=0").status_code == 422
 
 
+def test_metered_call_has_correlated_trace_without_copying_source_text(client, provider):
+    from app.metering import MeteredLLM
+
+    with SessionLocal() as db:
+        job_id = jobs.create_job(db, "trace_test").id
+    meter = MeteredLLM(provider, job_id, job_id=job_id)
+    meter.generate("outline", "curriculum designer", "private course source text")
+    detail = client.get(f"/api/jobs/{job_id}").json()
+    entries = detail["trace"]["entries"]
+    assert [entry["type"] for entry in entries] == ["tool_call", "tool_result"]
+    assert entries[0]["call_id"] == entries[1]["call_id"]
+    assert entries[0]["tool"] == entries[1]["tool"] == "llm.outline"
+    assert entries[0]["input"]["characters"] == len("private course source text")
+    assert entries[1]["output"]["elapsed_seconds"] >= 0
+    assert "private course source text" not in json.dumps(entries)
+
+
 def test_full_review_outline_revision_parallel_chapters_and_single_revision(client, provider):
     job = start(client, difficulty=2)
     assert job["status"] == "awaiting_review"

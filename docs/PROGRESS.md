@@ -381,3 +381,18 @@
 - **代码题提示下放**：`POST /quiz/{item_id}/hints`（level 1–3），`app/quiz_hint.py` 新 stage `quiz_hint`；阶梯为位置线索→原理→关键修正，永不给完整解法；带最近一次提交进 prompt；仅 code 题。前端 QuizSection 答错后出"获取提示"按钮逐级取。
 - **变式题下放**：`POST /api/courses/{course_id}/quiz/{item_id}/variant` → 201，新 stage `quiz_variant`；同题型同知识点、换场景表述，存入原题所在课时题库。前端题库每题旁"变式"按钮，生成后刷新。
 - 验证：后端 **1389 passed**；前端 **193 passed**，tsc/eslint clean；usage pin 补两 stage 并驱动；真机联调跨课程检索命中正确，hints/variant 在 fake 下受控 502。记录：`docs/test-reports/2026-10-21-course-model-3.md`。
+
+
+### 2026-10-23 — 按用户要求先恢复并对齐 main，暂停样式工作
+- 已 fetch origin 并切回 main；本地与 origin/main 均为 `29b0265`。本次对已有工作台组件、主题、导航和共享标题的覆盖已撤回，后端/API/类型定义不改；以 main 为恢复基线，没有用更早历史版本替换业务。
+- 源码差异校验：既有 components、backend、api.ts、types.ts、globals.css 对 main 为零差异；用户知识页宽度修改保留。首页新增内容仍在工作区，未提交，/today 按用户要求删除。
+- 实际 Docker 定向回归：4 文件 / 20 passed。全量对比：main 162 passed / 48 failed；恢复后 173 passed / 48 failed，失败集合一致，无新增失败。lint 均 17 errors / 50 warnings；tsc 的 22 个遗留错误日志与 main 完全一致。没有宣称全量检查或构建通过。
+- 浏览器：/courses、/courses/new、/projects/1、/jobs 为 200，/today 为 404。后端测试尝试被 uv/PyPI setuptools TLS 环境错误阻止，后端源码未改。
+- 详情：`docs/test-reports/2026-10-23-main-alignment.md`。未提交、未推送，样式/亮色选型与截图配色修复暂停；确认恢复阶段后再继续。
+
+
+### 2026-10-23 — 课程生成与 AI 任务链路实际恢复
+- 前条 main 对齐记录只证明源码一致，不足以证明用户要求的生成/链路功能恢复。本批基于 main 恢复遗漏的持久任务路由、前端恢复入口、审查/重试接口、Job awaiting_review 类型、trace 返回与并发安全追加、模型调用关联 ID、事务保存。Ant Design 卡片/任务表格保留，课程列表和图谱布局未改。
+- Docker 后端定向回归 `test_staged_generation.py test_generation.py test_usage_api.py`：68 passed；前端 course-workflows 定向：8 passed（另外 3 项课程/图谱测试未选入本次定向运行）。完整前端结果详见报告，无新增失败。
+- 独立临时库与离线确定性 provider 的真实 HTTP/浏览器流程：创建→刷新恢复→修改提纲→确认→任务页继续→修改章节→逐章确认→保存课程，全部完成；实际显示19条执行记录。不使用个人数据库，不调用付费模型。
+- 功能验收后继续深浅双主题，样式改动与恢复独立提交。详情 `docs/test-reports/2026-10-23-generation-trace-recovery.md`。

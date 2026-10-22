@@ -735,7 +735,7 @@ export interface QuizBankItem {
 export interface Job {
   id: string;
   type: string;
-  status: "pending" | "running" | "completed" | "failed" | "cancelled";
+  status: "pending" | "running" | "awaiting_review" | "completed" | "failed" | "cancelled";
   progress: {
     stage?: string;
     done?: number;
@@ -743,6 +743,13 @@ export interface Job {
     outline?: { title: string; modules: { title: string; lessons: { title: string }[] }[] };
     drafts?: { lesson_id: number; title: string; draft?: unknown; error?: string }[];
     current?: string;
+    generated?: number;
+    topic?: string;
+    mode?: "auto" | "outline" | "full";
+    difficulty?: number;
+    revision?: number;
+    draft?: CourseLessonDraft;
+    lessons?: CourseLessonDraft[];
   } | null;
   result: Record<string, unknown> | null;
   trace: {
@@ -750,6 +757,7 @@ export interface Job {
       type: "thinking" | "tool_call" | "tool_result";
       content?: string;
       tool?: string;
+      call_id?: string;
       input?: unknown;
       output?: unknown;
       at: string;
@@ -800,8 +808,10 @@ export function getJob(jobId: string): Promise<Job> {
   return request(`/api/jobs/${jobId}`);
 }
 
-export function listJobs(status?: string): Promise<{ items: Job[]; total: number }> {
-  return request(`/api/jobs${status ? `?status=${status}` : ""}`);
+export function listJobs(status?: string, limit = 20, offset = 0): Promise<{ items: Job[]; total: number }> {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  if (status) params.set("status", status);
+  return request(`/api/jobs?${params}`);
 }
 
 export function cancelJob(jobId: string): Promise<Job> {
@@ -1744,6 +1754,22 @@ export interface CourseOutline {
     title: string;
     lessons: { title: string; concepts?: string[] }[];
   }[];
+}
+
+export interface CourseLessonDraft extends LessonDraft {
+  quiz: { question: string; kind: string; options: string[]; answer: string; concept: string }[];
+}
+
+export function startStagedGeneration(topic: string, mode: "auto" | "outline" | "full", difficulty: number): Promise<{ job_id: string }> {
+  return postJson("/api/courses/generation/job", { topic, mode, difficulty });
+}
+
+export function reviewGeneration(jobId: string, action: "approve" | "revise", revision: number, feedback = ""): Promise<{ job_id: string }> {
+  return postJson(`/api/courses/generation/${jobId}/review`, { action, revision, feedback });
+}
+
+export function retryGeneration(jobId: string): Promise<{ job_id: string }> {
+  return postJson(`/api/courses/generation/${jobId}/retry`, {});
 }
 
 export function generateCourseOutline(

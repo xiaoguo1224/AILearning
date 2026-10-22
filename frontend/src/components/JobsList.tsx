@@ -1,16 +1,18 @@
 "use client";
 
-import { Badge as AntBadge, Table } from "antd";
+import { Alert, Badge as AntBadge, Button, Table } from "antd";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
 import { useI18n } from "@/components/LocaleProvider";
 import { JobCancelButton, JobProgressBar } from "@/components/JobProgress";
-import { Badge } from "@/components/ui/Badge";
+import { JobTrace } from "@/components/JobTrace";
 import { listJobs, type Job } from "@/lib/api";
 
 const TYPE_LABELS: Record<string, string> = {
   course_generate: "Course generation",
+  course_generate_staged: "课程生成与审查",
   course_regenerate: "Course regeneration",
   lesson_regenerate: "Lesson regeneration",
   quiz_generate: "Question generation",
@@ -20,12 +22,13 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 function jobLink(job: Job): string | null {
+  if (job.type === "course_generate_staged" && job.status !== "completed") return `/courses/new?job=${encodeURIComponent(job.id)}`;
   if (job.ref_type === "course" && job.ref_id) return `/courses/${job.ref_id}`;
   if (job.ref_type === "lesson" && job.ref_id) {
     // Lesson page needs the course id; link to jobs page anchor instead.
     return null;
   }
-  if (job.type === "course_generate" && job.status === "completed") {
+  if (["course_generate", "course_generate_staged"].includes(job.type) && job.status === "completed") {
     const courseId = job.result?.course_id;
     if (courseId != null) return `/courses/${String(courseId)}`;
   }
@@ -38,6 +41,11 @@ function jobLink(job: Job): string | null {
  */
 export function JobsList() {
   const { t } = useI18n();
+  const router = useRouter();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [total, setTotal] = useState(0);
+  const [error, setError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -45,13 +53,15 @@ export function JobsList() {
     let cancelled = false;
     async function load() {
       try {
-        const result = await listJobs();
+        const result = await listJobs(undefined, pageSize, (page - 1) * pageSize);
         if (!cancelled) {
           setJobs(result.items);
+          setTotal(result.total);
+          setError(null);
           setLoading(false);
         }
       } catch {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) { setLoading(false); setError(t("Could not reach the server.")); }
       }
     }
     void load();
@@ -60,11 +70,13 @@ export function JobsList() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, []);
+  }, [page, pageSize, t]);
 
   if (loading) {
     return <p className="text-small text-ink-muted">{t("Loading…")}</p>;
   }
+
+  if (jobs.length === 0 && error) return <Alert type="error" title={error} showIcon />;
 
   if (jobs.length === 0) {
     return (
@@ -91,7 +103,7 @@ export function JobsList() {
           status={
             status === "completed" ? "success" : status === "failed" ? "error" : "processing"
           }
-          text={t(status)}
+          text={status === "awaiting_review" ? "等待审阅" : t(status)}
         />
       ),
     },
@@ -114,7 +126,7 @@ export function JobsList() {
         const link = jobLink(job);
         return (
           <span style={{ display: "flex", gap: 8 }}>
-            {["pending", "running"].includes(job.status) && (
+            {["pending", "running", "awaiting_review"].includes(job.status) && (
               <JobCancelButton
                 jobId={job.id}
                 onCancelled={() =>
@@ -124,7 +136,10 @@ export function JobsList() {
                 }
               />
             )}
-            {link && <Link href={link}>{t("Open")}</Link>}
+            {link && (job.type === "course_generate_staged" && job.status !== "completed" ?
+              <Button size="small" onClick={event => { event.stopPropagation(); router.push(link); }}>
+                {job.status === "awaiting_review" ? "继续审查" : "查看生成进度"}
+              </Button> : <Link href={link}>{t("Open")}</Link>)}
           </span>
         );
       },
@@ -137,11 +152,16 @@ export function JobsList() {
       columns={columns}
       rowKey="id"
       pagination={{
-        pageSize: 10,
+        current: page,
+        pageSize,
+        total,
+        pageSizeOptions: [10, 20, 50, 100],
+        onChange: (nextPage, nextSize) => { setPage(nextPage); setPageSize(nextSize); },
         showSizeChanger: true,
         showTotal: (total) => `共 ${total} 条`,
       }}
       expandable={{
+        expandRowByClick: true,
         expandedRowRender: (job: Job) => (
           <div style={{ padding: "8px 0" }}>
             <JobProgressBar job={job} />
@@ -158,78 +178,7 @@ export function JobsList() {
                 </pre>
               </details>
             )}
-            {job.trace && job.trace.entries && job.trace.entries.length > 0 && (
-              <details style={{ marginTop: 12 }} open>
-                <summary style={{ cursor: "pointer", fontWeight: 500 }}>
-                  思考过程与工具调用 ({job.trace.entries.length})
-                </summary>
-                <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
-                  {job.trace.entries.map((entry, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        padding: "8px 12px",
-                        borderRadius: 8,
-                        background:
-                          entry.type === "thinking"
-                            ? "color-mix(in srgb, var(--accent) 6%, transparent)"
-                            : entry.type === "tool_call"
-                              ? "#f0f5ff"
-                              : "#f6ffed",
-                        border: "1px solid var(--line)",
-                        fontSize: 13,
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontSize: 11,
-                          color: "var(--ink-muted)",
-                          marginBottom: 4,
-                          display: "flex",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <span>
-                          {entry.type === "thinking"
-                            ? "💭 思考"
-                            : entry.type === "tool_call"
-                              ? `🔧 工具调用: ${entry.tool}`
-                              : `✅ 工具返回: ${entry.tool}`}
-                        </span>
-                        <span>{entry.at}</span>
-                      </div>
-                      {entry.content && (
-                        <div style={{ whiteSpace: "pre-wrap" }}>{entry.content}</div>
-                      )}
-                      {entry.input !== undefined && entry.input !== null && (
-                        <pre
-                          style={{
-                            fontSize: 11,
-                            margin: "4px 0 0",
-                            overflow: "auto",
-                            color: "var(--ink-muted)",
-                          }}
-                        >
-                          输入: {JSON.stringify(entry.input, null, 2)}
-                        </pre>
-                      )}
-                      {entry.output !== undefined && entry.output !== null && (
-                        <pre
-                          style={{
-                            fontSize: 11,
-                            margin: "4px 0 0",
-                            overflow: "auto",
-                            color: "var(--ink-muted)",
-                          }}
-                        >
-                          输出: {JSON.stringify(entry.output, null, 2)}
-                        </pre>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </details>
-            )}
+            <JobTrace job={job} />
           </div>
         ),
       }}

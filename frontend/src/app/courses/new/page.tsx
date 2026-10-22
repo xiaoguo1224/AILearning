@@ -8,8 +8,10 @@ import { StagedGenerateWizard } from "@/components/StagedGenerateWizard";
 import { MarkdownImportForm } from "@/components/MarkdownImportForm";
 import { PageHeader } from "@/components/ui/PageHeader";
 
-export default async function NewCoursePage() {
+export default async function NewCoursePage({ searchParams }: { searchParams: Promise<{ job?: string }> }) {
   const t = await getTranslator();
+  const query = await searchParams;
+  const jobId = typeof query.job === "string" ? query.job : undefined;
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-6 py-12">
       <Link
@@ -23,7 +25,7 @@ export default async function NewCoursePage() {
         description={t("Combine pasted text, web pages, and PDFs into one course, in any mix.")}
       />
       <div className="mt-8">
-        <StagedGenerateWizard />
+        <StagedGenerateWizard key={jobId ?? "new"} initialJobId={jobId} />
       </div>
       <MarkdownImportForm />
     </main>
