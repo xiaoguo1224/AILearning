@@ -89,4 +89,24 @@
 - [x] UI-01：功能恢复验收后，完成首页/工作台双主题，默认浅色并记住手动选择；独立浅色首屏、深色球体自动动画、艺术字体课程滚动、课程卡片/图谱/AI 链路适配。生产构建通过，测试证据见 `test-reports/2026-10-23-dual-theme.md`。
 - [x] BRAND-01：双主题提交 `eb6131f` 后，完成「知径 MindTrail」名称、书页路径 SVG Logo、favicon、界面/元信息/API 名称和 README；原 MIT/上游 README 保留。验收见 `test-reports/2026-10-23-mindtrail-brand.md`。
 
+### 2026-10-23 质量收敛（用户要求"都做"）
+
+- [x] QA-01：清理前端长期遗留的 43 个失败用例与 lint 收敛。逐条区分"真实代码缺陷"与"断言过期"：修 10 处真实缺陷（课程打开计数并发丢更新、`/variant` 同步端点失联、antd `Alert` 双 live region 与 `{nativeElement}` ref 转发、`Field` 缺 `htmlFor`、`PageHeader` 缺 h1、`DeleteCourseButton` 描述关联与删除中文案、`MarkCompleteButton` 缺 `group`、`ProjectWorkspace` 缺 `aria-label`、UI 组件库 `@ts-nocheck`/`any` 收口），其余改写为断言当前真实契约。实际结果：`npx vitest run` 185/43 → **229 passed / 0 failed**，`npx tsc --noEmit` 通过，`npx eslint .` 14 errors/33 warnings → **0 errors / 28 warnings**。未删功能、未降规则、未跳用例。验收见 `test-reports/2026-10-23-frontend-suite-green.md`。
+- [x] QA-02：后端全量 pytest 基线。阻塞已解除（并发批次的 `conftest.py` provider 桩已接受 `images`），**全量已跑通：1452 tests / 0 failed / 0 errors / 2 skipped**（`--junitxml` 报告为准，见 PROGRESS 2026-10-23 收口节）。过程中定位并修掉 3 项失败：`jobs/router.py::cancel_job` 漏传 `session` 导致取消接口 500（真实回归）、`test_ai_dedupe.py` 两处全局计数被其他文件的作业行污染、`test_agent_cross_course.py` 遗留的真实 provider 后台作业占满两线程池导致后续用例"永不完成"。
+- [!] QA-03：本机 `npm run build`。沙箱批量删除保护拦下 `.next/turbopack` 清理，与代码无关；需在放行环境或 Docker 中验证。上一轮 `c0ee77b` 的 Docker 生产构建为通过。
+- [ ] QA-04：剩余 28 条 lint warning（未使用变量/导入等），本轮已清 5 条，其余待清。
+
+### 2026-10-23 用户反馈修复
+
+- [x] TZ-01：时间全部改为北京时间（用户反馈「所有的时间都不是北京时间」）。三处独立缺陷：`days.DEFAULT_TIMEZONE` 默认 UTC 导致 04:00 学习日边界落在北京中午；`jobs/router.py::_out` 直接 `.isoformat()` 输出无偏移字符串导致任务列表慢 8 小时；前端 10 处各自 `toLocaleString()`、`formatDay` 硬编码 `timeZone: "UTC"` 导致日期与 SSR 不一致。修复：后端默认 `Asia/Shanghai` + 三份配置显式写出，`_out` 改用 `iso_utc()`；前端新增 `APP_TIMEZONE` / `formatDateTime()` / `dayKeyOf()` 统一收口（日键仍固定 UTC）。存储层不动，历史学习日不重算。验收见 PROGRESS 2026-10-23 记录与 ADR-032。
+
+### 2026-10-23 课程页三栏 / 题库独立页 / 资料弹窗 / AI 防重
+
+- [x] UI-01：`/courses/[id]` 改三栏（题目左、课时中、问答与进度右），题目跳转到独立页 `/courses/[id]/quiz`；`CourseQuizBank.tsx` 带章节目录与可折叠章节，`QuizGenerateDialog.tsx` 为课时页与题库页共用的唯一出题弹窗。
+- [x] UI-02：`ResourceAddDialog.tsx` 取代资料列表下方三套内联表单（文件/文本/链接用 `Segmented` 切换）；`AttachmentInput.tsx` 从"输入框内 chip"改为输入框下方列表式上传区（按钮 + 提示 + 每行 `图标/文件名/对勾/删除`）。
+- [x] AI-01：全量 AI 接口防重（用户反馈「答案解析能反复生成，要检查是否还有 AI 任务能刷新重试」）。新增 `jobs.service.find_live_job()`，13 个入口逐一审计、补齐 11 处守卫；答案分析改为**每次作答只生成一次**（作业行即缓存，`progress.attempt_id` 覆盖双击窗口、`result.attempt_id` 覆盖完成后再次点击）；变式题 ref 从 course 改为题目；提示按 (题, 级别) 匹配。决策见 ADR-033。
+- [x] AI-02：刷新不重置加载（用户要求）。`QuizSection` 挂载时从 `/api/jobs` 找回仍在 `pending/running` 的解析/分析/判分作业并继续轮询；新增 `useResumeJob()` 让两个重生成按钮自动恢复进度弹窗；任务列表的"打开"改为服务端下发 `href`（`jobs.router._link_for()`），覆盖全部可跳转任务类型。
+- [x] QA-05：本批次回归收口。修掉 `cancel_job` 漏传 `session` 的真实 500；`test_ai_dedupe.py` 断言按 `(type, ref_type, ref_id)` 收窄、分析用例改为手工完成作业（不再依赖两线程池）；`test_agent_cross_course.py` 加 autouse fixture 屏蔽图谱提取的真实模型调用（该调用会永久占满线程池）。最终：后端 **1452 / 0 failed / 2 skipped**，前端 **42 文件 / 244 passed**，`tsc` 通过，`eslint .` 0 problems。
+- [ ] QA-06：测试的 provider 注入是逐模块 monkeypatch，`project_graph/service.py`、`concept_extract/service.py`、`submissions/llm_*.py` 等模块在**模块级** `from app.llm import get_provider`，patch `app.main` 覆盖不到。任何走到这些后台作业的用例都会打真实模型；沙箱无外网时调用挂住，会把只有 2 个线程的作业池永久占满，表现为几个文件之后某个毫不相干的用例「作业永不完成」。本轮只堵了已确认泄漏的一处，全局方案（例如把这些模块改为调用时取值 `llm.get_provider()`，或在 conftest 统一注入）需要先评估对成本/用量断言的影响，单独一轮做。
+
 当 `TASKS.md` 中条目完成：记录对应 Git commit、修改路径、测试命令/结果和剩余风险到 `PROGRESS.md`；必要时更新 `DECISIONS.md`。发现新需求先判断是否属于 PRD 范围，再加任务，不能悄悄扩张范围。

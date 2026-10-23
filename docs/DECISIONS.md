@@ -224,3 +224,74 @@
 - 决策：在双主题验收与提交后，按用户要求更名为「知径 MindTrail」，标语为“连接知识，走出自己的学习路径”。新 SVG 标识结合书页与向上延伸的路径；首页、工作台、浏览器图标、网页标题、API 标题和用户可见的后端品牌文字统一。
 - README 改为独立产品的使用文档；根 LICENSE 与 `docs/upstream/README.md` 完整保留，新增 NOTICE 记录上游、字体、Logo 与参考媒体的版权边界。
 - 保留 `STUDYFORGE_*` 配置、Cookie、包名、日志命名空间和旧日历 PRODID，以兼容现有部署、偏好、历史日历；不改数据库、模型结构、任务 ID 或 API 路径。
+
+## ADR-028 — 填空题从「简答 / 填空」里拆成独立题型
+- 日期：2026-10-23
+- 状态：Accepted
+- 背景：`kind` 原本只有 `mcq / short / truefalse / code`，`short` 的标签是「简答 / 填空」，两种答案共用一个题型，也共用一套判分。填空的答案是一个词或数值，简答的答案是一段话，二者需要的判分方式相反。
+- 决策：新增 `fill`，`short` 从此专指简答题。`QUIZ_KINDS` 扩为五种，`QuizGenerateInput.items` 的上限随之从 4 改为 `len(QUIZ_KINDS)`。前端题型清单收敛到 `frontend/src/lib/quizKinds.ts` 一处，替换原先散在三个组件里的本地常量。
+- 存量数据**不迁移**：库里 8 道 `short` 题答案平均 146 字（7 道超过 40 字），本来就是句子作答，迁成 `fill` 会让精确匹配把每一道都判错。它们留在 `short` 下，正好由简答题的 AI 判分来判。若日后要迁，一条 `UPDATE quiz_items SET kind='fill' WHERE kind='short'` 即可，且可逆。
+- 影响：新增题型要同时改 `QUIZ_KINDS`、`KIND_LABELS`、`_KIND_SPECS` 和 `zh-CN.json` 的 `quiz_kind_<kind>`；`quizgen.build_prompt` 的 kind 枚举改为由 `QUIZ_KINDS` 拼接，避免再出现"模型不知道有新题型"。
+
+## ADR-029 — 判分策略按题型分派，两个答题端点合并到一处
+- 日期：2026-10-23
+- 状态：Accepted
+- 背景：`/quiz/{id}/answer`（同步）与 `/quiz/{id}/answer/job`（后台，前端实际调用）判分口径不一致：前者对非 code 题走精确匹配，后者不看 kind 一律送模型，还把 `exact_ci` 写进 attempt 行。同一道题走哪条路，结论和记录都不同。
+- 决策：新增 `main._judge_answer`，两个端点共用。策略表 `code_grade.GRADER_FOR_KIND`：`mcq / truefalse / fill` 精确匹配（`exact_ci`），`short / code` 由模型判（`llm_short` / `llm_code`）。`code_grade.grade_answer` 增加 `kind` 参数选择 system prompt，默认 `code` 以兼容既有调用。后台端点改用 `_record_attempt`，不再手写插入，从而获得重复提交保护、概念快照和正确的 grader。
+- 理由：精确匹配对填空是准确的，对简答则把每一句改写都判错，与"用自己的话回答"的要求相反。
+- 影响与风险：简答改由模型判分等于「意思对就过」，会顺着 `ever_correct` 影响掌握状态与进阶建议，属于产品语义变化而非纯技术改动。测试侧：所有"答题且用 `short` 题"的用例都改成 `fill`（它们不测判分策略），`FakeProvider` 新增判分分支，按 REFERENCE 与 SUBMITTED 精确比较给出 verdict，使离线测试行为与改动前一致且不产生真实调用。
+
+## ADR-030 — 答案附件：内容寻址存储 + 字节嗅探
+- 日期：2026-10-23
+- 状态：Accepted
+- 背景：简答题需要支持上传图片（手写答案拍照）、Word、Excel、PDF、代码/文本，并让模型据此判分。
+- 决策：
+  - 字节存 `backend/data/attachments/<sha256[:2]>/<sha256>`，DB 的 `attachments` 表只存元数据。文件名不参与路径，路径由内容哈希推导，目录穿越无从谈起；同一文件重复上传只存一份。
+  - 类型由**字节嗅探**决定（PNG/JPEG/WEBP 魔数、`%PDF`、`PK\x03\x04` + 内部 `word/` 或 `xl/` 路径、UTF-8 可解码），不看扩展名也不看 Content-Type。
+  - 拒绝带宏的 `.docm/.xlsm`（即使只读 XML 也拒绝），拒绝老格式 `.doc/.xls`（需外部转换器，与"单人本地、环境简单"冲突），单文件 10 MB、单次作答最多 5 个。
+  - 文本抽取：PDF 用 `pypdf`（前 20 页），DOCX 复用 `resources/parser.parse_docx_chunks`，XLSX 用 `openpyxl`（新增依赖，纯 Python），文本/代码直接 UTF-8 解码。每附件 6000 字、合计 20000 字封顶，截断时在 prompt 里写明已截断。
+  - 图片不转文字，作为多模态内容随请求发送；`LLMProvider.generate` 增加可选 `images`，`supports_vision` 由各 provider 声明（Ollama 按模型名判断）。模型不支持视觉且答案只有图片时返回 400 并提示，不给出"没看见也敢判"的结论。
+- 影响：`attempts` 新增 `attachment_ids`（JSON），经 `ADDED_COLUMNS` 追加，老库自动补列，NULL 与 `[]` 同义。`MeteredLLM` 仅在有图片时传第四个参数，避免要求所有历史 provider 桩同步改签名。
+
+## ADR-031 — 「题目解析」与「答案分析」是两个入口，不是同一个
+- 日期：2026-10-23
+- 状态：Accepted
+- 背景：最初设想一个「AI 解析」按钮，未答题时讲题、已答题时讲错因。二者混在一起会让同一块内容承担两种意图。
+- 决策：
+  - **题目解析**沿用 `POST /quiz/{id}/solution`：prompt 只有题干、题型与标准答案，不含学习者作答，讲的是"这道题怎么解"，结果缓存到 `quiz_items.solution`。
+  - **答案分析**新增 `POST /quiz/{id}/answer-analysis`（含 `/job`）：输入题干、参考答案、某次作答与判分结论，system prompt 明确"只评价这次作答，不要重讲题目"，输出「好在哪 / 问题出在哪 / 下次怎么答」。**不写入 `item.solution`**：一题多次作答的点评各不相同，写进去会让下一次作答看到上一次的点评。
+  - 前端每题两个按钮；「答案分析」在 `attempt_state.attempts > 0` 时才出现，并在新一次提交后清空，避免旧点评被误读为新答案的点评。
+- 影响：判分 feedback（一两句）与答案分析（多段）并存，深度不同不重复。答案分析目前不落库，刷新即失，属于有意取舍；若要保留历史，应在 `attempts` 加列而非复用 `solution`。
+
+## ADR-032 — 存储一律 UTC，展示一律北京时间
+- 日期：2026-10-23
+- 状态：Accepted
+- 背景：用户反馈「所有的时间都不是北京时间」。排查后确认是三处独立缺陷叠加，都不是存储问题——存储层一直是正确的「naive UTC」：
+  1. **学习日时区默认值错了**。`app/days.py` 的 `STUDYFORGE_TIMEZONE` 默认 `"UTC"`，且全仓库没有任何地方设置它。于是学习日的 04:00 边界落在北京时间 12:00：上午学习被记到前一天，中午队列翻页，`today_key` / 打卡 / Deadline 倒数全部按 UTC 日算。
+  2. **任务接口漏了时区标记**。`app/jobs/router.py::_out` 直接 `job.created_at.isoformat()`。SQLite 取回的时间戳是 naive UTC，序列化后成了 `2026-10-23T07:04:36`——浏览器把无偏移字符串当**本地时间**读，于是任务列表整体慢 8 小时。这是全仓库唯一一处绕过 `iso_utc()` 的时间序列化。
+  3. **前端各写各的换算**。`lib/copy.ts::formatDay` 硬编码 `timeZone: "UTC"`，凌晨 0–8 点发生的事件显示成前一天；另有 9 处组件/页面直接 `toLocaleString()` 不带时区，服务端渲染用宿主时区、水合后用浏览器时区，两者不一致。
+- 决策：
+  - 存储不动。瞬时一律 naive UTC，与既有 `review.py` / `planning.py` 的约定保持一致。
+  - `days.DEFAULT_TIMEZONE` 改为 `"Asia/Shanghai"`；`compose.yaml` 与两份 `.env.example` 显式写出 `STUDYFORGE_TIMEZONE=Asia/Shanghai`（容器里不靠猜）。环境变量仍可覆盖，测试用 `monkeypatch.setenv` 切换。
+  - `_out` 改用 `app.attempts.iso_utc()`，输出 `+00:00`，与 `projects` / `knowledge` / `submissions` / `agent` 各 schema 的 `utc_timestamp` 序列化器口径一致。
+  - 前端新增 `lib/copy.ts::APP_TIMEZONE = "Asia/Shanghai"` 与 `formatDateTime()` / `dayKeyOf()`，10 处调用点统一收口；`formatDay` 改用它。日键（`formatDayKey`、`lib/plan.ts` 的 `shiftDayKey`）**保持 UTC 固定**，因为 `YYYY-MM-DD` 是日历事实而非瞬时，跨时区换算反而会错一天。
+- 理由：单一用户、本机运行、人在北京，UI 上的「今天」「04:00 学习日」「任务几点跑的」都必须是墙上时钟。把时区收敛成两个常量（后端 `days.DEFAULT_TIMEZONE`、前端 `APP_TIMEZONE`）比在 15 个调用点各写一遍 `timeZone:` 更不容易再次走偏。
+- 影响与风险：历史数据不需要迁移——存的是 UTC 瞬时，只是过去按 UTC 日切分的学习日归属会与新口径不同（例如过去某天上午的打卡算在前一天）。这部分历史不重算，因为它记录的是当时的判定，重算会改写已发生的学习历史，违反「不删改学习历史」边界。测试：`tests/test_days.py::test_default_timezone_is_beijing` 断言默认时区与 04:00 边界，`tests/test_job_links.py::test_job_timestamps_carry_the_utc_offset` 断言接口带 `+00:00`，`frontend/tests/timezone-display.test.tsx` 用 UTC 与北京**日期不同**的瞬时锁住换算（中段时刻两种实现都能过，锁不住）。
+
+## ADR-033 — AI 请求按「主题」幂等：作业行就是缓存
+- 日期：2026-10-23
+- 状态：Accepted
+- 背景：用户连续两次报告同一个缺陷——「答案分析能反复触发」「检查一下是否还有 AI 任务是能刷新重试的，这是被杜绝的操作」。根因不是某一个按钮忘了 disabled，而是**服务端从来没有记住自己已经为同一个主题付过一次费**。前端按钮在作业结束时回到 idle，双击、开第二个标签页、刷新后重进页面，都会买到第二份相同答案。13 个 AI 入口里当时只有 2 个（知识点提取、图谱提取）有这层保护。
+- 决策：
+  - **一个守卫**：`jobs.service.find_live_job(session, type, ref_type, ref_id)`，只认 `pending`/`running`。命中即返回 `{"job_id": 已有的, "resumed": true}`，不新建行、不再调用模型。路由不再各写一套。
+  - **身份字段写在 `progress` 里**：`create_job(..., progress={"stage": "queued", "attempt_id": ...})`。之所以不放独立列，是因为 `progress` 已经在入队那一刻落库，正好覆盖「create 到 worker 启动」这个双击窗口；worker 启动后 `update_progress` 是**整体替换**，因此必须把身份字段继续带上，否则守卫在作业开始后就失效——这是本实现唯一的隐性约束，已在 `create_job` 与调用点注释里写明。
+  - **完成态的身份在 `result` 里**：`complete_job` 会 `progress=None`，所以「已完成」的查找必须读 `result`。只查 `progress` 的实现能通过双击测试，但永远查不到缓存，表现为「过一会儿再点又能生成」。
+  - **答案分析以作业行为缓存，不写 `attempts`**：`attempts` 是 append-only（模型 docstring 明确 rows are never updated），而一次点评属于某次作答而非某道题，写进 `quiz_items.solution` 会让下一次作答看到上一次的点评。因此 `(item_id, attempt_id)` 的唯一记录就是那条作业行。
+  - **粒度按产物定，不按入口定**：提示按 **(题, 级别)** 匹配，因为 level 1 与 level 2 是两份不同产物；变式题的 ref 从 `course` 改成 `quiz`/`item_id`，否则同课程任意两题共用一个守卫；课程生成没有 ref，全安装唯一。
+  - **同步端点同样先查缓存**：`POST /quiz/{id}/answer-analysis` 是异步端点的旁路，不查就等于开了后门。
+  - **客户端只做恢复，不做判定**：前端不猜「这是不是重复请求」，它只负责刷新后从 `/api/jobs` 找回仍在进行的作业并继续轮询（`useResumeJob`、`QuizSection` 挂载恢复）。判定权在服务端，否则前端一改就绕过去了。
+- 理由：作业行本来就是「一次付费调用的记录」，让它兼任幂等键，比新增一张 `ai_requests` 表更小、也不会出现两处状态不一致。`find_live_job` 只有 6 行，13 个入口共用一个，新增入口时漏接是可以被 `tests/test_ai_dedupe.py` 直接指出的。
+- 影响与风险：
+  - 幂等窗口只在「进行中」与「已完成」两种状态。**失败**的作业不参与复用，重试是允许的（用户为失败付费了，不能连重试也堵死）。这一点是有意的：`find_live_job` 只看 `pending`/`running`。
+  - 同一主题的两个请求若真正同时到达（未加锁的 read-then-write），仍可能各插一行；这与 `attempts` 的双击守卫同一个已知边界，不在本轮扩大范围。单人本机场景下窗口在毫秒级。
+  - 测试：`tests/test_ai_dedupe.py` 8 项覆盖 13 个入口中的 8 类（解析、出题、课程生成、课时重生成、课程重生成、判分、提示分级、答案分析每作答一次、图谱触发不叠加，其中重生成一项覆盖两个入口）。该文件全部用「直接插入 pending 作业 + 手工完成作业」的方式构造，不依赖后台线程池——依赖线程池会让断言在并发批次里测到的是线程调度而不是守卫（本轮实际踩到：另一个文件遗留的真实 provider 作业占满两个线程，用例报「job never finished」）。
