@@ -31,7 +31,9 @@ describe("RegenDraftPreview", () => {
       <RegenDraftPreview draft={DRAFT} onAdopt={onAdopt} onDiscard={onDiscard} adopting={false} />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Edit" }));
-    fireEvent.change(screen.getByDisplayValue("注意力"), { target: { value: "注意力机制" } });
+    // By label, not by value: the concepts field holds "注意力" too, so a value query
+    // matches both inputs.
+    fireEvent.change(screen.getByLabelText("Title"), { target: { value: "注意力机制" } });
     fireEvent.click(screen.getByRole("button", { name: "Adopt" }));
     expect(onAdopt).toHaveBeenCalledWith({ ...DRAFT, title: "注意力机制" });
     expect(onDiscard).not.toHaveBeenCalled();

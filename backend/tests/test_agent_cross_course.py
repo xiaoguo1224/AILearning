@@ -6,8 +6,29 @@ courses. Lessons from courses that are NOT linked stay invisible: the scoping
 promise is widened to the project, not dropped.
 """
 
+import pytest
+
 from app.agent.retrieval import retrieve
 from app.db import SessionLocal
+
+
+@pytest.fixture(autouse=True)
+def _no_graph_extraction(monkeypatch):
+    """Creating a project also queues a knowledge-graph extraction job.
+
+    That job is a real model call in a two-thread pool, and nothing here asks for
+    one — this file is about retrieval. Left running, it outlives the test that
+    created it: in a full run the suite has no API route to answer, so the call
+    hangs and both pool threads are gone for every test that comes after. The
+    damage does not look like damage. It looks like an unrelated file's background
+    job "never finishing", three files later, in a test about something else.
+
+    The routes import `trigger_graph_extract` inside the function body, so patching
+    the module attribute is enough. The guard itself is covered by test_ai_dedupe.
+    """
+    from app.project_graph import trigger as graph_trigger
+
+    monkeypatch.setattr(graph_trigger, "trigger_graph_extract", lambda project_id: None)
 
 
 def _project(client, name="Cross-course project"):

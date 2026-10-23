@@ -19,22 +19,15 @@ const TYPE_LABELS: Record<string, string> = {
   quiz_generate: "Question generation",
   quiz_variant: "Question variant",
   quiz_solution: "Reference solution",
+  quiz_answer_analysis: "Answer analysis",
+  quiz_grade: "Short-answer grading",
+  quiz_hint: "Answer hint",
   code_review_llm: "Code review",
+  concept_extract: "Concept extraction",
+  project_graph_extract: "Knowledge graph extraction",
 };
 
-function jobLink(job: Job): string | null {
-  if (job.type === "course_generate_staged" && job.status !== "completed") return `/courses/new?job=${encodeURIComponent(job.id)}`;
-  if (job.ref_type === "course" && job.ref_id) return `/courses/${job.ref_id}`;
-  if (job.ref_type === "lesson" && job.ref_id) {
-    // Lesson page needs the course id; link to jobs page anchor instead.
-    return null;
-  }
-  if (["course_generate", "course_generate_staged"].includes(job.type) && job.status === "completed") {
-    const courseId = job.result?.course_id;
-    if (courseId != null) return `/courses/${String(courseId)}`;
-  }
-  return null;
-}
+
 
 /**
  * Live list of background AI jobs with progress bars.
@@ -125,7 +118,9 @@ export function JobsList() {
       key: "action",
       width: 120,
       render: (_: unknown, job: Job) => {
-        const link = jobLink(job);
+        // `href` is resolved server-side: a quiz job knows only its item id, and the
+        // course is two joins away. Null means the job produced nothing to open.
+        const link = job.href;
         return (
           <span style={{ display: "flex", gap: 8 }}>
             {["pending", "running", "awaiting_review"].includes(job.status) && (

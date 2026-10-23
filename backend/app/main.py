@@ -48,6 +48,7 @@ from app.concepts import course_scope, lesson_scope, normalize_concept
 from app.content_reviews.router import router as content_reviews_router
 from app.course_content.router import router as course_content_router
 from app.course_quiz.router import router as course_quiz_router
+from app.attachments.router import router as attachments_router
 from app.jobs.router import router as jobs_router
 from app.project_graph.router import router as project_graph_router
 from app.concept_extract.router import router as concept_extract_router
@@ -85,6 +86,7 @@ app.include_router(curriculum_router)
 app.include_router(content_reviews_router)
 app.include_router(course_content_router)
 app.include_router(course_quiz_router)
+app.include_router(attachments_router)
 app.include_router(jobs_router)
 app.include_router(project_graph_router)
 app.include_router(concept_extract_router)
@@ -780,7 +782,7 @@ def generate_job(body: GenerateRequest, session: Session = Depends(get_session))
     {"course_id": ...}. Poll GET /api/jobs/{id}. Navigating away does NOT
     cancel it.
     """
-    from app.jobs.service import create_job, run_in_background
+    from app.jobs.service import create_job, find_live_job, run_in_background
 
     specs = [
         ingest.SourceSpec(
@@ -802,6 +804,12 @@ def generate_job(body: GenerateRequest, session: Session = Depends(get_session))
     }[_difficulty]
     chunks = [_difficulty_desc] + chunks
     owners = ["difficulty"] + owners
+
+    live = find_live_job(session, "course_generate")
+    if live:
+        # Generation is the most expensive call in the app and there is no subject to
+        # scope it by: one at a time, and a second request joins the first.
+        return {"job_id": live.id, "resumed": True}
 
     job = create_job(session, "course_generate")
 
@@ -1127,13 +1135,17 @@ def regenerate_lesson_job(
     Navigating away does NOT cancel it.
     """
     from app import models as _models
-    from app.jobs.service import create_job, run_in_background
+    from app.jobs.service import create_job, find_live_job, run_in_background
 
     lesson = session.get(_models.Lesson, lesson_id)
     if not lesson:
         raise HTTPException(404, "Lesson not found")
     if not (lesson.content or "").strip():
         raise HTTPException(422, "The lesson has no text to regenerate from.")
+
+    live = find_live_job(session, "lesson_regenerate", "lesson", lesson_id)
+    if live:
+        return {"job_id": live.id, "resumed": True}
 
     job = create_job(session, "lesson_regenerate", ref_type="lesson", ref_id=lesson_id)
     feedback = body.feedback.strip()
@@ -1253,13 +1265,23 @@ def regenerate_lesson_stream(
 
 @app.post("/api/courses/{course_id}/open")
 def record_course_open(course_id: int, session: Session = Depends(get_session)):
-    """Record that the user opened a course. Returns the updated open count."""
-    course = session.get(models.Course, course_id)
-    if not course:
+    """Record that the user opened a course. Returns the updated open count.
+
+    The counter is bumped with a single UPDATE ... SET opened_count = opened_count + 1
+    rather than read-modify-write on the ORM object: two course cards can be opened
+    from two tabs at once, and the ORM version loses one of the increments. The
+    rowcount doubles as the existence check, so a missing course still 404s.
+    """
+    result = session.execute(
+        models.Course.__table__.update()
+        .where(models.Course.id == course_id)
+        .values(opened_count=func.coalesce(models.Course.opened_count, 0) + 1)
+    )
+    if result.rowcount == 0:
+        session.rollback()
         raise HTTPException(404, "Course not found")
-    course.opened_count = (course.opened_count or 0) + 1
     session.commit()
-    return {"opened_count": course.opened_count}
+    return {"opened_count": session.get(models.Course, course_id).opened_count}
 
 
 @app.post("/api/courses/{course_id}/regenerate/job")
@@ -1273,7 +1295,7 @@ def regenerate_course_job(
     them. Poll GET /api/jobs/{id}. Navigating away does NOT cancel it.
     """
     from app import models as _models
-    from app.jobs.service import create_job, run_in_background
+    from app.jobs.service import create_job, find_live_job, run_in_background
 
     course = session.get(_models.Course, course_id)
     if not course:
@@ -1285,6 +1307,10 @@ def regenerate_course_job(
                 lesson_ids.append(lesson.id)
     if not lesson_ids:
         raise HTTPException(422, "The course has no lesson text to regenerate from.")
+
+    live = find_live_job(session, "course_regenerate", "course", course_id)
+    if live:
+        return {"job_id": live.id, "resumed": True}
 
     job = create_job(session, "course_regenerate", ref_type="course", ref_id=course_id)
     feedback = body.feedback.strip()
@@ -1649,7 +1675,7 @@ def get_lesson(lesson_id: int, session: Session = Depends(get_session)):
     quiz = []
     answered = correct = first_try_correct = 0
     for q in lesson.quiz_items:
-        state = _attempt_state(by_item.get(q.id, []))
+        state = _attempt_state(by_item.get(q.id, []), session)
         if state["attempts"]:
             answered += 1
         if state["ever_correct"]:
@@ -1727,6 +1753,94 @@ def get_lesson_attempts(lesson_id: int, session: Session = Depends(get_session))
 class QuizAnswer(BaseModel):
     answer: str
     elapsed_ms: int | None = None
+    # Ids returned by POST /api/attachments. Files are uploaded while the learner is
+    # writing; this request only references them, so it stays a small JSON body.
+    attachment_ids: list[int] = []
+
+
+def _judge_answer(
+    kind: str,
+    question: str,
+    reference: str,
+    submitted: str,
+    job_id: str | None = None,
+    attachments: str = "",
+    images: list[tuple[str, bytes]] | None = None,
+) -> tuple[bool, str | None, str]:
+    """Grade one answer, and say which policy judged it.
+
+    Two policies, chosen by kind. Multiple choice, true/false and fill-in are one
+    term measured against a key: exact match decides them, and there is no feedback
+    to give beyond the key the caller already returns. Code and short answers are
+    prose, so the model decides.
+
+    Both answer endpoints go through here because they used to disagree: the sync
+    one exact-matched short answers while the job one — the one the UI actually
+    calls — sent every kind to the model and then recorded `exact_ci` on the row.
+
+    Takes the question as plain values, not a QuizItem, so the background job can
+    call it with snapshots instead of an ORM object that outlives its session.
+    Attachments arrive pre-resolved for the same reason: text already extracted,
+    images already read off disk.
+
+    Raises HTTPException 400 when the answer cannot be judged as submitted (a picture
+    for a kind that needs a term, a picture the model cannot see), 402 on the cost cap,
+    and 502 when the call fails or the verdict is unusable. None of these is recorded
+    as a wrong answer: a provider failure must not cost the learner a mark.
+    """
+    grader = code_grade.GRADER_FOR_KIND.get(kind)
+    if grader is None:
+        if not submitted.strip():
+            raise HTTPException(
+                400, "这种题型请用文字作答，附件不能代替答案。"
+            )
+        return _grade(submitted, reference), None, GRADER
+
+    provider = get_provider()
+    if images and not getattr(provider, "supports_vision", False):
+        raise HTTPException(
+            400,
+            "当前模型读不了图片。请把答案写成文字，或在 .env 里换用支持图片的模型。",
+        )
+
+    meter = MeteredLLM(provider, uuid.uuid4().hex, job_id=job_id)
+    try:
+        correct, feedback = code_grade.grade_answer(
+            meter,
+            question,
+            reference,
+            submitted,
+            kind=kind,
+            attachments=attachments,
+            images=images,
+        )
+    except CostLimitExceeded as exc:
+        raise _cost_limit_exceeded(exc) from exc
+    except LLMCallError as exc:
+        raise HTTPException(502, str(exc)) from exc
+    except code_grade.GradeParseError as exc:
+        raise HTTPException(502, "AI 判分失败，请重试一次。") from exc
+    return correct, feedback, grader
+
+
+def _attachment_material(
+    session: Session, ids: list[int]
+) -> tuple[str, list[tuple[str, bytes]]]:
+    """Extract attachments for grading: (text block, images).
+
+    Done in the request thread even for the job route, because the rows and the files
+    belong to a session the background thread does not share. Extraction is also where
+    a broken file is turned into a note in the prompt rather than a failed call.
+    """
+    if not ids:
+        return "", []
+    from app.attachments import service as attachment_service
+    from app.attachments import storage as attachment_storage
+
+    try:
+        return attachment_service.material_for(session, ids)
+    except attachment_storage.AttachmentError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @app.post("/quiz/{item_id}/answer/job")
@@ -1736,62 +1850,81 @@ def answer_quiz_job(item_id: int, body: QuizAnswer, session: Session = Depends(g
     Returns {job_id} immediately. On completion job.result holds
     {correct, feedback}. Poll GET /api/jobs/{id}.
     """
-    from app.jobs.service import create_job, run_in_background
+    from app.jobs.service import create_job, find_live_job, run_in_background
 
     item = session.get(models.QuizItem, item_id)
     if not item:
         raise HTTPException(404, "Quiz item not found")
-    if not body.answer.strip():
+    if not body.answer.strip() and not body.attachment_ids:
         raise HTTPException(400, "Answer cannot be empty")
+
+    live = find_live_job(session, "quiz_grade", "quiz", item_id)
+    if live:
+        # The same answer pressed twice is one grading, not two: the second press
+        # joins the first job instead of writing a second attempt row for it.
+        return {"job_id": live.id, "resumed": True}
 
     job = create_job(session, "quiz_grade", ref_type="quiz", ref_id=item_id)
     answer_snap = body.answer.strip()
     kind_snap = item.kind
     question_snap = item.question
     reference_snap = item.answer
+    elapsed_snap = _sanitize_elapsed_ms(body.elapsed_ms)
+    attachment_ids = list(body.attachment_ids)
+    attachment_text, images = _attachment_material(session, attachment_ids)
 
     def _run(job_id: str):
+        from app.jobs.models import Job as _Job
         from app.jobs.service import complete_job, fail_job, update_progress
-        from app.llm import get_provider as _get_provider
-        from app.llm.base import LLMCallError
-        from app.metering import CostLimitExceeded, MeteredLLM, cost_limit_detail
-        from app import code_grade as _cg
 
         update_progress(job_id, {"stage": "grading"})
         try:
-            meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, job_id=job_id)
-            correct, feedback = _cg.grade_answer(
-                meter, question_snap, reference_snap, answer_snap
+            correct, feedback, grader = _judge_answer(
+                kind_snap,
+                question_snap,
+                reference_snap,
+                answer_snap,
+                job_id=job_id,
+                attachments=attachment_text,
+                images=images,
             )
-        except CostLimitExceeded as exc:
-            fail_job(job_id, f"Cost limit exceeded: {cost_limit_detail(exc)}")
+        except HTTPException as exc:
+            # A failed call or an unusable verdict. No attempt row either way.
+            fail_job(job_id, str(exc.detail))
             return
-        except LLMCallError as exc:
-            fail_job(job_id, str(exc))
-            return
-        # Record the attempt.
-        from app.db import SessionLocal
-        from app import models as _m
 
         with SessionLocal() as s:
-            j = s.get(__import__("app.jobs.models", fromlist=["Job"]).Job, job_id)
+            j = s.get(_Job, job_id)
             if j and j.status == "cancelled":
                 return
-            # Count existing attempts for ordinal.
-            count = s.query(_m.Attempt).filter_by(quiz_item_id=item_id).count()
-            s.add(
-                _m.Attempt(
-                    quiz_item_id=item_id,
-                    lesson_id=s.get(_m.QuizItem, item_id).lesson_id,
-                    submitted_answer=answer_snap,
-                    expected_answer=reference_snap,
-                    correct=correct,
-                    attempt_no=count + 1,
-                    source="lesson_quiz",
-                )
+            item_row = s.get(models.QuizItem, item_id)
+            if item_row is None:
+                fail_job(job_id, "Quiz item not found")
+                return
+            # One recorder for both endpoints: it owns the double-submit guard, the
+            # concept snapshot, and the attempt ordinal.
+            attempt = _record_attempt(
+                s,
+                item_row,
+                answer_snap,
+                correct,
+                elapsed_snap,
+                grader=grader,
+                attachment_ids=attachment_ids,
             )
             s.commit()
-        complete_job(job_id, {"correct": correct, "feedback": feedback})
+            state = _attempt_state(_attempts_for_item(s, item_id), s)
+            attempt_id = attempt.id
+        complete_job(
+            job_id,
+            {
+                "correct": correct,
+                "expected": reference_snap,
+                "feedback": feedback,
+                "attempt_id": attempt_id,
+                "attempt_state": state,
+            },
+        )
 
     run_in_background(job.id, _run)
     return {"job_id": job.id}
@@ -1802,30 +1935,18 @@ def answer_quiz(item_id: int, body: QuizAnswer, session: Session = Depends(get_s
     item = session.get(models.QuizItem, item_id)
     if not item:
         raise HTTPException(404, "Quiz item not found")
-    if not body.answer.strip():
+    if not body.answer.strip() and not body.attachment_ids:
         raise HTTPException(400, "Answer cannot be empty")
 
-    feedback: str | None = None
-    grader = GRADER
-    if item.kind == "code":
-        # A code submission IS the answer to this question — the analogue of
-        # picking an option on a multiple-choice item — so the model judges
-        # whether it solves this question. Static reading only; the server
-        # never executes submitted code.
-        run_id = uuid.uuid4().hex
-        meter = MeteredLLM(get_provider(), run_id)
-        try:
-            correct, feedback = code_grade.grade_answer(
-                meter, item.question, item.answer, body.answer
-            )
-        except CostLimitExceeded as exc:
-            raise _cost_limit_exceeded(exc) from exc
-        except code_grade.GradeParseError as exc:
-            # No attempt recorded: a provider failure is not the learner's error.
-            raise HTTPException(502, "AI 判分失败，请重试一次。") from exc
-        grader = code_grade.CODE_GRADER
-    else:
-        correct = _grade(body.answer, item.answer)
+    attachment_text, images = _attachment_material(session, list(body.attachment_ids))
+    correct, feedback, grader = _judge_answer(
+        item.kind,
+        item.question,
+        item.answer,
+        body.answer,
+        attachments=attachment_text,
+        images=images,
+    )
 
     attempt = _record_attempt(
         session,
@@ -1834,6 +1955,7 @@ def answer_quiz(item_id: int, body: QuizAnswer, session: Session = Depends(get_s
         correct,
         _sanitize_elapsed_ms(body.elapsed_ms),
         grader=grader,
+        attachment_ids=list(body.attachment_ids),
     )
     return {
         "correct": attempt.correct,
@@ -1841,8 +1963,33 @@ def answer_quiz(item_id: int, body: QuizAnswer, session: Session = Depends(get_s
         "feedback": feedback,
         "attempt_id": attempt.id,
         "attempt_no": attempt.attempt_no,
-        "attempt_state": _attempt_state(_attempts_for_item(session, item.id)),
+        "attempt_state": _attempt_state(_attempts_for_item(session, item.id), session),
     }
+
+
+def _live_hint_job(session: Session, item_id: int, level: int):
+    """The hint job already generating this exact level, if one is in flight.
+
+    Level is part of the identity because the three levels are different products:
+    asking for "the principle" must not be answered with the "where to look" job.
+    """
+    from app.jobs.models import Job
+
+    rows = (
+        session.query(Job)
+        .filter(
+            Job.type == "quiz_hint",
+            Job.ref_type == "quiz",
+            Job.ref_id == item_id,
+            Job.status.in_(("pending", "running")),
+        )
+        .order_by(Job.created_at.desc())
+        .all()
+    )
+    for row in rows:
+        if (row.progress or {}).get("level") == level:
+            return row
+    return None
 
 
 class QuizHintRequest(BaseModel):
@@ -1858,13 +2005,26 @@ def quiz_hints_job(
     Returns {job_id} immediately. On completion job.result.hint holds the text.
     Poll GET /api/jobs/{id}.
     """
-    from app.jobs.service import create_job, run_in_background
+    from app.jobs.service import create_job, find_live_job, run_in_background
 
     item = session.get(models.QuizItem, item_id)
     if not item:
         raise HTTPException(404, "Quiz item not found")
 
-    job = create_job(session, "quiz_hint", ref_type="quiz", ref_id=item_id)
+    # Levels are separate products (location clue, principle, key correction), so the
+    # guard has to match the level too — asking for level 2 must not return the level 1
+    # job that happens to be running.
+    live = _live_hint_job(session, item_id, body.level)
+    if live:
+        return {"job_id": live.id, "resumed": True}
+
+    job = create_job(
+        session,
+        "quiz_hint",
+        ref_type="quiz",
+        ref_id=item_id,
+        progress={"stage": "queued", "level": body.level},
+    )
     level_snap = body.level
     question_snap = item.question
     reference_snap = item.answer
@@ -1876,7 +2036,7 @@ def quiz_hints_job(
         from app.metering import CostLimitExceeded, MeteredLLM, cost_limit_detail
         from app import quiz_hint as _qh
 
-        update_progress(job_id, {"stage": "generating"})
+        update_progress(job_id, {"stage": "generating", "level": level_snap})
         try:
             meter = MeteredLLM(_get_provider(), uuid.uuid4().hex, job_id=job_id)
             hint = _qh.hint_for(

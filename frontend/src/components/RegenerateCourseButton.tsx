@@ -8,6 +8,7 @@ import { useI18n } from "@/components/LocaleProvider";
 import { Button } from "@/components/ui/Button";
 import { RegenDraftPreview } from "@/components/RegenDraftPreview";
 import { JobCancelButton, JobProgressBar, useJob } from "@/components/JobProgress";
+import { useResumeJob } from "@/components/useResumeJob";
 import {
   ApiError,
   patchLesson,
@@ -36,10 +37,17 @@ export function RegenerateCourseButton({ courseId }: { courseId: number }) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [jobId, setJobId] = useState<string | null>(null);
-  const { job } = useJob(dialogOpen ? jobId : null);
+  // Re-attach to a regeneration that was already running when the page reloaded.
+  // Derived rather than mirrored into state: `dismissed` is what lets the learner
+  // close the resumed dialog and keep it closed.
+  const { jobId, setJobId, resumed } = useResumeJob("course_regenerate", "course", courseId);
+  const [dismissed, setDismissed] = useState(false);
+  const open = dialogOpen || (resumed && !dismissed);
+  const { job } = useJob(open ? jobId : null);
   const [error, setError] = useState<string | null>(null);
-  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  // The open/closed set is not read back: antd's Collapse owns which panel is open.
+  // It is kept as the reset hook `start()` calls when a new regeneration begins.
+  const [, setExpanded] = useState<Set<number>>(new Set());
   const [adopted, setAdopted] = useState<Set<number>>(new Set());
   const [adopting, setAdopting] = useState<number | null>(null);
 
@@ -89,6 +97,7 @@ export function RegenerateCourseButton({ courseId }: { courseId: number }) {
 
   function close() {
     setDialogOpen(false);
+    setDismissed(true);
     // The job keeps running in the background; reopening reconnects.
   }
 
@@ -100,7 +109,7 @@ export function RegenerateCourseButton({ courseId }: { courseId: number }) {
         {t("Regenerate course")}
       </Button>
       <Modal
-        open={dialogOpen}
+        open={open}
         onCancel={close}
         title={!jobId ? t("Regenerate course") : done ? t("Regeneration complete") : t("Regenerating…")}
         width={900}

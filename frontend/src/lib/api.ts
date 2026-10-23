@@ -750,6 +750,14 @@ export interface Job {
     revision?: number;
     draft?: CourseLessonDraft;
     lessons?: CourseLessonDraft[];
+    /**
+     * Identity, not progress. Routes that can be asked for the same subject twice
+     * (one analysis per attempt, one hint per level) write the narrower key here when
+     * the job is queued, so a duplicate request can recognise it before the worker
+     * starts.
+     */
+    attempt_id?: number;
+    level?: number;
   } | null;
   result: Record<string, unknown> | null;
   trace: {
@@ -766,6 +774,11 @@ export interface Job {
   error: string | null;
   ref_type: string | null;
   ref_id: number | null;
+  /**
+   * Where this job's subject lives, resolved by the server — a quiz job knows only
+   * its item id, and the course is two joins away. Null when there is nothing to open.
+   */
+  href: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -827,6 +840,50 @@ export function generateQuestionSolution(
 
 export function startQuestionSolutionJob(itemId: number): Promise<{ job_id: string }> {
   return postJson(`/api/quiz/${itemId}/solution/job`, {});
+}
+
+/**
+ * Review one submitted answer — how good it was, not how the question works.
+ *
+ * Separate from the solution above on purpose: that one explains the question and
+ * never sees the answer, this one sees only the answer. `attemptId` omitted means
+ * the most recent lesson-quiz attempt.
+ */
+export function startAnswerAnalysisJob(
+  itemId: number,
+  attemptId?: number | null,
+): Promise<{ job_id: string }> {
+  return postJson(`/api/quiz/${itemId}/answer-analysis/job`, {
+    attempt_id: attemptId ?? null,
+  });
+}
+
+export interface UploadedAttachment {
+  id: number;
+  filename: string;
+  mime: string;
+  size: number;
+  kind: "image" | "pdf" | "docx" | "xlsx" | "text";
+}
+
+/**
+ * Upload one file and get back its id. The answer POST then references the id.
+ *
+ * No Content-Type header: the browser sets multipart/form-data with its own boundary,
+ * and setting it by hand is how uploads arrive unparseable.
+ */
+export function uploadAttachment(file: File): Promise<UploadedAttachment> {
+  const form = new FormData();
+  form.append("file", file);
+  return request<UploadedAttachment>("/api/attachments", {
+    method: "POST",
+    body: form,
+  });
+}
+
+/** Where the bytes can be read back, for a thumbnail or a past answer. */
+export function attachmentUrl(id: number): string {
+  return `${BASE_URL}/api/attachments/${id}`;
 }
 export interface QuizBankLesson {
   id: number;
@@ -1471,8 +1528,12 @@ export function triggerCodeReview(submissionId: number, useLlm = false): Promise
 export function startGradeJob(
   itemId: number,
   answer: string,
+  attachmentIds: number[] = [],
 ): Promise<{ job_id: string }> {
-  return postJson(`/quiz/${itemId}/answer/job`, { answer });
+  return postJson(`/quiz/${itemId}/answer/job`, {
+    answer,
+    attachment_ids: attachmentIds,
+  });
 }
 
 export function startHintJob(

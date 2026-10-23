@@ -615,10 +615,15 @@ def trigger_review_job(submission_id: int, session: Db, use_llm: bool = Query(Fa
     {id, summary, finding_count}. Poll GET /api/jobs/{id}. Navigating away
     does NOT cancel it. use_llm=true includes the model review (slower).
     """
-    from app.jobs.service import create_job, run_in_background
+    from app.jobs.service import create_job, find_live_job, run_in_background
 
     submission = _submission_or_404(session, submission_id)
     job_type = "code_review_llm" if use_llm else "code_review"
+    live = find_live_job(session, job_type, "submission", submission_id)
+    if live:
+        # A submission is immutable, so a review already in flight is the review this
+        # request would produce. Join it rather than pay for it twice.
+        return {"job_id": live.id, "resumed": True}
     job = create_job(session, job_type, ref_type="submission", ref_id=submission_id)
 
     def _run(job_id: str):

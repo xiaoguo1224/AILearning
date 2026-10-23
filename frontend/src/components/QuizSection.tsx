@@ -1,6 +1,5 @@
 "use client";
 
-import { Input } from "antd";
 import Link from "next/link";
 
 
@@ -14,10 +13,33 @@ import { Pagination } from "antd";
 
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
-import { ApiError, getJob, startGradeJob, startHintJob } from "@/lib/api";
+import {
+  ApiError,
+  getJob,
+  listJobs,
+  startAnswerAnalysisJob,
+  startGradeJob,
+  startHintJob,
+  startQuestionSolutionJob,
+} from "@/lib/api";
+import type { Job } from "@/lib/api";
+import type { UploadedAttachment } from "@/lib/api";
+import { AttachmentInput } from "@/components/AttachmentInput";
 import type { QuizHint } from "@/lib/api";
 import { QuizMarkdown } from "@/components/QuizMarkdown";
 import type { AttemptState, QuizItem, QuizProgress } from "@/lib/types";
+
+interface JobResult {
+  correct: boolean;
+  expected: string;
+  feedback?: string;
+  attempt_state: AttemptState;
+  hint?: QuizHint;
+  /** Set by the solution job: the question explained, no answer involved. */
+  solution?: string;
+  /** Set by the answer-analysis job: a review of one submitted answer. */
+  analysis?: string;
+}
 
 interface Feedback {
   correct: boolean;
@@ -40,10 +62,27 @@ type ErrorKind = "validation" | "server";
 
 interface ItemState {
   answer: string;
+  /** Files attached to this answer. Kept after submitting: they are part of the record. */
+  attachments: UploadedAttachment[];
   feedback: Feedback | null;
   /** Progressive hints fetched for a wrong code answer, in level order. */
   hints: QuizHint[];
   hintLoading: boolean;
+  /**
+   * The question explained on its own terms. Loaded on demand and kept until the
+   * panel closes; it never depends on what the learner wrote, so it survives a retry.
+   */
+  solution: string | null;
+  solutionOpen: boolean;
+  solutionLoading: boolean;
+  /**
+   * A review of one submitted answer — a different question from `solution` above.
+   * Cleared on the next submit: a critique of the previous answer shown beside the
+   * new one reads as a critique of the new one.
+   */
+  analysis: string | null;
+  analysisOpen: boolean;
+  analysisLoading: boolean;
   attemptState: AttemptState;
   submitting: boolean;
   error: string | null;
@@ -71,12 +110,28 @@ function restored(item: QuizItem): ItemState {
   const latest = item.attempt_state.latest_quiz_attempt;
   return {
     answer: latest?.answer ?? "",
+    // The files come back with the attempt. Without them a learner who answered with
+    // a photographed page reopened the question to an empty box and no way to see
+    // what they had actually submitted.
+    attachments: (latest?.attachments ?? []).map((row) => ({
+      id: row.id,
+      filename: row.filename,
+      mime: row.mime,
+      size: row.size,
+      kind: row.kind,
+    })),
     feedback:
       latest === null
         ? null
         : { correct: latest.correct, expected: latest.expected, aiFeedback: null },
     hints: [],
     hintLoading: false,
+    solution: null,
+    solutionOpen: false,
+    solutionLoading: false,
+    analysis: null,
+    analysisOpen: false,
+    analysisLoading: false,
     attemptState: item.attempt_state,
     submitting: false,
     error: null,
@@ -88,14 +143,6 @@ function restored(item: QuizItem): ItemState {
 /** Record when an item became answerable, for the elapsed_ms timing signal. */
 function markShown(shownAt: Map<number, number>, itemId: number, restart = false): void {
   if (restart || !shownAt.has(itemId)) shownAt.set(itemId, Date.now());
-}
-
-/** Undefined when the item was never stamped, so submission goes ahead untimed. */
-function elapsedSince(shownAt: Map<number, number>, itemId: number): number | undefined {
-  const start = shownAt.get(itemId);
-  if (start === undefined) return undefined;
-  const ms = Date.now() - start;
-  return Number.isFinite(ms) && ms >= 0 ? ms : undefined;
 }
 
 export function QuizSection({
@@ -123,14 +170,15 @@ export function QuizSection({
 
   /**
    * Per-item refs to the controls a submission's focus restoration might land on.
-   * The radios and the text input are never unmounted (their options and their kind
+   * The radios and the answer box are never unmounted (their options and their kind
    * are fixed once a lesson loads), so a plain ref per item is enough for either;
    * `mcqRefs` is keyed a second time by option because a submission's target is
    * whichever radio is CURRENTLY checked, not a fixed one. `correctRefs` is the
    * "Correct" message, the only thing left to land on once solving an item unmounts
-   * its button and leaves its inputs disabled.
+   * its button and leaves its inputs disabled. `inputRefs` holds either an `<input>`
+   * (fill) or a `<textarea>` (short, inside AttachmentInput), hence the base type.
    */
-  const inputRefs = useRef<Map<number, HTMLInputElement>>(new Map());
+  const inputRefs = useRef<Map<number, HTMLElement>>(new Map());
   const codeRefs = useRef<Map<number, HTMLTextAreaElement>>(new Map());
   const mcqRefs = useRef<Map<number, Map<string, HTMLInputElement>>>(new Map());
   const correctRefs = useRef<Map<number, HTMLParagraphElement>>(new Map());
@@ -163,6 +211,52 @@ export function QuizSection({
   useEffect(() => {
     for (const item of quiz) markShown(shownAt.current, item.id);
   }, [quiz]);
+
+  /**
+   * Re-attach to whatever is still running for these questions.
+   *
+   * Jobs live on the server and survive navigation; the only thing a refresh threw
+   * away was the id this panel was watching. That left a question mid-analysis looking
+   * idle, and pressing the button again started a second job for work already in
+   * flight. Asking once per mount turns a reload into "keep waiting" instead of
+   * "start over".
+   */
+  useEffect(() => {
+    let cancelled = false;
+    const byId = new Map(quiz.map((item) => [item.id, item]));
+    void (async () => {
+      let jobs: Job[];
+      try {
+        jobs = (await listJobs(undefined, 100, 0)).items;
+      } catch {
+        // The page still renders from server data; only the re-attach is lost.
+        return;
+      }
+      if (cancelled) return;
+      for (const job of jobs) {
+        if (job.ref_type !== "quiz" || job.ref_id === null) continue;
+        if (job.status !== "pending" && job.status !== "running") continue;
+        const item = byId.get(job.ref_id);
+        if (!item) continue;
+        if (job.type === "quiz_solution") {
+          patch(item, { solutionLoading: true });
+          void watchSolution(item, job.id);
+        } else if (job.type === "quiz_answer_analysis") {
+          patch(item, { analysisLoading: true });
+          void watchAnalysis(item, job.id);
+        } else if (job.type === "quiz_grade") {
+          patch(item, { submitting: true });
+          void watchGrade(item, job.id);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Once per mount on purpose: this is about what survived the reload, not about
+    // the `quiz` prop changing under it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /**
    * Restore focus once a submission's disabling clears, the same house pattern as
@@ -201,10 +295,13 @@ export function QuizSection({
   ).length;
   const answeredCount = progress.answered + newlyAnswered;
 
-  async function pollJob(jobId: string, maxAttempts = 60): Promise<any> {
+  // Both job kinds resolve through the same poll: grading returns a verdict, hints
+  // return a hint. Every field is optional because the poller cannot know which job it
+  // is waiting on; each caller reads the one it asked for.
+  async function pollJob(jobId: string, maxAttempts = 60): Promise<JobResult> {
     for (let i = 0; i < maxAttempts; i++) {
       const job = await getJob(jobId);
-      if (job.status === "completed") return job.result;
+      if (job.status === "completed") return job.result as unknown as JobResult;
       if (job.status === "failed") throw new Error(job.error || "Job failed");
       if (job.status === "cancelled") throw new Error("Job cancelled");
       await new Promise((r) => setTimeout(r, 2000));
@@ -221,6 +318,7 @@ export function QuizSection({
       const { job_id } = await startHintJob(item.id, level);
       const result = await pollJob(job_id);
       const hint = result.hint;
+      if (!hint) throw new Error("The hint job finished without a hint.");
       patch(item, (prev) => ({ hints: [...prev.hints, hint], hintLoading: false }));
     } catch (err) {
       patch(item, (prev) => ({
@@ -232,9 +330,81 @@ export function QuizSection({
     }
   }
 
+  /**
+   * Explain the question itself. Deliberately independent of what the learner wrote:
+   * the server prompt for this route never receives the answer, so opening it before
+   * answering produces the same text as opening it after.
+   */
+  /** One shape for every failed start or poll, so no branch forgets to clear its flag. */
+  function failWith(item: QuizItem, err: unknown, clear: Partial<ItemState>) {
+    patch(item, (prev) => ({
+      error: err instanceof ApiError ? err.message : t("Could not reach the server."),
+      errorKind: "server" as const,
+      errorNonce: prev.errorNonce + 1,
+      ...clear,
+    }));
+  }
+
+  /**
+   * Wait for a solution job that already exists. Split from `loadSolution` so a page
+   * that reloads mid-job can re-attach to it: the job survives navigation, and the
+   * only thing a refresh used to lose was the id needed to watch it.
+   */
+  async function watchSolution(item: QuizItem, jobId: string) {
+    try {
+      const result = await pollJob(jobId);
+      patch(item, {
+        solution: String(result.solution ?? ""),
+        solutionOpen: true,
+        solutionLoading: false,
+      });
+    } catch (err) {
+      failWith(item, err, { solutionLoading: false });
+    }
+  }
+
+  async function loadSolution(item: QuizItem) {
+    if (stateOf(item).solutionLoading) return;
+    patch(item, { solutionLoading: true });
+    try {
+      const { job_id } = await startQuestionSolutionJob(item.id);
+      await watchSolution(item, job_id);
+    } catch (err) {
+      failWith(item, err, { solutionLoading: false });
+    }
+  }
+
+  /**
+   * Review the answer just submitted. The opposite half of `loadSolution`: this one
+   * is told not to re-teach the question, only to say how the answer did.
+   */
+  async function watchAnalysis(item: QuizItem, jobId: string) {
+    try {
+      const result = await pollJob(jobId);
+      patch(item, {
+        analysis: String(result.analysis ?? ""),
+        analysisOpen: true,
+        analysisLoading: false,
+      });
+    } catch (err) {
+      failWith(item, err, { analysisLoading: false });
+    }
+  }
+
+  async function loadAnalysis(item: QuizItem) {
+    if (stateOf(item).analysisLoading) return;
+    patch(item, { analysisLoading: true });
+    try {
+      const { job_id } = await startAnswerAnalysisJob(item.id);
+      await watchAnalysis(item, job_id);
+    } catch (err) {
+      failWith(item, err, { analysisLoading: false });
+    }
+  }
+
   async function submit(item: QuizItem) {
-    const { answer } = stateOf(item);
-    if (!answer.trim()) {
+    const { answer, attachments } = stateOf(item);
+    if (!answer.trim() && attachments.length === 0) {
       // Pressing "Check answer" again on a still-empty field re-sets the identical
       // literal; bumping errorNonce off the prior value (not a value closed over above)
       // is what forces the paragraph below to remount and re-announce.
@@ -247,30 +417,49 @@ export function QuizSection({
     }
     patch(item, { submitting: true, error: null, errorKind: null });
     try {
-      const { job_id } = await startGradeJob(item.id, answer);
-      const result = await pollJob(job_id);
-      // Time a retry from this attempt, not from the first time the item appeared.
-      markShown(shownAt.current, item.id, true);
-      // `ever_correct`, not `result.correct`: an item solved earlier that takes another
-      // wrong attempt still unmounts its button, so it is solved-ness, not this
-      // attempt's own verdict, that decides which control survives to land focus on.
-      pendingFocus.current.set(item.id, result.attempt_state.ever_correct ? "correct" : "answer");
-      patch(item, {
-        feedback: {
-          correct: result.correct,
-          expected: result.expected,
-          aiFeedback: result.feedback,
-        },
-        attemptState: result.attempt_state,
-        submitting: false,
-      });
+      const { job_id } = await startGradeJob(
+        item.id,
+        answer,
+        attachments.map((row) => row.id),
+      );
+      await watchGrade(item, job_id);
     } catch (err) {
-      patch(item, (prev) => ({
-        error: err instanceof ApiError ? err.message : t("Could not reach the server."),
-        errorKind: "server",
-        errorNonce: prev.errorNonce + 1,
-        submitting: false,
-      }));
+      failWith(item, err, { submitting: false });
+    }
+  }
+
+  /**
+   * Apply a grading job's verdict. Separate from `submit` because the job outlives the
+   * page: a refresh between "Check answer" and the verdict used to leave the question
+   * looking unanswered while the server had already recorded the attempt.
+   */
+  function applyGrade(item: QuizItem, result: JobResult) {
+    // Time a retry from this attempt, not from the first time the item appeared.
+    markShown(shownAt.current, item.id, true);
+    // `ever_correct`, not `result.correct`: an item solved earlier that takes another
+    // wrong attempt still unmounts its button, so it is solved-ness, not this
+    // attempt's own verdict, that decides which control survives to land focus on.
+    pendingFocus.current.set(item.id, result.attempt_state.ever_correct ? "correct" : "answer");
+    patch(item, {
+      feedback: {
+        correct: result.correct,
+        expected: result.expected,
+        aiFeedback: result.feedback ?? null,
+      },
+      attemptState: result.attempt_state,
+      // A review of the previous answer must not survive a new one: side by side
+      // with the new verdict it reads as a review of that verdict.
+      analysis: null,
+      analysisOpen: false,
+      submitting: false,
+    });
+  }
+
+  async function watchGrade(item: QuizItem, jobId: string) {
+    try {
+      applyGrade(item, await pollJob(jobId));
+    } catch (err) {
+      failWith(item, err, { submitting: false });
     }
   }
 
@@ -391,6 +580,38 @@ export function QuizSection({
                       {t("Code questions open on their own page.")}
                     </p>
                   )
+                ) : item.kind === "short" ? (
+                  /*
+                    A short answer gets the box that takes files; fill-in keeps the plain
+                    input. The split is the point of separating the two kinds: a fill
+                    answer is one term and a picture cannot be that term.
+                  */
+                  <AttachmentInput
+                    value={state.answer}
+                    onChange={(value) =>
+                      patch(item, (prev) =>
+                        prev.errorKind === "validation"
+                          ? { answer: value, error: null, errorKind: null }
+                          : { answer: value },
+                      )
+                    }
+                    attachments={state.attachments}
+                    onAttachmentsChange={(next) => patch(item, { attachments: next })}
+                    disabled={state.submitting || solved}
+                    labelledBy={`quiz-question-${item.id}`}
+                    textareaRef={(el) => {
+                      if (el) inputRefs.current.set(item.id, el);
+                      else inputRefs.current.delete(item.id);
+                    }}
+                    onSubmit={() => void submit(item)}
+                    onError={(message) =>
+                      patch(item, (prev) => ({
+                        error: message,
+                        errorKind: "server",
+                        errorNonce: prev.errorNonce + 1,
+                      }))
+                    }
+                  />
                 ) : (
                   <input
                     type="text"
@@ -526,6 +747,70 @@ export function QuizSection({
                   >
                     {state.submitting ? t("Checking…") : state.feedback ? t("Try again") : t("Check answer")}
                   </Button>
+                )}
+
+                {/*
+                  Two reviews, two buttons, because they answer different questions.
+                  "Explain the question" never sees this learner's answer, so it is
+                  offered before answering too. "Review my answer" only exists once
+                  there is an answer, and is told not to re-teach the question.
+                */}
+                <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    disabled={state.solutionLoading}
+                    onClick={() =>
+                      state.solution
+                        ? patch(item, { solutionOpen: !state.solutionOpen })
+                        : void loadSolution(item)
+                    }
+                  >
+                    {state.solutionLoading
+                      ? t("Loading explanation…")
+                      : state.solution
+                        ? state.solutionOpen
+                          ? t("Hide explanation")
+                          : t("Show explanation")
+                        : t("Explain the question")}
+                  </Button>
+                  {state.attemptState.attempts > 0 && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      disabled={state.analysisLoading}
+                      onClick={() =>
+                        state.analysis
+                          ? patch(item, { analysisOpen: !state.analysisOpen })
+                          : void loadAnalysis(item)
+                      }
+                    >
+                      {state.analysisLoading
+                        ? t("Reviewing…")
+                        : state.analysis
+                          ? state.analysisOpen
+                            ? t("Hide review")
+                            : t("Show review")
+                          : t("Review my answer")}
+                    </Button>
+                  )}
+                </div>
+
+                {state.solutionOpen && state.solution && (
+                  <div className="mt-3 rounded-control border border-line bg-surface-sunken px-4 py-3">
+                    <p className="text-micro uppercase text-ink-subtle">
+                      {t("Question explained")}
+                    </p>
+                    <QuizMarkdown content={state.solution} />
+                  </div>
+                )}
+                {state.analysisOpen && state.analysis && (
+                  <div className="mt-3 rounded-control border border-line bg-surface-sunken px-4 py-3">
+                    <p className="text-micro uppercase text-ink-subtle">
+                      {t("Your answer, reviewed")}
+                    </p>
+                    <QuizMarkdown content={state.analysis} />
+                  </div>
                 )}
               </Card>
             </li>

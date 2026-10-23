@@ -8,6 +8,7 @@ import { useI18n } from "@/components/LocaleProvider";
 import { Button } from "@/components/ui/Button";
 import { RegenDraftPreview } from "@/components/RegenDraftPreview";
 import { JobCancelButton, JobProgressBar, useJob } from "@/components/JobProgress";
+import { useResumeJob } from "@/components/useResumeJob";
 import {
   ApiError,
   patchLesson,
@@ -28,8 +29,14 @@ export function RegenerateLessonButton({ lessonId }: { lessonId: number }) {
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [feedback, setFeedback] = useState("");
-  const [jobId, setJobId] = useState<string | null>(null);
-  const { job } = useJob(dialogOpen ? jobId : null);
+  // A regeneration started before the reload is still running; pick it back up instead
+  // of showing an idle "Regenerate" button that would start a second one. Derived, not
+  // mirrored into state by an effect: `dismissed` is what lets the learner close the
+  // resumed dialog and keep it closed.
+  const { jobId, setJobId, resumed } = useResumeJob("lesson_regenerate", "lesson", lessonId);
+  const [dismissed, setDismissed] = useState(false);
+  const open = dialogOpen || (resumed && !dismissed);
+  const { job } = useJob(open ? jobId : null);
   const [adopting, setAdopting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +58,7 @@ export function RegenerateLessonButton({ lessonId }: { lessonId: number }) {
 
   function close() {
     setDialogOpen(false);
+    setDismissed(true);
     // The job keeps running in the background; reopening reconnects.
   }
 
@@ -60,7 +68,7 @@ export function RegenerateLessonButton({ lessonId }: { lessonId: number }) {
         {t("Regenerate")}
       </Button>
       <Modal
-        open={dialogOpen}
+        open={open}
         onCancel={close}
         title={!jobId ? t("Regenerate lesson") : job && draft ? t("Review the draft") : t("Regenerating…")}
         width={800}

@@ -32,18 +32,56 @@ def create_job(
     job_type: str,
     ref_type: str | None = None,
     ref_id: int | None = None,
+    progress: dict | None = None,
 ) -> Job:
+    """Queue a job. `progress` is for identity, not decoration: a route that can be
+    asked for the same subject twice (one analysis per attempt) puts the narrower key
+    there so a second request can recognise the first."""
     job = Job(
         id=uuid.uuid4().hex,
         type=job_type,
         status="pending",
         ref_type=ref_type,
         ref_id=ref_id,
+        progress=progress,
     )
     session.add(job)
     session.commit()
     session.refresh(job)
     return job
+
+
+def find_live_job(
+    session: Session,
+    job_type: str,
+    ref_type: str | None = None,
+    ref_id: int | None = None,
+) -> Job | None:
+    """The job already running for this exact subject, if there is one.
+
+    Every job here is a paid model call. A double-click, a second tab, or a page that
+    re-sends its request must JOIN the work in flight rather than buy a second copy of
+    it. Callers answer with `{"job_id": live.id, "resumed": True}` so the client polls
+    the same job it would have started.
+
+    Matching is on (type, ref_type, ref_id): the subject, not the request body. Two
+    different attempts at the same question therefore share one guard — which is right
+    for grading, where the answer is already in flight, and is why the answer-analysis
+    route additionally caches per attempt (see `attempts.analysis`).
+    """
+    query = session.query(Job).filter(
+        Job.type == job_type,
+        Job.status.in_(("pending", "running")),
+    )
+    if ref_type is None:
+        query = query.filter(Job.ref_type.is_(None))
+    else:
+        query = query.filter(Job.ref_type == ref_type)
+    if ref_id is None:
+        query = query.filter(Job.ref_id.is_(None))
+    else:
+        query = query.filter(Job.ref_id == ref_id)
+    return query.order_by(Job.created_at.desc()).first()
 
 
 def _set_status(job_id: str, status: str, **fields) -> bool:

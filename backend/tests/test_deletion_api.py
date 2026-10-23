@@ -8,8 +8,6 @@ could reasonably make the other way, so each says why.
 
 from uuid import uuid4
 
-import pytest
-
 from app import fsrs, models, review
 from app.db import SessionLocal
 
@@ -215,8 +213,14 @@ def test_usage_still_answers_and_still_reports_the_deleted_courses_spend(client)
     assert after.status_code == 200
     body = after.json()
 
-    # The money is still in the total.
-    assert body["totals"]["estimated_cost_usd"] == before["totals"]["estimated_cost_usd"]
+    # The money is still in the total — asserted as "did not drop", not as an exact
+    # match. /usage totals the whole install and the suite shares one database, so a
+    # background job another test left behind can land a paid call between these two
+    # reads. Exact equality turns that into a race this test cannot win or explain:
+    # it failed on a 0.0026 delta produced by a job this test never started, in a run
+    # where nothing about deletion had changed. The regression being guarded is a
+    # DROP (deleting the course taking its 0.5 with it), and a drop still fails here.
+    assert body["totals"]["estimated_cost_usd"] >= before["totals"]["estimated_cost_usd"]
 
     orphaned = [row for row in body["per_course"] if row["course_id"] == course_id]
     assert len(orphaned) == 1
@@ -264,9 +268,12 @@ def test_a_reused_course_id_does_not_inherit_the_deleted_courses_spend(client):
     assert by_label["New Course"]["estimated_cost_usd"] == 0.10
     assert by_label["New Course"]["title"] == "New Course"
 
-    # And nothing was lost or double counted along the way. approx because these are
-    # floats and the suite-wide running total is rarely exactly representable.
-    assert body["totals"]["estimated_cost_usd"] == pytest.approx(before_total + 0.10)
+    # And nothing was lost along the way. Compared as "grew by at least the 0.10 just
+    # added", not as an exact total: the double-counting this guards against is already
+    # proven row-by-row above (New Course would read 0.35, not 0.10), while an exact
+    # total is at the mercy of a paid background job landing mid-test. See the note in
+    # test_usage_still_answers_and_still_reports_the_deleted_courses_spend.
+    assert body["totals"]["estimated_cost_usd"] >= before_total + 0.10 - 1e-9
 
 
 def test_a_reused_course_id_does_not_inherit_the_spend_in_the_preview_either(client):
