@@ -45,26 +45,6 @@ const PRIMARY_LINK_CLASSES =
   "hover:bg-fill-hover";
 
 /**
- * Deterministic cover gradients, one per course, standing in for MOOC course
- * cover art. Courses carry no image of their own, so the id picks a gradient;
- * the white title on top is what makes each card recognizable at a glance.
- */
-const COVERS = [
-  "linear-gradient(135deg, #34d399 0%, #059669 100%)",
-  "linear-gradient(135deg, #60a5fa 0%, #2563eb 100%)",
-  "linear-gradient(135deg, #a78bfa 0%, #7c3aed 100%)",
-  "linear-gradient(135deg, #fbbf24 0%, #d97706 100%)",
-  "linear-gradient(135deg, #f472b6 0%, #db2777 100%)",
-  "linear-gradient(135deg, #2dd4bf 0%, #0d9488 100%)",
-  "linear-gradient(135deg, #fb7185 0%, #e11d48 100%)",
-  "linear-gradient(135deg, #94a3b8 0%, #475569 100%)",
-];
-
-function coverFor(course: CourseSummary): string {
-  return COVERS[Math.abs(course.id) % COVERS.length];
-}
-
-/**
  * THE CARD IS NO LONGER ONE BIG LINK, and it had to stop being one. Delete is a button,
  * and a button nested inside an anchor is invalid HTML that browsers recover from
  * inconsistently: the press would sometimes navigate to the course it was deleting. The

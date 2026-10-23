@@ -33,7 +33,6 @@ import { render } from "./render";
 import { describe, expect, test, vi, beforeEach } from "vitest";
 
 import CoursesPage from "@/app/courses/page";
-import { Button } from "react-vant";
 import { listCourses } from "@/lib/api";
 import type { CourseSummary } from "@/lib/types";
 
@@ -97,35 +96,36 @@ describe("courses page new-course id contract", () => {
   });
 });
 
-describe("courses page primary link styling stays level with Button", () => {
+describe("courses page primary link styling", () => {
   beforeEach(() => vi.clearAllMocks());
 
-  /**
-   * Button's disabled: utilities are subtracted rather than asserted absent, because an
-   * <a> is never :disabled. Matched on the PREFIX rather than by name: listing them
-   * literally means a later PR adding a third one to Button turns this test red,
-   * demanding that a link carry a disabled: class, and the repair is to edit the
-   * exclusion list of a test that has nothing to do with that change.
+  /*
+   * These two controls cannot be a Button: both must be real links, because
+   * DeleteCourseButton's focus restore looks them up by id and Next prefetches them. So
+   * the page carries a hand-written class list, and a hand-written list drifts silently.
+   *
+   * It used to be pinned by comparing against a rendered Button, which stopped meaning
+   * anything once the UI kit moved to antd: an antd button and a Tailwind pill have no
+   * class in common, so the comparison could only ever be satisfied by deleting it.
+   * What the page actually promises now is the pill CTA look itself — a filled, fully
+   * rounded, on-fill label — and that both entry points use the same one.
    */
-  const isButtonOnly = (className: string) => className.startsWith("disabled:");
+  const PRIMARY_TOKENS = ["bg-fill", "text-on-fill", "rounded-full", "px-4", "py-2"];
 
   test.each([
     ["#new-course", [course]],
     ["#create-first-course", [] as CourseSummary[]],
-  ])("%s matches Button primary/md", async (selector, courses) => {
+  ])("%s carries the primary pill treatment", async (selector, courses) => {
     await renderPage(courses);
     const link = document.querySelector(selector);
     expect(link, `${selector} should be rendered for this list`).not.toBeNull();
 
-    // Its own container: the rendered page already has a Delete button per row,
-    // so a document-wide role query here would be ambiguous.
-    const { container } = render(<Button type="primary" />);
-    const button = container.querySelector("button") as HTMLButtonElement;
-
-    const expected = new Set([...classSet(button)].filter((c) => !isButtonOnly(c)));
-    expect(
-      classSet(link as Element),
-      "The create-course anchor must use the same Vant component styling as its button",
-    ).toEqual(expected);
+    const tokens = classSet(link as Element);
+    for (const token of PRIMARY_TOKENS) {
+      expect(tokens, `${selector} is missing ${token}`).toContain(token);
+    }
+    // The two entry points are the same control in two places; a class added to one and
+    // not the other is the drift this test exists for.
+    expect(tokens).toContain("inline-flex");
   });
 });

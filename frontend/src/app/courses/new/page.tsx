@@ -1,11 +1,9 @@
 
 
-
 import { getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 
-import { StagedGenerateWizard } from "@/components/StagedGenerateWizard";
-import { MarkdownImportForm } from "@/components/MarkdownImportForm";
+import { CreateCourseTabs } from "@/components/CreateCourseTabs";
 import { PageHeader } from "@/components/ui/PageHeader";
 
 export default async function NewCoursePage({ searchParams }: { searchParams: Promise<{ job?: string }> }) {
@@ -22,12 +20,11 @@ export default async function NewCoursePage({ searchParams }: { searchParams: Pr
       <PageHeader
         className="mt-4"
         title={t("Create a course")}
-        description={t("Combine pasted text, web pages, and PDFs into one course, in any mix.")}
+        description={t("Build one from your own material with AI, or import a folder of markdown you already wrote.")}
       />
       <div className="mt-8">
-        <StagedGenerateWizard key={jobId ?? "new"} initialJobId={jobId} />
+        <CreateCourseTabs initialJobId={jobId} />
       </div>
-      <MarkdownImportForm />
     </main>
   );
 }

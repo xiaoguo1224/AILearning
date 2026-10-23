@@ -1,16 +1,16 @@
 import { LocalizedText } from "@/components/LocaleProvider";
 
 
-
 import { getTranslator } from "@/lib/locale-server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { CourseTabs } from "@/components/CourseTabs";
-import { CourseDeletionProvider, DeleteCourseButton } from "@/components/DeleteCourseButton";
+import { CourseDeletionProvider } from "@/components/DeleteCourseButton";
 import { EditCourseButton } from "@/components/EditCourseButton";
 import { RegenerateCourseButton } from "@/components/RegenerateCourseButton";
 import { CourseQaSection } from "@/components/CourseQaSection";
+// 如果你之前报错，请确保这里的导入方式正确（比如改为 import CourseQuizSection from ...）
 import { CourseQuizSection } from "@/components/CourseQuizSection";
 import { CourseResourcesSection } from "@/components/CourseResourcesSection";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -37,32 +37,19 @@ export default async function CoursePage(props: { params: Promise<{ courseId: st
   const t = await getTranslator();
   const { courseId } = await props.params;
   const id = Number(courseId);
-  // Preserved exactly: a non-numeric id is a genuine 404, not a backend failure, and
-  // must keep 404ing even though everything below it now treats a caught error as a
-  // friendly inline message instead of a re-thrown 500. See courses/page.tsx for the
-  // 200-vs-500 reasoning this page shares.
+
   if (!Number.isInteger(id)) notFound();
 
   let course: CourseDetail;
   try {
     course = await getCourse(id, t.locale);
   } catch (err) {
-    // A genuine 404 (course does not exist) must still 404. Everything else, backend
-    // down, network failure, a 500 from the API, becomes the inline friendly message
-    // instead of propagating into Next's generic error screen.
     if (err instanceof ApiError && err.status === 404) notFound();
     const message =
       err instanceof ApiError ? err.message : t("Could not reach the server. Is the backend running?");
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
         {BACK_TO_COURSES_LINK}
-        {/*
-          The failed fetch means we never learned the real course title, so PageHeader
-          gets the generic "Course" rather than leaving the page with no h1 at all: a
-          screen reader landing here previously had nothing to announce as the page's
-          heading, unlike the courses list, whose PageHeader renders unconditionally
-          before its own error/empty/list ternary.
-        */}
         <PageHeader className="mt-4" title={t("Course")} />
         <ErrorState className="mt-8" message={message} />
       </main>
@@ -76,8 +63,8 @@ export default async function CoursePage(props: { params: Promise<{ courseId: st
 
   return (
     <CourseDeletionProvider>
-      <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
-        {/* Hero card: breadcrumb, title, meta, CTA — the MOOC course header. */}
+      <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">
+        {/* Hero card */}
         <div className="rounded-surface bg-surface p-6 shadow-raise sm:p-8">
           <nav aria-label="Breadcrumb" className="text-small text-ink-subtle">
             <Link href="/courses" className="transition-colors duration-fast ease-standard hover:text-ink">
@@ -117,9 +104,16 @@ export default async function CoursePage(props: { params: Promise<{ courseId: st
           )}
         </div>
 
-        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="mt-6 grid items-start gap-6 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,2fr)_minmax(0,0.95fr)]">
+
+          {/* Left rail: 增加 min-w-0, overflow-x-hidden 和 [&_*]:break-words */}
+          <div className="min-w-0 space-y-6 xl:sticky xl:top-6 xl:col-start-1 xl:row-start-1 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto xl:overflow-x-hidden xl:[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] [&_*]:break-words">
+            <CourseQuizSection courseId={course.id} />
+            <CourseResourcesSection courseId={course.id} />
+          </div>
+
           {/* Chapters */}
-          <div className="min-w-0 rounded-surface bg-surface p-6 shadow-raise sm:p-8">
+          <div className="min-w-0 rounded-surface bg-surface p-6 shadow-raise sm:p-8 xl:col-start-2 xl:row-start-1">
             <CourseTabs courseId={course.id} active="lessons" />
             <div className="mt-6 flex flex-col gap-8">
               {course.modules.map((module, mi) => (
@@ -166,8 +160,9 @@ export default async function CoursePage(props: { params: Promise<{ courseId: st
             </div>
           </div>
 
-          {/* Sidebar */}
-          <aside className="space-y-6">
+          {/* Right rail: 增加 min-w-0, overflow-x-hidden 和 [&_*]:break-words */}
+          <aside className="min-w-0 space-y-6 xl:sticky xl:top-6 xl:col-start-3 xl:row-start-1 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto xl:overflow-x-hidden xl:[&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] [&_*]:break-words">
+            <CourseQaSection courseId={course.id} courseTitle={course.title} />
             <div className="rounded-surface bg-surface p-6 shadow-raise">
               <h2 className="text-subtitle">{t("Learning progress")}</h2>
               <div className="mt-4">
@@ -199,29 +194,9 @@ export default async function CoursePage(props: { params: Promise<{ courseId: st
                 </div>
               </dl>
             </div>
-            {/*
-              A trailing "danger zone" after the sidebar, rather than sitting directly
-              under the header. Reaching it takes scrolling past everything the learner
-              came for, which is the point for an action this page cannot recover from.
-            */}
-            <div className="rounded-surface bg-surface p-6 shadow-raise">
-              <DeleteCourseButton
-                courseId={course.id}
-                title={course.title}
-                afterDelete="navigate-to-list"
-              />
-            </div>
           </aside>
-        </div>
 
-        {/* Per-course features, laid out around the course: the question bank and
-            the course Q&A sit on the two sides, both scoped to this course;
-            reference materials span the full width below. */}
-        <div className="mt-6 grid items-start gap-6 lg:grid-cols-2">
-          <CourseQuizSection courseId={course.id} />
-          <CourseQaSection courseId={course.id} courseTitle={course.title} />
         </div>
-        <CourseResourcesSection courseId={course.id} />
       </main>
     </CourseDeletionProvider>
   );

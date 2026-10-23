@@ -43,21 +43,33 @@ describe("CourseResourcesSection", () => {
     await waitFor(() => expect(vi.mocked(deleteCourseResource)).toHaveBeenCalledWith(7, 1));
   });
 
-  test("pasting text adds a material", async () => {
+  test("pasting text adds a material from the add dialog", async () => {
     vi.mocked(listCourseResources).mockResolvedValue([]);
     render(<CourseResourcesSection courseId={7} />);
     fireEvent.click(screen.getByRole("button", { name: /Reference materials/ }));
     await waitFor(() => expect(screen.getByText("No reference materials yet.")).toBeTruthy());
     fireEvent.click(screen.getByRole("button", { name: "Add material" }));
+
+    // The dialog opens on "upload a file"; the text fields only exist in their own mode,
+    // which is the point of moving the three add forms into a dialog.
+    expect(screen.getByText("Drop a file here, or click to choose")).toBeTruthy();
+    fireEvent.click(screen.getByText("Paste text"));
+
     fireEvent.change(screen.getByPlaceholderText("Title"), { target: { value: "笔记" } });
     fireEvent.change(screen.getByPlaceholderText("Paste the material here"), {
       target: { value: "内容" },
     });
     vi.mocked(addCourseTextResource).mockResolvedValue({ ...RES[0], chunks: [] } as never);
-    const textForm = screen.getByPlaceholderText("Paste the material here").closest("form");
-    fireEvent.click(textForm!.querySelector('button[type="submit"]')!);
+    // The dialog title and its submit button share a label; the button is the one
+    // inside the modal footer.
+    const footerAdd = screen
+      .getAllByRole("button", { name: "Add material" })
+      .find((button) => button.closest(".ant-modal-footer"));
+    fireEvent.click(footerAdd!);
     await waitFor(() =>
       expect(vi.mocked(addCourseTextResource)).toHaveBeenCalledWith(7, "笔记", "内容"),
     );
+    // Adding closes the dialog and refreshes the list.
+    await waitFor(() => expect(screen.queryByText("Drop a file here, or click to choose")).toBeNull());
   });
 });

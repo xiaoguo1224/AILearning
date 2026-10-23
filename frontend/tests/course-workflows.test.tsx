@@ -22,7 +22,8 @@ vi.mock("@/lib/api", async original => ({ ...await original<typeof import("@/lib
 
 function task(): Job {
   return { id: "test-job", type: "course_generate_staged", status: "awaiting_review", error: null,
-    ref_id: null, ref_type: null, created_at: "2026-10-21T08:00:00Z", updated_at: "2026-10-21T08:00:00Z",
+    ref_id: null, ref_type: null, href: "/courses/new?job=test-job",
+    created_at: "2026-10-21T08:00:00Z", updated_at: "2026-10-21T08:00:00Z",
     result: null, trace: { entries: [{ type: "tool_call", tool: "llm.outline", at: "2026-10-21T08:00:00Z" }] },
     progress: { topic: "Tensor", mode: "full", difficulty: 2, revision: 1, stage: "outline_review", done: 0, total: 2,
       outline: { title: "Tensor course", modules: [{ title: "Basics", lessons: [{ title: "Shapes" }, { title: "Broadcast" }] }] } } };

@@ -5,13 +5,15 @@ import { useState } from "react";
 import { QuizSection } from "@/components/QuizSection";
 import { useI18n } from "@/components/LocaleProvider";
 import { Button } from "@/components/ui/Button";
-import { ApiError, createQuizVariant, getCourseQuiz, getJob, getQuizItem, startQuizGenerateJob, type QuizBankItem, type QuizBankLesson, type QuizKindCount } from "@/lib/api";
+import { ApiError, createQuizVariant, getJob, getQuizItem, startQuizGenerateJob, type QuizBankItem, type QuizKindCount } from "@/lib/api";
 import type { QuizItem, QuizProgress } from "@/lib/types";
+import { QUIZ_KINDS as KINDS, type QuizKind } from "@/lib/quizKinds";
 
-const KINDS = ["mcq", "short", "truefalse", "code"] as const;
-
-const KIND_LABELS: Record<string, string> = {
+// Typed by QuizKind so a kind added to QUIZ_KINDS without a label here is a type
+// error rather than a row of the generate form rendering an empty name.
+const KIND_LABELS: Record<QuizKind, string> = {
   mcq: "Multiple choice",
+  fill: "Fill in the blank",
   short: "Short answer",
   truefalse: "True/false",
   code: "Code",

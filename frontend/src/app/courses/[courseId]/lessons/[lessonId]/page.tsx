@@ -3,11 +3,9 @@
 
 import { getTranslator } from "@/lib/locale-server";
 import type { Translator } from "@/lib/i18n";
-import Link from "next/link";
 import { BackButton } from "@/components/BackButton";
 import { notFound } from "next/navigation";
 
-import { LessonMarkdown } from "@/components/LessonMarkdown";
 import { MarkCompleteButton } from "@/components/MarkCompleteButton";
 import { EditLessonButton } from "@/components/EditLessonButton";
 import { RegenerateLessonButton } from "@/components/RegenerateLessonButton";

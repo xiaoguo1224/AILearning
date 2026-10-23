@@ -1,24 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useI18n } from "@/components/LocaleProvider";
 import { Button } from "@/components/ui/Button";
-import { Input } from "antd";
 import { Button as AntButton } from "antd";
-import {
-  addCourseTextResource,
-  addCourseUrlResource,
-  deleteCourseResource,
-  listCourseResources,
-  uploadCourseResource,
-} from "@/lib/api";
+import { ResourceAddDialog } from "@/components/ResourceAddDialog";
+import { deleteCourseResource, listCourseResources } from "@/lib/api";
 import type { ResourceSummary } from "@/lib/types";
 
 /**
  * The course's reference materials (资料), as a section of the course page.
  * Same shape as the quiz bank: a collapsed header with a count, expanding to
- * the list plus the add forms. The Q&A below grounds in these materials and
- * cites them the way project explore cites its uploads.
+ * the list. Adding a material opens a dialog — the three ways to add one used
+ * to be stacked under the list, which turned a short list into a form page.
+ * The Q&A below grounds in these materials and cites them the way project
+ * explore cites its uploads.
  */
 export function CourseResourcesSection({ courseId }: { courseId: number }) {
   const { t } = useI18n();
@@ -27,12 +23,7 @@ export function CourseResourcesSection({ courseId }: { courseId: number }) {
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [showAdd, setShowAdd] = useState(false);
-  const [url, setUrl] = useState("");
-  const [urlTitle, setUrlTitle] = useState("");
-  const [textTitle, setTextTitle] = useState("");
-  const [textContent, setTextContent] = useState("");
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [adding, setAdding] = useState(false);
 
   const load = useCallback(() => {
     listCourseResources(courseId)
@@ -61,17 +52,20 @@ export function CourseResourcesSection({ courseId }: { courseId: number }) {
   }
 
   return (
-    <section aria-label={t("Reference materials")} className="mt-6 rounded-surface bg-surface p-6 shadow-raise sm:p-8">
+    <section aria-label={t("Reference materials")} className="rounded-surface bg-surface p-5 shadow-raise">
       <div className="flex flex-wrap items-center justify-between gap-3">
+        {/* `!whitespace-normal`: antd buttons are nowrap, and this one carries a
+            sentence — in the course page's left-hand rail it overflowed the card. */}
         <AntButton
           onClick={() => setOpen((o) => !o)}
           aria-expanded={open}
           type="text"
+          className="!whitespace-normal text-left"
         >
           <span aria-hidden>{open ? "▾" : "▸"}</span>
           {t("Reference materials")}
           {loaded && (
-            <span className="text-small font-normal text-ink-muted">
+            <span className="block text-small font-normal text-ink-muted">
               {resources.length === 0
                 ? t("Papers, notes and links the course Q&A can cite.")
                 : t("{0} items", resources.length)}
@@ -114,98 +108,21 @@ export function CourseResourcesSection({ courseId }: { courseId: number }) {
             </ul>
           )}
           <div className="mt-4">
-            {!showAdd ? (
-              <Button variant="secondary" size="sm" onClick={() => setShowAdd(true)}>
-                {t("Add material")}
-              </Button>
-            ) : (
-              <div className="space-y-4 rounded-control border border-line p-4">
-                <div>
-                  <p className="mb-2 text-small font-medium">{t("Upload a file")}</p>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".pdf,.docx,.md,.markdown,.txt"
-                    disabled={busy}
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      void afterChange(async () => {
-                        await uploadCourseResource(courseId, file);
-                        if (fileInputRef.current) fileInputRef.current.value = "";
-                      });
-                    }}
-                    className="text-small"
-                  />
-                </div>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!textTitle.trim() || !textContent.trim()) return;
-                    void afterChange(async () => {
-                      await addCourseTextResource(courseId, textTitle.trim(), textContent);
-                      setTextTitle("");
-                      setTextContent("");
-                    });
-                  }}
-                >
-                  <p className="mb-2 text-small font-medium">{t("Paste text")}</p>
-                  <Input
-                    value={textTitle}
-                    onChange={(e) => setTextTitle(e.target.value)}
-                    placeholder={t("Title")}
-                    disabled={busy}
-                    style={{ marginBottom: 8, width: "100%" }}
-                  />
-                  <Input.TextArea
-                    value={textContent}
-                    onChange={(e) => setTextContent(e.target.value)}
-                    placeholder={t("Paste the material here")}
-                    rows={4}
-                    disabled={busy}
-                    style={{ width: "100%" }}
-                  />
-                  <Button type="submit" variant="secondary" size="sm" disabled={busy} className="mt-2">
-                    {t("Save")}
-                  </Button>
-                </form>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!url.trim()) return;
-                    void afterChange(async () => {
-                      await addCourseUrlResource(courseId, url.trim(), urlTitle.trim() || undefined);
-                      setUrl("");
-                      setUrlTitle("");
-                    });
-                  }}
-                >
-                  <p className="mb-2 text-small font-medium">{t("Add a link")}</p>
-                  <Input
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://…"
-                    disabled={busy}
-                    style={{ marginBottom: 8, width: "100%" }}
-                  />
-                  <Input
-                    value={urlTitle}
-                    onChange={(e) => setUrlTitle(e.target.value)}
-                    placeholder={t("Title (optional)")}
-                    disabled={busy}
-                    style={{ marginBottom: 8, width: "100%" }}
-                  />
-                  <Button type="submit" variant="secondary" size="sm" disabled={busy}>
-                    {t("Save")}
-                  </Button>
-                </form>
-                <Button variant="secondary" size="sm" onClick={() => setShowAdd(false)}>
-                  {t("Done")}
-                </Button>
-              </div>
-            )}
+            <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
+              {t("Add material")}
+            </Button>
           </div>
         </div>
+      )}
+      {adding && (
+        <ResourceAddDialog
+          courseId={courseId}
+          onClose={() => setAdding(false)}
+          onAdded={() => {
+            setAdding(false);
+            load();
+          }}
+        />
       )}
     </section>
   );

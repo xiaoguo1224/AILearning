@@ -1,247 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Alert, Button, Input, Modal } from "antd";
+import { Button } from "antd";
 
 import { useI18n } from "@/components/LocaleProvider";
+import { QuizGenerateDialog } from "@/components/QuizGenerateDialog";
 import { QuizSection } from "@/components/QuizSection";
 import {
-  ApiError,
   getJob,
   getLesson,
   listJobs,
-  startQuizGenerateJob,
   startQuizVariantJob,
-  type QuizKindCount,
   type QuizVariant,
 } from "@/lib/api";
 import type { QuizItem, QuizProgress } from "@/lib/types";
 
-const KINDS = ["mcq", "short", "truefalse", "code"] as const;
-
-function LessonQuizGenerateDialog({
-  courseId,
-  lessonId,
-  onClose,
-  onGenerated,
-}: {
-  courseId: number;
-  lessonId: number;
-  onClose: () => void;
-  onGenerated: (quiz: QuizItem[]) => void;
-}) {
-  const { t } = useI18n();
-  const [counts, setCounts] = useState<Record<string, number>>({
-    mcq: 5,
-    short: 0,
-    truefalse: 0,
-    code: 0,
-  });
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [prompt, setPrompt] = useState("");
-
-  const total = KINDS.reduce((sum, k) => sum + (counts[k] || 0), 0);
-
-  async function submit() {
-    const items: QuizKindCount[] = KINDS.filter((k) => counts[k] > 0).map((k) => ({
-      kind: k,
-      count: counts[k],
-    }));
-    if (items.length === 0) {
-      setError(t("Ask for at least one question."));
-      return;
-    }
-    setBusy(true);
-    setError(null);
-    try {
-      const { job_id } = await startQuizGenerateJob(
-        courseId,
-        items,
-        lessonId,
-        prompt.trim() || undefined,
-      );
-      for (let i = 0; i < 60; i++) {
-        const job = await getJob(job_id);
-        if (job.status === "completed") break;
-        if (job.status === "failed" || job.status === "cancelled") {
-          throw new Error(job.error || t("Could not generate questions."));
-        }
-        await new Promise((r) => setTimeout(r, 2000));
-      }
-      const fresh = await getLesson(lessonId);
-      onGenerated(fresh.quiz);
-      onClose();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : t("Could not generate questions."));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const KIND_META: Record<string, { icon: string; desc: string }> = {
-    mcq: { icon: "☰", desc: t("Multiple choice with options") },
-    short: { icon: "✎", desc: t("Short answer or fill in the blank") },
-    truefalse: { icon: "✓", desc: t("True or false judgment") },
-    code: { icon: "⟨/⟩", desc: t("Programming exercise") },
-  };
-
-  function adjust(kind: string, delta: number) {
-    setCounts((c) => ({
-      ...c,
-      [kind]: Math.max(0, Math.min(20, (c[kind] || 0) + delta)),
-    }));
-  }
-
-  return (
-    <Modal
-      open={true}
-      onCancel={onClose}
-      title={null}
-      footer={null}
-      width={520}
-    >
-      <div style={{ padding: "8px 4px" }}>
-        <h3 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 4px" }}>
-          {t("AI 出题")}
-        </h3>
-        <p style={{ color: "var(--sf-ink-muted)", fontSize: 13, margin: "0 0 20px" }}>
-          {t("Pick the types and how many of each.")}
-        </p>
-        <div style={{ display: "grid", gap: 12 }}>
-          {KINDS.map((kind) => {
-            const meta = KIND_META[kind];
-            const active = (counts[kind] || 0) > 0;
-            return (
-              <div
-                key={kind}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 14,
-                  padding: "14px 16px",
-                  borderRadius: 12,
-                  border: `1px solid ${active ? "var(--sf-accent)" : "var(--sf-line)"}`,
-                  background: active ? "color-mix(in srgb, var(--sf-accent) 6%, transparent)" : "transparent",
-                  transition: "all 0.2s",
-                }}
-              >
-                <div
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 10,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: 18,
-                    background: active ? "var(--sf-accent)" : "var(--sf-surface)",
-                    color: active ? "var(--sf-on-fill)" : "var(--sf-ink-muted)",
-                    transition: "all 0.2s",
-                  }}
-                >
-                  {meta.icon}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 500, fontSize: 14 }}>
-                    {t(`quiz_kind_${kind}`)}
-                  </div>
-                  <div style={{ fontSize: 12, color: "var(--sf-ink-muted)" }}>
-                    {meta.desc}
-                  </div>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <Button
-                    size="small"
-                    shape="circle"
-                    disabled={busy || (counts[kind] || 0) <= 0}
-                    onClick={() => adjust(kind, -1)}
-                  >
-                    −
-                  </Button>
-                  <span
-                    style={{
-                      minWidth: 28,
-                      textAlign: "center",
-                      fontSize: 16,
-                      fontWeight: 600,
-                      color: active ? "var(--sf-accent)" : "var(--sf-ink-muted)",
-                    }}
-                  >
-                    {counts[kind] || 0}
-                  </span>
-                  <Button
-                    size="small"
-                    shape="circle"
-                    disabled={busy || (counts[kind] || 0) >= 20}
-                    onClick={() => adjust(kind, 1)}
-                  >
-                    ＋
-                  </Button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ marginTop: 16 }}>
-          <div
-            style={{
-              fontSize: 13,
-              fontWeight: 500,
-              marginBottom: 8,
-              color: "var(--sf-ink)",
-            }}
-          >
-            {t("出题要求（可选）")}
-          </div>
-          <Input.TextArea
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder={t(
-              "例如：侧重 Transformer 的注意力机制，出中等难度的应用题…",
-            )}
-            rows={3}
-            disabled={busy}
-            maxLength={500}
-            showCount
-            style={{ resize: "vertical" }}
-          />
-        </div>
-        {error && (
-          <Alert title={error} type="error" showIcon style={{ marginTop: 16 }} />
-        )}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: 24,
-          }}
-        >
-          <span style={{ fontSize: 13, color: "var(--sf-ink-muted)" }}>
-            {total > 0
-              ? t("Total: {0} questions", total)
-              : t("Select at least one question")}
-          </span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <Button onClick={onClose} disabled={busy}>
-              {t("Cancel")}
-            </Button>
-            <Button
-              type="primary"
-              loading={busy}
-              disabled={total === 0 || busy}
-              onClick={submit}
-              style={{ minWidth: 120 }}
-            >
-              {busy ? t("Generating…") : t("Generate")}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </Modal>
-  );
-}
 
 function VariantButton({
   courseId,
@@ -336,8 +109,32 @@ export function LessonQuizList({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId, lessonId]);
+
+  /**
+   * The same dialog the course bank uses, scoped to this lesson. `onGenerated`
+   * refetches the lesson rather than trusting the job result: the job reports ids,
+   * and the questions themselves (options, concept, attempt state) come from the
+   * lesson payload.
+   */
+  const dialog = (
+    <QuizGenerateDialog
+      courseId={courseId}
+      scopes={[
+        {
+          value: `lesson:${lessonId}`,
+          label: t("This lesson"),
+          lessonIds: [lessonId],
+        },
+      ]}
+      onClose={() => setShowDialog(false)}
+      onGenerated={() => {
+        void getLesson(lessonId)
+          .then((fresh) => setQuiz(fresh.quiz))
+          .catch(() => {});
+      }}
+    />
+  );
 
   if (quiz.length === 0) {
     return (
@@ -346,14 +143,7 @@ export function LessonQuizList({
         <Button type="primary" onClick={() => setShowDialog(true)} style={{ marginTop: 16 }}>
           AI 出题
         </Button>
-        {showDialog && (
-          <LessonQuizGenerateDialog
-            courseId={courseId}
-            lessonId={lessonId}
-            onClose={() => setShowDialog(false)}
-            onGenerated={(q) => setQuiz(q)}
-          />
-        )}
+        {showDialog && dialog}
       </div>
     );
   }
@@ -369,14 +159,7 @@ export function LessonQuizList({
           AI 出题
         </Button>
       </div>
-      {showDialog && (
-        <LessonQuizGenerateDialog
-          courseId={courseId}
-          lessonId={lessonId}
-          onClose={() => setShowDialog(false)}
-          onGenerated={(q) => setQuiz(q)}
-        />
-      )}
+      {showDialog && dialog}
     <QuizSection
       quiz={quiz}
       progress={progress}

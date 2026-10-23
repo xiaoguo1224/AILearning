@@ -25,7 +25,6 @@ export function LessonLayout({
   lessonTitle,
   content,
   quiz,
-  quizProgress,
   disclaimer,
 }: {
   courseId: number;
