@@ -6,6 +6,7 @@ import {useEffect, useState} from "react";
 import {LanguageSwitcher, useI18n} from "./LocaleProvider";
 import {ThemeSwitcher} from "./ThemeProvider";
 import {SiteBrand} from "./SiteBrand";
+import {LogoutButton} from "./LogoutButton";
 
 /** "/" only matches itself; every other tab owns its whole subtree. */
 function isActive(pathname: string, href: string): boolean {
@@ -152,7 +153,7 @@ export function AppSidebar() {
                 <NavRows/>
             </div>
             <ProjectRows/>
-
+            <div className="mt-auto pt-4"><LogoutButton/></div>
         </aside>
     );
 }
@@ -164,7 +165,7 @@ export function MobileTopBar() {
         <header className="border-b border-line bg-surface/70 backdrop-blur-xl lg:hidden">
             <div className="flex items-center justify-between px-4 py-2.5">
                 <SiteBrand/>
-                <div className="flex items-center gap-2"><ThemeSwitcher/><LanguageSwitcher/></div>
+                <div className="flex items-center gap-2"><ThemeSwitcher/><LanguageSwitcher/><LogoutButton/></div>
             </div>
             <nav aria-label={t("Primary")} className="flex gap-1 overflow-x-auto px-4 pb-2.5">
                 {NAV.map((item) => {

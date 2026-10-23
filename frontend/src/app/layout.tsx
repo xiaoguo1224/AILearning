@@ -5,7 +5,6 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { normalizeTheme, THEME_COOKIE, themeVariables } from "@/lib/theme";
 import { BRAND_NAME, BRAND_TITLE } from "@/lib/brand";
 
-import { CostBanner } from "@/components/CostBanner";
 import { AppShell } from "@/components/AppShell";
 import { LocaleProvider } from "@/components/LocaleProvider";
 import { VantThemeProvider } from "@/components/VantThemeProvider";
@@ -56,7 +55,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <LocaleProvider locale={t.locale}>
           <ThemeProvider initialTheme={theme}>
           <VantThemeProvider>
-          <CostBanner />
           <AppShell>{children}</AppShell>
           </VantThemeProvider>
           </ThemeProvider>

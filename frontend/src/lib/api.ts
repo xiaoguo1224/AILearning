@@ -68,9 +68,9 @@ import type {
   QuizItem,
 } from "./types";
 
-const BASE_URL =
-  (typeof window === "undefined" ? process.env.API_INTERNAL_URL : undefined) ??
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const BASE_URL = typeof window === "undefined"
+  ? process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
+  : "/backend";
 
 export function listProjectReviewTasks(projectId: number, locale?: Locale): Promise<ProjectReviewTasks> {
   return get(`/api/projects/${projectId}/review-tasks`, locale);
@@ -115,6 +115,10 @@ export function decideSuggestion(id: number, decision: "accepted" | "rejected"):
 async function localizedFetch(input: RequestInfo | URL, init?: RequestInit, locale: Locale = browserLocale()): Promise<Response> {
   const headers = new Headers(init?.headers);
   headers.set("Accept-Language", locale);
+  if (typeof window === "undefined") {
+    const { cookies } = await import("next/headers");
+    headers.set("Cookie", (await cookies()).toString());
+  }
   return fetch(input, { ...init, headers });
 }
 
@@ -629,7 +633,7 @@ export async function* streamLessonRegeneration(
   feedback: string,
   init?: { signal?: AbortSignal },
 ): AsyncGenerator<LessonRegenEvent> {
-  const res = await localizedFetch(`/api/lessons/${lessonId}/regenerate/stream`, {
+  const res = await localizedFetch(`${BASE_URL}/api/lessons/${lessonId}/regenerate/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ feedback }),

@@ -526,6 +526,9 @@ def test_a_kind_nobody_reads_is_a_parseable_refusal_and_never_a_500(client, monk
     with __import__("fastapi").testclient.TestClient(
         main.app, raise_server_exceptions=False
     ) as raw:
+        from app.auth.service import ACCESS_COOKIE, access_token, new_session
+        auth_session, _ = new_session()
+        raw.cookies.set(ACCESS_COOKIE, access_token(auth_session))
         response = raw.post(
             "/courses/generate", json={"sources": [{"kind": kind, "value": GOOD_TEXT}]}
         )

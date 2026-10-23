@@ -273,6 +273,7 @@ def _migrate_submissions_question_scope() -> None:
 def init_db() -> None:
     from app import models  # noqa: F401  (register models with Base)
     from app.agent import models as agent_models  # noqa: F401
+    from app.auth import models as auth_models  # noqa: F401
     from app.content_reviews import models as content_review_models  # noqa: F401
     from app.knowledge import models as knowledge_models  # noqa: F401
     from app.projects import models as project_models  # noqa: F401

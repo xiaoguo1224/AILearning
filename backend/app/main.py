@@ -44,6 +44,8 @@ from app.attempts import (
     _sanitize_elapsed_ms,
     iso_utc,
 )
+from app.auth.middleware import AuthMiddleware
+from app.auth.router import router as auth_router
 from app.concepts import course_scope, lesson_scope, normalize_concept
 from app.content_reviews.router import router as content_reviews_router
 from app.course_content.router import router as course_content_router
@@ -75,6 +77,8 @@ logger = logging.getLogger("studyforge.api")
 
 app = FastAPI(title="MindTrail", version="0.1.0")
 app.add_middleware(TeachingLocaleMiddleware)
+app.add_middleware(AuthMiddleware)
+app.include_router(auth_router)
 app.include_router(projects_router)
 app.include_router(resources_router)
 app.include_router(submissions_router)
@@ -99,6 +103,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/health")
+def health():
+    return {"status": "ok"}
 
 
 # --------------------------------------------------------------------------

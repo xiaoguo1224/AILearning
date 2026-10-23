@@ -10,6 +10,7 @@ os.environ["STUDYFORGE_DB"] = os.path.join(tempfile.mkdtemp(), "test.sqlite3")
 # Pin (not just pop) the CORS config: app/__init__ loads backend/.env, and env
 # vars set here take precedence over it, keeping tests independent of dev .env files.
 os.environ["STUDYFORGE_CORS_ORIGINS"] = "http://localhost:3000"
+os.environ["ADMIN_PWD"] = "test-workspace-password"
 
 import pytest
 
@@ -252,6 +253,11 @@ def client():
     from app.main import app
 
     with TestClient(app) as test_client:
+        # Business tests run through real authentication; security tests use a fresh client.
+        from app.auth.service import ACCESS_COOKIE, REFRESH_COOKIE, access_token, new_session
+        auth_session, refresh = new_session()
+        test_client.cookies.set(ACCESS_COOKIE, access_token(auth_session))
+        test_client.cookies.set(REFRESH_COOKIE, refresh)
         yield test_client
 
 

@@ -548,3 +548,13 @@
 - 修改前 Docker 相关 50 项通过；新增主题与交互回归 4 项通过；修改后 Docker 完整前端 **43 文件 / 248 passed**，完整 lint 无问题，最终 tsc 通过。`docker compose build frontend` 成功（含生产构建和 tsc），也为先前 QA-03 的本机构建环境阻塞补充当前树的 Docker 验证。
 - Playwright：实际 3000 页面，1440/390 宽度下浅/深主题、草稿保留、502 重试、快捷键、回答引用与扩展均验证；无横向溢出、无 pageerror。手机课时页 scope 和草稿切换亦核对。问答响应由浏览器路由受控提供，未调用付费模型。截图人工检查。
 - 未运行后端全量或所有 AI 后台任务端到端验收；本轮未修改后端。手机课时正文另有既存长代码/公式溢出（问答开关前后均 766px），本轮未扩展修改正文布局。报告：`test-reports/2026-10-23-qa-theme.md`。
+
+
+### 2026-10-24 单人密码登录与真实 API 门禁
+
+- 开始于 `main` / `0f07c08`；原有 `.env.example` 修改保留，不纳入本次提交。会话中发现 `backend/uv.lock` 的额外变化，也保留且不纳入本次认证提交。
+- 新增后端 `auth` 模块与独立会话表、Next.js 请求门禁和固定上游转发；浏览器 API、SSR Cookie、附件链接、侧栏、概念提取及重生成流式请求接入认证链路。公开首页不显示费用条，未认证时不展示私人课程数据；登录页无侧栏，复用首页视频/轨道动画，支持主题、语言、暂停和减少动态效果；提供退出登录。
+- 使用 `.env` 现有 `ADMIN_PWD`，未读取或输出密码值。登录固定保持 7 天，access 每 15 分钟续期；退出撤销、密码变更失效、空配置关闭访问、错误不回显秘密、跨站写入拦截与限流。Compose 仅同步密码环境变量和无数据健康检查路径，未使用 Docker 验证。
+- 真正执行完成的验证：修改前 `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_error_shape.py -q` 26 passed；前端 `npx vitest run tests/landing-page.test.tsx` 8 passed。实现中 `pytest tests/test_auth.py tests/test_error_shape.py -q` 47 passed；前端首页/API 地址相关 10 passed；一次 `npm run build` 成功（含 TypeScript、Proxy 与登录/转发路由）。之后认证/UI/首页/API 地址批次实际只发现 3 个 `.test.tsx` 文件、16 passed，随后发现 `.test.ts` 不在 Vitest include 中，已将认证代理用例更名为 `.test.tsx`，未重新运行。
+- 实际执行过后端 Ruff：新认证模块与测试通过；对 `main.py`/`db.py` 的较宽检查报告既有及新增 import 顺序等共 11 项，未宣称全仓 lint 通过。后端全量在 fake provider 环境开始后被用户要求中止，日志到 14%，没有完整结果。前端 tsc/lint 链也按要求停止，不宣称最终全量通过。
+- 用户在验证中明确要求「不用做测试了，直接进行git提交」；停止后续测试和浏览器验收，直接交付提交。最终代码较已完成构建有后续改动，完整前后端回归、最终生产构建、移动/桌面真实视觉与实际登录链路仍未验收。风险和边界不以局部结果替代。

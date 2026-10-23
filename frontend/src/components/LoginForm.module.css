@@ -1,0 +1,34 @@
+.page { min-height: 100svh; isolation: isolate; display: flex; flex-direction: column; }
+.backdrop { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.backdrop > div { z-index: 0; }
+.backdrop svg { animation: login-orbit 28s ease-in-out infinite alternate; }
+.page[data-paused="true"] .backdrop svg { animation-play-state: paused; }
+.content { width: min(1180px, 90%); margin: auto; padding: 160px 0 110px; display: grid; grid-template-columns: 1.3fr 1fr; align-items: center; gap: 8%; }
+.intro h1 { font-size: clamp(36px, 4.6vw, 65px); line-height: 1.18; letter-spacing: -.04em; font-weight: 450; margin: 28px 0; text-wrap: balance; }
+.intro em { font-family: "Learning Serif", "Learning Brush", serif; color: var(--sf-accent); font-weight: 400; }
+.intro > p:last-child { color: var(--sf-ink-muted); max-width: 380px; line-height: 1.8; }
+.eyebrow { font-size: 10px; letter-spacing: .14em; color: var(--sf-ink-muted); }
+.card { border: 1px solid var(--sf-line); border-radius: 28px; padding: clamp(24px, 3vw, 44px); background: color-mix(in srgb, var(--sf-surface) 90%, transparent); box-shadow: var(--sf-shadow-overlay); backdrop-filter: blur(22px); }
+.cardLabel { margin-bottom: 32px; font-size: 24px; letter-spacing: -.03em; }
+.card label { display: block; font-size: 13px; margin-bottom: 10px; }
+.card input { width: 100%; min-height: 52px; border: 1px solid var(--sf-line-strong); border-radius: 12px; padding: 13px 16px; background: var(--sf-app); color: var(--sf-ink); font-size: 16px; }
+.card input:focus-visible, .card button:focus-visible, .card a:focus-visible, .footer button:focus-visible { outline: 2px solid var(--sf-accent); outline-offset: 4px; }
+.submit { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-top: 22px; border-radius: 30px; padding: 14px 18px 14px 24px; background: var(--sf-fill); color: var(--sf-on-fill); font-size: 14px; cursor: pointer; }
+.submit:hover { background: var(--sf-fill-hover); }
+.submit:disabled { opacity: .65; cursor: wait; }
+.submit span { font-size: 22px; }
+.note { color: var(--sf-ink-muted); font-size: 12px; line-height: 1.8; margin-top: 16px; }
+.back { display: inline-block; color: var(--sf-ink-muted); font-size: 12px; margin-top: 32px; }
+.error { color: var(--sf-danger); font-size: 13px; line-height: 1.6; margin-top: 12px; }
+.footer { width: 90%; margin: 0 auto; padding: 24px 0; display: flex; align-items: center; justify-content: space-between; gap: 20px; font-size: 10px; color: var(--sf-ink-muted); letter-spacing: .06em; }
+.footer button { border: 1px solid var(--sf-line-strong); border-radius: 20px; padding: 8px 14px; background: var(--sf-surface); }
+@keyframes login-orbit { to { transform: rotate(65deg); } }
+@media (max-width: 760px) {
+  .content { grid-template-columns: 1fr; width: min(440px, 88%); gap: 32px; padding: 120px 0 40px; }
+  .intro h1 { font-size: 38px; margin: 18px 0; }
+  .intro > p:last-child { font-size: 13px; }
+  .card { padding: 28px; }
+  .cardLabel { margin-bottom: 24px; font-size: 21px; }
+  .footer > span { max-width: 130px; line-height: 1.8; }
+}
+@media (prefers-reduced-motion: reduce) { .backdrop svg { animation: none; } }

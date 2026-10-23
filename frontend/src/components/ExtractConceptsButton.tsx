@@ -60,7 +60,7 @@ export function ExtractConceptsButton({ courseId }: ExtractConceptsButtonProps) 
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch(`/api/courses/${courseId}/concepts/extract/job`, {
+      const res = await fetch(`/backend/api/courses/${courseId}/concepts/extract/job`, {
         method: "POST",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

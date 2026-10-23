@@ -8,7 +8,7 @@ afterEach(() => {
 
 test.each([
   { server: true, expected: "http://backend:8000/courses" },
-  { server: false, expected: "http://localhost:8000/courses" },
+  { server: false, expected: "/backend/courses" },
 ])("uses the correct API address when server=$server", async ({ server, expected }) => {
   vi.stubEnv("API_INTERNAL_URL", "http://backend:8000");
   vi.stubEnv("NEXT_PUBLIC_API_URL", "http://localhost:8000");

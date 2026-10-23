@@ -7,6 +7,7 @@ import { listCourses } from "@/lib/api";
 import { AppShell } from "@/components/AppShell";
 
 vi.mock("@/lib/api", () => ({ listCourses: vi.fn() }));
+vi.mock("@/components/CostBanner", () => ({ CostBanner: () => null }));
 const navigation = vi.hoisted(() => ({ pathname: "/" }));
 vi.mock("next/navigation", () => ({
   usePathname: () => navigation.pathname,

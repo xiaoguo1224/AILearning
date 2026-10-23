@@ -11,8 +11,8 @@ export default async function HomePage() {
   let unavailable = false;
   try {
     courses = await listCourses(t.locale);
-  } catch {
-    unavailable = true;
+  } catch (error) {
+    unavailable = !(error instanceof Error && "status" in error && error.status === 401);
   }
   return <LandingPage courses={courses} unavailable={unavailable} />;
 }

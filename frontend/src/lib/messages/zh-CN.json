@@ -1059,5 +1059,22 @@
   "Every question is a beginning.": "每一个问题，都是新的开始。",
   "Discover the approach": "发现学习方式",
   "Pause background animation": "暂停背景动画",
-  "Resume background animation": "继续背景动画"
+  "Resume background animation": "继续背景动画",
+  "Welcome back.": "欢迎回来。",
+  "Keep your curiosity growing.": "让好奇，继续生长。",
+  "Your questions, your progress, your next discovery.": "你的问题、学习足迹，与下一次发现，都在这里。",
+  "Enter your workspace": "进入你的学习空间",
+  "Workspace password": "访问密码",
+  "Enter password": "请输入密码",
+  "Enter workspace": "进入学习空间",
+  "Signing in…": "正在登录…",
+  "Stay signed in for 7 days on this browser.": "此浏览器将在 7 天内保持登录。",
+  "Back to home": "返回首页",
+  "Incorrect password. Please try again.": "密码不正确，请重试。",
+  "Too many attempts. Try again in a minute.": "尝试次数过多，请一分钟后重试。",
+  "Sign-in is temporarily unavailable. Please try again.": "登录服务暂时不可用，请稍后重试。",
+  "Unable to connect. Check your connection and try again.": "连接失败，请检查网络后重试。",
+  "Sign out": "退出登录",
+  "Signing out…": "正在退出…",
+  "Unable to sign out. Please try again.": "退出失败，请重试。"
 }

@@ -205,3 +205,14 @@ P4 已实现：项目自由问答和临时讲解在回答引用本项目资料�
 3. 原 Tutor 强绑定 Concept，不宜简单添加 Prompt 作为自由 Agent。
 4. 自定义 SQLite add-column 机制有限，复杂关联需要正式迁移。
 5. LLM 静态评审可能误判；以证据分级、复核和可重复样例降低风险。
+
+
+## 单人访问门禁（2026-10-24）
+
+- `backend/app/auth/`：统一 ASGI 认证与跨站写请求校验、密码登录、会话续期和撤销；全部业务路由（含附件、下载、流式接口、OpenAPI 文档）受保护。仅 `/health` 与 `/auth/*` 认证入口豁免业务 access 校验；续期必须提供有效 refresh token。未配置密码返回 503。
+- `auth_sessions`：新增表，记录随机会话 ID、refresh token 的 HMAC 摘要、创建/绝对过期时间；不改动学习数据。`init_db()` 通过既有 `create_all` 幂等创建。回滚代码时可保留该独立表，不必删除或恢复学习数据。
+- access token：HMAC 签名，15 分钟有效，服务端逐次检查会话存在及未过期；refresh token：随机不透明令牌，HttpOnly Cookie，7 天绝对有效且续期不延期。数据库不保存原始 token。退出删除会话，改密码使旧签名与摘要失效。两种 Cookie 均 SameSite=Lax，HTTPS 下 Secure。
+- Next.js `src/proxy.ts` 在页面渲染前调用后端 `/auth/session`，过期 access 由 refresh 换发，并将新 Cookie 同时转交 SSR 和浏览器。未登录页面跳 `/login?next=...`，API 返回 401。后端不可用时关闭访问，返回 503。
+- 浏览器请求统一经 `/backend/[...path]` 同源流式转发到固定配置的后端；SSR API 请求转发当前 Cookie。转发仅允许必要请求头，不改变上传与 SSE 响应体。侧栏接口复用同一 API 封装。
+- 生产/本地配置：在根 `.env` 或 `backend/.env` 设置 `ADMIN_PWD`（后者优先；系统环境变量优先于文件），重启后端生效；前端使用 `API_INTERNAL_URL` 指定服务端后端地址，默认本机 8000。修改访问域名或端口时，`STUDYFORGE_CORS_ORIGINS` 必须列出实际前端 Origin。密码不使用 `NEXT_PUBLIC_` 前缀。浏览器通过同源路径访问，不依赖直连后端的 CORS 凭据。
+- 登录限流为本地单 worker 的 60 秒最多 10 次尝试；扩展多 worker 前需要共享限流存储。refresh token 在其固定期限内可重复换发 access，退出/改密/过期均撤销；不扩展设备管理或账号体系。

@@ -10,7 +10,7 @@ afterEach(cleanup);
 
 // Server pages are invoked outside Next request scope; preserve their English contract.
 vi.mock("next/headers", () => ({
-  cookies: async () => ({ get: () => ({ value: "en" }) }),
+  cookies: async () => ({ get: () => ({ value: "en" }), toString: () => "" }),
 }));
 
 // Ant Design components need these browser APIs that jsdom doesn't provide.

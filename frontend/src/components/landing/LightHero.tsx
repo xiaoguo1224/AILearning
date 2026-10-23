@@ -5,8 +5,7 @@ import { useEffect, useRef } from "react";
 import { useI18n } from "@/components/LocaleProvider";
 import styles from "./landing.module.css";
 
-export function LightHero({ paused, onToggle }: { paused: boolean; onToggle: () => void }) {
-  const { t } = useI18n();
+export function Landscape({ paused }: { paused: boolean }) {
   const video = useRef<HTMLVideoElement>(null);
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -21,9 +20,14 @@ export function LightHero({ paused, onToggle }: { paused: boolean; onToggle: () 
     document.addEventListener("visibilitychange", sync);
     return () => { element?.pause(); media.removeEventListener("change", sync); document.removeEventListener("visibilitychange", sync); };
   }, [paused]);
+  return <div className={styles.landscape} aria-hidden="true"><video ref={video} muted loop playsInline preload="none"
+      src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260527_061033_0f369854-8849-4214-8787-9181479c8121.mp4" /></div>;
+}
+
+export function LightHero({ paused, onToggle }: { paused: boolean; onToggle: () => void }) {
+  const { t } = useI18n();
   return <div className={styles.lightHero}>
-    <div className={styles.landscape} aria-hidden="true"><video ref={video} muted loop playsInline preload="none"
-      src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260527_061033_0f369854-8849-4214-8787-9181479c8121.mp4" /></div>
+    <Landscape paused={paused} />
     <div className={styles.lightIntro}>
       <p className={styles.lightBadge}>✳ <span>{t("Plant a question. Grow an idea.")}</span> ↗</p>
       <h1>{t("A little curiosity.")}<br />{t("A world of possibility.")}</h1>
