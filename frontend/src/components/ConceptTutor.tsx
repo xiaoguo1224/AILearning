@@ -140,7 +140,7 @@ function TutorReply({
       tabIndex={-1}
       role="region"
       aria-labelledby={headingId}
-      className="flex flex-col gap-3"
+      className="flex min-w-0 flex-col gap-3 rounded-2xl focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-focus"
     >
       {/* The region needs a name of its own, and neither register heading can be it:
           calling the whole reply "From your course" would label the ungrounded half as
@@ -149,8 +149,8 @@ function TutorReply({
       <h5 id={headingId} className="sr-only">
         {t("Tutor reply")}</h5>
 
-      <div className="rounded-lg border border-amber-200 bg-white/70 px-4 py-3 dark:border-amber-900 dark:bg-zinc-900/40">
-        <p className="text-[12px] font-semibold uppercase tracking-wide text-amber-800 dark:text-amber-400">
+      <div className="rounded-2xl border border-line bg-surface px-4 py-3">
+        <p className="text-micro font-semibold uppercase tracking-wide text-accent">
           {t(GROUNDED_HEADING)}
         </p>
         {/* Through LessonMarkdown, which runs react-markdown without rehype-raw: this is
@@ -195,17 +195,16 @@ function TutorReply({
 
           It cannot collide with `check`, which the server blanks in this mode, and the
           two are told apart at a glance anyway: a filled panel with an accent bar and a
-          bold instruction here, a thin outline and a quiet label there. Amber and never
-          red, because nothing has gone wrong. */}
+          bold instruction here, a thin outline and a quiet label there. The theme accent marks an invitation to continue, rather than an error. */}
       {message.ask && (
-        <div className="rounded-lg border-l-4 border-amber-600 bg-amber-100/70 px-4 py-3 dark:border-amber-500 dark:bg-amber-950/60">
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-amber-900 dark:text-amber-200">
+        <div className="rounded-2xl border-l-4 border-accent bg-surface-sunken px-4 py-3">
+          <p className="text-micro font-semibold uppercase tracking-wide text-accent">
             {t(ASK_HEADING)}
           </p>
           {/* Through LessonMarkdown like `answer` and `beyond`. This is model output
               derived from an uploaded document and gets the same escaping as the rest of
               the reply; a new field is exactly how one slips past sanitisation. */}
-          <div className="mt-1.5 text-[13px] font-medium text-zinc-800 dark:text-zinc-100">
+          <div className="mt-1.5 text-small font-medium text-ink">
             <LessonMarkdown content={message.ask} title="" />
           </div>
         </div>
@@ -213,13 +212,13 @@ function TutorReply({
 
       {message.beyond && (
         /* A DIFFERENT block, never a paragraph appended to the one above. Dashed and
-           neutral where the grounded half is solid and amber, so the two do not read as
+           neutral where the grounded half has a solid border and accent heading, so the two do not read as
            one card that happens to have a subheading in it. */
-        <div className="rounded-lg border border-dashed border-zinc-400 bg-zinc-50 px-4 py-3 dark:border-zinc-600 dark:bg-zinc-900/60">
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
+        <div className="rounded-2xl border border-dashed border-line-strong bg-surface-sunken px-4 py-3">
+          <p className="text-micro font-semibold uppercase tracking-wide text-ink-muted">
             {t(BEYOND_HEADING)}
           </p>
-          <p className="mt-1.5 text-[12px] leading-[1.5] text-zinc-600 dark:text-zinc-400">
+          <p className="mt-1.5 text-small text-ink-muted">
             {t(BEYOND_DISCLAIMER)}
           </p>
           {/* No title to strip here: `beyond` is at most three sentences and has no
@@ -232,12 +231,12 @@ function TutorReply({
       )}
 
       {message.check && (
-        <div className="rounded-lg border border-amber-200/70 px-4 py-2.5 dark:border-amber-900/70">
-          <p className="text-[12px] font-semibold uppercase tracking-wide text-amber-800/80 dark:text-amber-400/80">
+        <div className="rounded-2xl border border-line px-4 py-3">
+          <p className="text-micro font-semibold uppercase tracking-wide text-accent">
             {t("Check yourself")}</p>
           {/* Plain text, not markdown. It is one question, and a text node is escaped by
               React on its own, which is the least this untrusted string can be given. */}
-          <p className="mt-1.5 text-[13px] text-zinc-700 dark:text-zinc-300">{message.check}</p>
+          <p className="mt-1.5 text-small text-ink">{message.check}</p>
         </div>
       )}
     </div>
@@ -248,11 +247,11 @@ function TutorReply({
 function LearnerMessage({ text }: { text: string }) {
   const { t } = useI18n();
   return (
-    <div className="rounded-lg bg-amber-100/60 px-4 py-2.5 dark:bg-amber-950/50">
-      <p className="text-[12px] font-semibold uppercase tracking-wide text-amber-900/70 dark:text-amber-200/70">
+    <div className="rounded-2xl bg-surface-sunken px-4 py-3">
+      <p className="text-micro font-semibold uppercase tracking-wide text-ink-muted">
         {t("You asked")}</p>
       {/* A text node, so whatever was typed is escaped rather than parsed. */}
-      <p className="mt-1 whitespace-pre-wrap text-[13px] text-zinc-800 dark:text-zinc-200">
+      <p className="mt-1 whitespace-pre-wrap text-small text-ink">
         {text}
       </p>
     </div>
@@ -544,28 +543,27 @@ export function ConceptTutor({
   return (
     <section
       aria-labelledby={headingId}
-      className="mt-4 border-t border-amber-200 pt-4 dark:border-amber-900"
+      className="mt-5 min-w-0 border-t border-line pt-5 text-ink [overflow-wrap:anywhere]"
     >
-      <h4 id={headingId} className="text-[14px] font-semibold">
+      <h4 id={headingId} className="text-small font-semibold">
         {t("Ask about this concept")}</h4>
       {/* The register contract, said once and before the first reply, so the two
           headings below are not the first the learner hears of it. */}
-      <p className="mt-0.5 text-[13px] text-amber-900/80 dark:text-amber-200/80">
+      <p className="mt-2 text-small text-ink-muted">
         {t("Answers come from your course. Anything the tutor adds from outside it is kept under its own heading.")}</p>
 
       {loading && messages.length === 0 && (
-        <p className="mt-3 text-[13px] text-amber-900/70 dark:text-amber-200/70">
+        <p className="mt-3 text-small text-ink-muted">
           {t("Loading your conversation…")}</p>
       )}
 
       {loadError && (
         <div className="mt-3">
-          <p className="text-[13px] text-red-800 dark:text-red-300">{loadError}</p>
+          <p className="text-small text-danger">{loadError}</p>
           <Button
             onClick={load}
             disabled={loading}
-            size="small"
-            color="orange"
+            size="middle"
             style={{ marginTop: 8 }}
           >
             {t("Try again")}</Button>
@@ -583,7 +581,7 @@ export function ConceptTutor({
             return (
               <li key={message.id} className="flex flex-col gap-3.5">
                 {day && day !== previous && (
-                  <p className="text-[12px] text-zinc-500 dark:text-zinc-500">
+                  <p className="text-micro text-ink-subtle">
                     {formatDay(message.created_at, t.locale)}
                   </p>
                 )}
@@ -631,19 +629,20 @@ export function ConceptTutor({
             }
           }}
           placeholder={t("Ask anything about {0}", conceptLabel)}
-          style={{ width: "100%" }}
+          className="!bg-surface-sunken !text-ink placeholder:!text-ink-subtle"
+          style={{ width: "100%", borderRadius: 16, padding: 12, resize: "vertical" }}
         />
 
-        {error && <p className="mt-2 text-[13px] text-red-800 dark:text-red-300">{t(error)}</p>}
+        {error && <p className="mt-2 text-small text-danger">{t(error)}</p>}
 
         {/* The server's own refusal, shown where the send it refused happened. */}
         {notice && (
-          <p className="mt-2 rounded-lg bg-white/70 px-3 py-2 text-[13px] text-zinc-700 dark:bg-zinc-900/40 dark:text-zinc-300">
+          <p className="mt-2 rounded-xl border border-warning-border bg-warning-surface px-3 py-2 text-small text-warning">
             {notice}
           </p>
         )}
 
-        <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <div className="mt-3 flex flex-wrap items-center gap-2">
           {/*
             A real `disabled` while a question is in flight, and that is load-bearing
             beyond this file: the endpoint takes no generation slot and no lock, on the
@@ -655,9 +654,8 @@ export function ConceptTutor({
             ref={askRef}
             onClick={() => void send("answer")}
             disabled={sending}
-            size="small"
-            color="orange"
-            variant="solid"
+            size="middle"
+            type="primary"
           >
             {sendingMode === "answer" ? t("Asking…") : t("Ask")}
           </Button>
@@ -675,12 +673,11 @@ export function ConceptTutor({
             ref={guidedRef}
             onClick={() => void send("guided")}
             disabled={sending}
-            size="small"
-            color="orange"
+            size="middle"
           >
             {sendingMode === "guided" ? t("Working…") : t("Let me work it out")}
           </Button>
-          <p className="text-[12px] text-zinc-500 dark:text-zinc-500">
+          <p className="text-micro text-ink-subtle">
             {t("Ctrl or Cmd and Enter sends.")}{/* Only once the server has said what they are. Nothing here invents the
                 numbers, and until the conversation has loaded there are none to show. */}
             {limits && ` ${usageLine(limits, t)}`}
@@ -688,7 +685,7 @@ export function ConceptTutor({
         </div>
         {/* Which of the two sentences shows is the server's call, off `guided.available`,
             and never counted out of the transcript above. */}
-        <p className="mt-1.5 text-[12px] text-zinc-500 dark:text-zinc-500">
+        <p className="mt-2 text-micro leading-relaxed text-ink-subtle">
           {t(guided && !guided.available ? GUIDED_SPENT_HINT : GUIDED_HINT)}
         </p>
       </div>

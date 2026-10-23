@@ -110,3 +110,8 @@
 - [ ] QA-06：测试的 provider 注入是逐模块 monkeypatch，`project_graph/service.py`、`concept_extract/service.py`、`submissions/llm_*.py` 等模块在**模块级** `from app.llm import get_provider`，patch `app.main` 覆盖不到。任何走到这些后台作业的用例都会打真实模型；沙箱无外网时调用挂住，会把只有 2 个线程的作业池永久占满，表现为几个文件之后某个毫不相干的用例「作业永不完成」。本轮只堵了已确认泄漏的一处，全局方案（例如把这些模块改为调用时取值 `llm.get_provider()`，或在 conftest 统一注入）需要先评估对成本/用量断言的影响，单独一轮做。
 
 当 `TASKS.md` 中条目完成：记录对应 Git commit、修改路径、测试命令/结果和剩余风险到 `PROGRESS.md`；必要时更新 `DECISIONS.md`。发现新需求先判断是否属于 PRD 范围，再加任务，不能悄悄扩张范围。
+
+
+### 2026-10-23 问答界面主题统一
+
+- [x] UI-QA-01：在最新 main `cc89525` 上，仅调整共享问答和课程问答卡片的展示；统一亮/深主题按钮、输入区、分隔线和对话来源分区，保留当前课程/课时 scope、历史、引用、引导思考、限额、快捷键与焦点恢复。Docker 全量前端 43 文件 / 248 passed，lint、tsc、生产构建通过；1440/390 浏览器通过。详见 `test-reports/2026-10-23-qa-theme.md`。
