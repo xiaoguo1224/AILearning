@@ -20,6 +20,7 @@ test("password-only entry has no private shell and can pause the shared animatio
   expect(screen.queryByText("Private sidebar")).not.toBeInTheDocument();
   expect(screen.queryByText("Private costs")).not.toBeInTheDocument();
   expect(screen.getByLabelText("Workspace password")).toHaveAttribute("type", "password");
+  expect(screen.getByLabelText("Workspace password").closest("form")).toHaveAttribute("method", "post");
   expect(document.querySelectorAll("input")).toHaveLength(1);
   fireEvent.click(screen.getByRole("button", { name: "Pause background animation" }));
   expect(screen.getByRole("button", { name: "Resume background animation" })).toHaveAttribute("aria-pressed", "true");

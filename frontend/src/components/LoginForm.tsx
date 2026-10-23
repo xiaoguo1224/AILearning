@@ -55,7 +55,7 @@ export function LoginForm({ next }: { next: string }) {
     </div>
     <section className={styles.content} aria-labelledby="login-title">
       <div className={styles.intro}><p className={styles.eyebrow}>✳ &nbsp; YOUR PERSONAL LEARNING SPACE</p><h1 id="login-title">{t("Welcome back.")}<br /><em>{t("Keep your curiosity growing.")}</em></h1><p>{t("Your questions, your progress, your next discovery.")}</p></div>
-      <form className={styles.card} onSubmit={submit} aria-busy={busy}>
+      <form method="post" className={styles.card} onSubmit={submit} aria-busy={busy}>
         <p className={styles.cardLabel}>{t("Enter your workspace")}</p>
         <label htmlFor="workspace-password">{t("Workspace password")}</label>
         <input ref={password} id="workspace-password" name="password" type="password" autoComplete="current-password" required maxLength={1024} disabled={busy} aria-invalid={!!error} aria-describedby={error ? "login-error login-note" : "login-note"} placeholder={t("Enter password")} />
