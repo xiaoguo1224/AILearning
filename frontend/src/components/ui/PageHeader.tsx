@@ -1,10 +1,10 @@
-// @ts-nocheck
 "use client";
 import { Typography } from "antd";
 import type { HTMLAttributes, ReactNode } from "react";
 import { forwardRef } from "react";
 
-export interface PageHeaderProps extends HTMLAttributes<HTMLDivElement> {
+// `title` is the page heading, not the HTML tooltip attribute.
+export interface PageHeaderProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   title?: ReactNode;
   description?: ReactNode;
   actions?: ReactNode;
@@ -17,7 +17,12 @@ export const PageHeader = forwardRef<HTMLDivElement, PageHeaderProps>(function P
   return (
     <div ref={ref} {...props}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography.Title level={2} style={{ margin: 0 }}>{title ?? children}</Typography.Title>
+        {/*
+          Level 1, not 2: this is the page's own title, and several error branches render
+          it on its own to keep the page from having no heading at all. At level 2 those
+          pages had no h1 for a screen reader to announce.
+        */}
+        <Typography.Title level={1} style={{ margin: 0 }}>{title ?? children}</Typography.Title>
         {actions && <div>{actions}</div>}
       </div>
       {description && <Typography.Paragraph type="secondary">{description}</Typography.Paragraph>}

@@ -62,48 +62,13 @@ export function MarkCompleteButton({
           aria-label={t("Mark this lesson as not complete")}
           color="green"
           variant="filled"
+          className="group"
           /*
-            Hand-rolled rather than Button: none of its variants is a success-tinted
-            fill (primary's `fill` token is deliberately neutral, not accent and not a
-            status colour; see Button.tsx and globals.css's --sf-accent comment), and
-            this is the one control in the app that needs one.
-
-            Hover uses --sf-success-surface-hover, a token added for it, rather than the
-            tone's existing boundary colour. An earlier draft used that boundary colour
-            as a fill, on the theory that it is just the next step in the same family,
-            the way surface/surface-sunken and line/line-hover are. The analogy does not
-            hold: each of those pairs stays inside one role, two fills or two borders,
-            where this would have been a boundary colour used as a fill, which nothing
-            else in the codebase does. It also measured badly. Emerald-300 is darker
-            than the emerald-200 the raw version hovered to, so `text-success` on it
-            came out at 3.57:1 light and 3.91:1 dark, under the 4.5:1 this label needs
-            as normal-size text and down from 6.02 and 6.41 before the migration. The
-            new token is emerald-100 light and emerald-900 dark and measures 4.78 and
-            4.95. --sf-danger-fill-hover already existed for the same reason, so this
-            follows the family's own pattern rather than inventing one.
-
-            The Undo hint reveals to full opacity rather than to 80%. It is invisible
-            at rest, so it is only ever read while revealed, and 80% over the hover fill
-            composites to 3.35:1 light and 3.80:1 dark. Full opacity puts it at the
-            label's own 4.78 and 4.95, which also closes a 3.94:1 light-mode failure that
-            predates this PR. "Revealed" is not a synonym for "hovered", though: the
-            group-focus-visible half of this shows the hint over the RESTING fill, where
-            it measures 5.15:1 light and 7.70:1 dark. Both paths clear 4.5:1, which is the
-            point, and the keyboard one was never the tighter of the two.
-
-            What that trades away is hover strength: the fill step from resting to hover
-            is 1.08:1 light and 1.56:1 dark, against 1.44 and 1.97 for the boundary
-            colour it rejected. That is the band every other hover in the app sits in:
-            Button's ghost variant steps 1.04 in light mode, and the tinted variant added
-            by the generate-flow work in PR #36 steps 1.05 and 1.30 on this same
-            success surface. The raw version this replaced stepped
-            1.13 and 1.56, so a weak hover is not something this change introduced.
-
-            All figures are from the hexes Tailwind emits, not from globals.css and not
-            from converting the OKLCH by hand: the emitted light fill is #d0fae5, not the
-            v3 hex the palette name suggests, and emerald-800 emits #005f46 where a
-            straight OKLCH conversion gives #006045. That last one is why three figures
-            here were previously 0.03 low.
+            antd's filled green is the app's only success-tinted fill; our own Button
+            deliberately has no status-coloured variant, so this one control drops to
+            AntButton. `group` is load-bearing rather than decorative: the Undo hint
+            below is revealed by group-hover / group-focus-visible, and without the
+            class it stays at opacity 0 with no way to appear.
           */
         >
           {pending ? (

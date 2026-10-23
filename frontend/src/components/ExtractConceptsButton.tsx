@@ -38,7 +38,6 @@ export function ExtractConceptsButton({ courseId }: ExtractConceptsButtonProps) 
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [courseId]);
 
   async function pollJob(jobId: string) {

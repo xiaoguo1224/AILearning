@@ -144,7 +144,15 @@ export function ProjectWorkspace({ project, courses = [], coursesError }: {
                         {course.title}
                       </Link>
                       {!archived && (
-                        <button disabled={pending} onClick={() => void act(() => unlinkProjectCourse(project.id, course.course_id), "Course unlinked.")} className="shrink-0 text-small text-ink-faint opacity-0 transition-opacity hover:text-danger group-hover:opacity-100 disabled:opacity-50">
+                        <button
+                          disabled={pending}
+                          onClick={() => void act(() => unlinkProjectCourse(project.id, course.course_id), "Course unlinked.")}
+                          /* The visible label is one word, repeated once per row; the
+                             accessible name carries the course so the list is navigable
+                             by name alone. */
+                          aria-label={`${t("Unlink course")} — ${course.title}`}
+                          className="shrink-0 text-small text-ink-faint opacity-0 transition-opacity hover:text-danger group-hover:opacity-100 disabled:opacity-50"
+                        >
                           {t("Unlink")}
                         </button>
                       )}
@@ -162,7 +170,12 @@ export function ProjectWorkspace({ project, courses = [], coursesError }: {
                         <option value="">{t("Choose a course")}</option>
                         {available.map(course => <option key={course.id} value={course.id}>{course.title}</option>)}
                       </select>
-                      <Button disabled={pending || !selected} onClick={() => void act(() => linkProjectCourse(project.id, Number(selected), project.courses.length), "Course linked.")} variant="secondary">
+                      <Button
+                        disabled={pending || !selected}
+                        onClick={() => void act(() => linkProjectCourse(project.id, Number(selected), project.courses.length), "Course linked.")}
+                        aria-label={t("Link course")}
+                        variant="secondary"
+                      >
                         {t("Link")}
                       </Button>
                     </>

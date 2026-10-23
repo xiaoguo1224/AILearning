@@ -281,9 +281,19 @@ test("a refreshed revision preserves unsaved text until the learner discards it"
   expect(screen.getByLabelText("Body")).toHaveValue("New saved content");
 });
 
-test("knowledge pagination preserves the active review filter", async () => {
+/*
+ * The list's Previous/Next links are gone: entries are picked from the knowledge graph
+ * now, not paged through in a sidebar. What still has to hold is that the review filter
+ * survives the page load, which is what this asserts — at the request, since there is no
+ * link left to carry it.
+ */
+test("the review filter reaches the knowledge query", async () => {
   mockPage(entry());
   vi.mocked(listProjectKnowledge).mockResolvedValue({ items: [entry()], total: 51 });
   render(await renderPage({ status: "pending_review", core: "1" }));
-  expect(screen.getByRole("link", { name: "Next" })).toHaveAttribute("href", "/projects/1/knowledge?status=pending_review&core=1&offset=50");
+  expect(vi.mocked(listProjectKnowledge)).toHaveBeenCalledWith(
+    1,
+    expect.objectContaining({ status: "pending_review", core: true }),
+    "en",
+  );
 });

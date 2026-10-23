@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 import { Tag } from "antd";
 import type { HTMLAttributes } from "react";
@@ -16,5 +15,11 @@ const COLOR_MAP: Record<BadgeTone, string> = {
 };
 
 export function Badge({ tone = "neutral", children, ...props }: BadgeProps) {
-  return <Tag color={COLOR_MAP[tone]} {...props as any}>{children}</Tag>;
+  // Tag accepts the span attributes this interface declares; the cast only widens the
+  // rest object to Tag's own prop type so the spread type-checks.
+  return (
+    <Tag color={COLOR_MAP[tone]} {...(props as Record<string, unknown>)}>
+      {children}
+    </Tag>
+  );
 }

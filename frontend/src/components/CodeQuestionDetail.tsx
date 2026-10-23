@@ -3,7 +3,7 @@
 import { BackButton } from "@/components/BackButton";
 import { useEffect, useState } from "react";
 
-import { Button as AntButton, Tabs, Table, Input } from "antd";
+import { Button as AntButton, Tabs, Table } from "antd";
 import { useI18n } from "@/components/LocaleProvider";
 import { QuizMarkdown } from "@/components/QuizMarkdown";
 import { SubmissionReviewPanel } from "@/components/SubmissionReviewPanel";
@@ -108,6 +108,9 @@ export function CodeQuestionDetail({
   }
 
   useEffect(() => {
+    // Every setState in refreshHistory runs after an await, so this cannot cascade a
+    // render during the effect; the rule cannot see through the async boundary.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshHistory(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id]);

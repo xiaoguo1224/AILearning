@@ -18,13 +18,15 @@ import { act, fireEvent, render, screen } from "./render";
 import { describe, expect, test, vi } from "vitest";
 
 import { QuizSection } from "@/components/QuizSection";
-import { ApiError, answerQuiz } from "@/lib/api";
+import { ApiError, startGradeJob } from "@/lib/api";
 
 import { deferred, quizItem, quizProgress } from "./fixtures";
 
 vi.mock("@/lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
   answerQuiz: vi.fn(),
+  startGradeJob: vi.fn(),
+  getJob: vi.fn(),
 }));
 
 function renderQuiz(kind: "mcq" | "short" = "short") {
@@ -101,7 +103,7 @@ describe("editing the answer clears a stale validation error", () => {
   test("leaves a server error in place, since editing the answer does not undo a failed request", async () => {
     renderQuiz("short");
     const failure = deferred<never>();
-    vi.mocked(answerQuiz).mockReturnValue(failure.promise);
+    vi.mocked(startGradeJob).mockReturnValue(failure.promise);
     fireEvent.change(screen.getByPlaceholderText("Your answer"), {
       target: { value: "Circular" },
     });
@@ -128,7 +130,7 @@ describe("editing the answer clears a stale validation error", () => {
   test("leaves a server error in place when another mcq option is picked", async () => {
     const { item } = renderQuiz("mcq");
     const failure = deferred<never>();
-    vi.mocked(answerQuiz).mockReturnValue(failure.promise);
+    vi.mocked(startGradeJob).mockReturnValue(failure.promise);
     fireEvent.click(screen.getByRole("radio", { name: item.options[0] }));
     fireEvent.click(screen.getByRole("button", { name: "Check answer" }));
     await act(async () => failure.reject(new ApiError(500, "Could not reach the server.")));

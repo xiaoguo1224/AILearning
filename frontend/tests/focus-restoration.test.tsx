@@ -176,16 +176,17 @@ import { GenerateForm } from "@/components/GenerateForm";
 import { QuizSection } from "@/components/QuizSection";
 import type { TutorOutcome } from "@/lib/api";
 import {
-  answerQuiz,
   ApiError,
   deleteCourse,
   generateFromSources,
   getDeletionPreview,
   getGenerationLimits,
+  getJob,
   getTutorConversation,
   removeDayOff,
   sendTutorMessage,
   setCourseDeadline,
+  startGradeJob,
 } from "@/lib/api";
 import type {
   AnswerResult,
@@ -209,6 +210,8 @@ vi.mock("@/lib/api", async (importOriginal) => ({
   getDeletionPreview: vi.fn(),
   deleteCourse: vi.fn(),
   answerQuiz: vi.fn(),
+  startGradeJob: vi.fn(),
+  getJob: vi.fn(),
   getGenerationLimits: vi.fn(),
   generateFromSources: vi.fn(),
 }));
@@ -1066,8 +1069,14 @@ describe("QuizSection focus restoration", () => {
   function renderQuiz(kind: "mcq" | "short") {
     const item = quizItem({ id: 1, kind });
     const view = render(<QuizSection quiz={[item]} progress={quizProgress({ items: 1 })} />);
+    // Grading is a background job: the submit starts it, then polls for the result.
+    // Resolving `graded` is what completes that poll, so every test below keeps its
+    // "resolve the verdict, then assert focus" shape.
     const graded = deferred<AnswerResult>();
-    vi.mocked(answerQuiz).mockReturnValue(graded.promise);
+    vi.mocked(startGradeJob).mockResolvedValue({ job_id: "grade-job" });
+    vi.mocked(getJob).mockImplementation(() =>
+      graded.promise.then((result) => ({ status: "completed", result }) as never),
+    );
     return { item, graded, rerender: view.rerender };
   }
 

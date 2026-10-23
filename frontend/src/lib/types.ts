@@ -1,3 +1,5 @@
+import type { QuizKind } from "@/lib/quizKinds";
+
 export interface CourseSummary {
   id: number;
   title: string;
@@ -48,6 +50,21 @@ export interface LatestAttempt {
   correct: boolean;
   expected: string;
   created_at: string;
+  /**
+   * Files that were submitted with this attempt. Optional because a row written
+   * before attachments existed has none, and because not every endpoint that
+   * returns attempt state resolves them.
+   */
+  attachments?: SubmittedAttachment[];
+}
+
+/** Metadata for one file already stored on an attempt; the bytes are at /api/attachments/{id}. */
+export interface SubmittedAttachment {
+  id: number;
+  filename: string;
+  kind: "image" | "pdf" | "docx" | "xlsx" | "text";
+  mime: string;
+  size: number;
 }
 
 export interface AttemptState {
@@ -75,7 +92,7 @@ export interface QuizProgress {
 export interface QuizItem {
   id: number;
   question: string;
-  kind: "mcq" | "short" | "truefalse" | "code";
+  kind: QuizKind;
   options: string[];
   concept: string;
   attempt_state: AttemptState;
@@ -313,7 +330,7 @@ export type RemediationConflictCode = RemediationConflict["error"];
 export interface PracticeItem {
   id: number;
   question: string;
-  kind: "mcq" | "short";
+  kind: "mcq" | "fill" | "short";
   options: string[];
 }
 
@@ -655,7 +672,7 @@ export interface RatingPreview {
 export interface ReviewItem {
   id: number;
   question: string;
-  kind: "mcq" | "short";
+  kind: "mcq" | "fill" | "short";
   options: string[];
 }
 

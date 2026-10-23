@@ -18,16 +18,11 @@ function formatWhen(value: string, locale: string): string {
 
 export default async function ProjectSubmissionsPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ variant?: string }>;
 }) {
   const t = await getTranslator();
   const { projectId } = await params;
-  const requestedVariant = Number((await searchParams).variant);
-  const variantId =
-    Number.isSafeInteger(requestedVariant) && requestedVariant > 0 ? requestedVariant : undefined;
   const id = Number(projectId);
   if (!/^\d+$/.test(projectId) || !Number.isSafeInteger(id) || id <= 0) notFound();
 

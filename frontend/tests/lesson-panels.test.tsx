@@ -8,13 +8,14 @@ import { describe, expect, test, vi } from "vitest";
 
 import { LessonQaSection } from "@/components/LessonQaSection";
 import { LessonQuizPanel } from "@/components/LessonQuizPanel";
-import { generateQuizQuestions } from "@/lib/api";
+import { getJob, startQuizGenerateJob } from "@/lib/api";
 
 import { quizItem, quizProgress } from "./fixtures";
 
 vi.mock("@/lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
-  generateQuizQuestions: vi.fn(),
+  startQuizGenerateJob: vi.fn(),
+  getJob: vi.fn(),
 }));
 
 vi.mock("@/components/ConceptTutor", () => ({
@@ -35,10 +36,15 @@ describe("LessonQuizPanel", () => {
     expect(screen.getByText(item.question)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "AI generate" }));
-    vi.mocked(generateQuizQuestions).mockResolvedValue({ course_id: 3, lesson_id: 9, created: [] });
+    // Generation is a background job now: start it, then poll for the result.
+    vi.mocked(startQuizGenerateJob).mockResolvedValue({ job_id: "quiz-job" });
+    vi.mocked(getJob).mockResolvedValue({
+      status: "completed",
+      result: { course_id: 3, lesson_id: 9, created: [] },
+    } as never);
     fireEvent.click(screen.getByRole("button", { name: /Generate 2/ }));
-    await waitFor(() => expect(vi.mocked(generateQuizQuestions)).toHaveBeenCalled());
-    const [courseId, items, lessonId] = vi.mocked(generateQuizQuestions).mock.calls[0];
+    await waitFor(() => expect(vi.mocked(startQuizGenerateJob)).toHaveBeenCalled());
+    const [courseId, items, lessonId] = vi.mocked(startQuizGenerateJob).mock.calls[0];
     expect(courseId).toBe(3);
     expect(lessonId).toBe(9);
     expect(items).toEqual([{ kind: "mcq", count: 2 }]);

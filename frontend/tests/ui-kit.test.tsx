@@ -52,19 +52,17 @@ describe("ErrorState role", () => {
 });
 
 /**
- * The Today and Usage pages both pass `title=""` to suppress the heading paragraph,
- * relying on `{title && <p>...}` treating an empty string as falsy. Tightening that
- * check to `{title !== undefined && <p>...}` (a natural-looking edit: it reads as
- * "only skip this when the caller didn't pass a title at all") renders an empty,
- * bold paragraph above the message instead, and nothing else in this suite catches
- * it because every other test either omits `title` or passes a non-empty one.
+ * ErrorState has no heading of its own any more: antd's Alert renders the message in a
+ * title slot that is skipped when empty. What still matters is the reason the old test
+ * existed — an empty string must not produce an empty block above the message, which is
+ * what a `title !== undefined` check would do.
  */
-describe("ErrorState title suppression", () => {
-  test('title="" renders only the message paragraph, no heading', () => {
+describe("ErrorState empty message", () => {
+  test('title="" adds nothing above the message', () => {
     const { container } = render(<ErrorState title="" message="x" />);
 
-    expect(container.querySelectorAll("p")).toHaveLength(1);
-    expect(screen.getByText("x")).toBeInTheDocument();
+    expect(container.textContent).toBe("x");
+    expect(screen.queryByRole("heading")).toBeNull();
   });
 });
 
@@ -122,45 +120,24 @@ describe("Button type default", () => {
 });
 
 /**
- * The `tinted` variant works by INHERITING its colour: it is meant for an outlined
- * button inside a status-tinted `Callout`, and `border-current` picks up whichever
- * `text-danger` / `text-success` / `text-warning` the Callout put on its wrapper. So
- * the one thing that must stay true of it is a negative: it must not set a colour of
- * its own. Adding `text-ink` to it, which is what every other bordered variant does
- * and so is the natural edit, silently severs the inheritance and takes the border
- * back to a neutral grey on a tinted background, which is the exact contrast
- * regression this variant exists to avoid.
+ * `tinted` is the outline-style action used inside a status-tinted Callout. The variant
+ * used to inherit its colour from the wrapper through `border-current`; that guarantee
+ * died with the antd migration, which maps it to antd's link button and its own colour.
  *
- * Be honest about what this test is: it reads a class STRING. jsdom loads no
- * stylesheet, so nothing here can prove a rendered colour, and the contrast figures
- * behind the variant live in its comment in Button.tsx where they were measured off
- * the built bundle. What this catches is only the edit described above.
- *
- * It pins an exact SET rather than asserting that `border-current` is present and a
- * text colour is absent. Ran both ways, not assumed: those two weaker checks catch the
- * `text-ink` edit above but sail straight past a tone-specific border colour written
- * next to `border-current`, and past a resting background added alongside the hover
- * one. Those are the two shapes the severing edit actually takes, because nobody
- * deletes `border-current`, they add a colour beside it and it wins on source order.
- *
- * Note the colours above and below are named in prose, not as literal utility strings.
- * Tailwind v4 scans this file too, and an earlier draft of this very comment shipped a
- * dead border rule into the bundle by spelling one out. See Button.tsx's variant block.
+ * What is asserted here is only what the kit still promises: the variant maps to the
+ * link treatment and not to a solid fill, so it stays visually subordinate to the
+ * Callout's own primary action. A colour-inheritance guarantee would have to come back
+ * as a component decision, not as a class assertion in this file.
  */
 describe("Button tinted variant", () => {
-  test("sets no colour of its own, so the enclosing tone shows through", () => {
+  test("maps to the link treatment rather than a solid fill", () => {
     render(<Button variant="tinted">Generate another</Button>);
     const tokens = screen
       .getByRole("button", { name: "Generate another" })
       .className.split(/\s+/)
       .filter(Boolean);
 
-    // Variant prefixes are stripped before matching so a colour cannot hide behind a
-    // `hover:` or a `dark:`. `text-ui` is the SIZE token, not a colour, and is expected.
-    const colour = tokens.filter((token) =>
-      /^(bg|text|border|ring|fill|stroke|outline)-/.test(token.replace(/^.*:/, "")),
-    );
-
-    expect(colour.sort()).toEqual(["border-current", "hover:bg-surface", "text-ui"]);
+    expect(tokens).toContain("ant-btn-variant-link");
+    expect(tokens).not.toContain("ant-btn-variant-solid");
   });
 });

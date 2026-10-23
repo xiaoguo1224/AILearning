@@ -1,10 +1,10 @@
-// @ts-nocheck
 "use client";
 import { Empty } from "antd";
 import type { HTMLAttributes, ReactNode } from "react";
 import { forwardRef } from "react";
 
-export interface EmptyStateProps extends HTMLAttributes<HTMLDivElement> {
+// `title` is the visible heading here, not the HTML tooltip attribute.
+export interface EmptyStateProps extends Omit<HTMLAttributes<HTMLDivElement>, "title"> {
   title?: ReactNode;
   description?: ReactNode;
   action?: ReactNode;

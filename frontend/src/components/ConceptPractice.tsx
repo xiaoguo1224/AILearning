@@ -22,7 +22,7 @@ interface Feedback {
   submitted: string;
   expected: string;
   correct: boolean;
-  kind: "mcq" | "short";
+  kind: "mcq" | "fill" | "short";
 }
 
 /** Where focus belongs once a response has landed and the DOM has caught up. */
@@ -52,7 +52,7 @@ type FocusTarget = "answer" | "next" | "terminal" | "submit";
 function gradeAnnouncement(
   correct: boolean,
   expected: string,
-  kind: "mcq" | "short",
+  kind: "mcq" | "fill" | "short",
   answered: number,
   maxAnswers: number,
   ended: boolean,
@@ -60,7 +60,9 @@ function gradeAnnouncement(
 ): string {
   const position = ended ? "" : t("Answer {0} of {1}. ", answered, maxAnswers);
   if (correct) return `${position}${t("Correct.")}`;
-  const verdict = t(kind === "short" ? "Not an exact match." : "Not the right option.");
+  // A typed answer was not an exact match; a picked one was the wrong option. Asking
+  // which kind it is beats listing the two typed kinds, since both read the same here.
+  const verdict = t(kind === "mcq" ? "Not the right option." : "Not an exact match.");
   return `${position}${verdict} ${t("The reference answer is: {0}", expected)}`;
 }
 

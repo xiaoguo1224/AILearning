@@ -1,4 +1,3 @@
-// @ts-nocheck
 "use client";
 
 import { Button as AntButton } from "antd";
@@ -8,7 +7,9 @@ import type { ButtonHTMLAttributes } from "react";
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "tinted" | "danger";
 export type ButtonSize = "sm" | "md";
 
-export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+// `size` here is this kit's own two-step scale, not the HTML attribute antd would take.
+export interface ButtonProps
+  extends Omit<ButtonHTMLAttributes<HTMLButtonElement>, "size" | "color"> {
   variant?: ButtonVariant;
   size?: ButtonSize;
 }
@@ -32,7 +33,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       htmlType={type}
       size={size === "sm" ? "small" : "middle"}
       danger={variant === "danger"}
-      {...props as any}
+      {...(props as Record<string, unknown>)}
     />
   );
 });

@@ -542,6 +542,9 @@ def test_upgrade_adds_the_tutor_and_explicit_project_tables(databases):
         "jobs",
         "project_graph_edges",
         "project_graph_layout",
+        # Answer attachments (ADR-030). A brand-new table rather than a column, so it
+        # belongs on this whitelist and nowhere in ADDED_COLUMNS.
+        "attachments",
     }
     assert not set(databases.base) - set(databases.upgraded), "create_all cannot drop a table"
 

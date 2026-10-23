@@ -55,8 +55,8 @@ test("links available courses and unlinks without calling course deletion", asyn
   fireEvent.change(screen.getByLabelText("Choose a course"), { target: { value: "3" } });
   fireEvent.click(screen.getByRole("button", { name: "Link course" }));
   await waitFor(() => expect(linkProjectCourse).toHaveBeenCalledWith(1, 3, 1));
-  await waitFor(() => expect(screen.getByRole("button", { name: "Unlink course" })).toBeEnabled());
-  fireEvent.click(screen.getByRole("button", { name: "Unlink course" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: /Unlink course/ })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: /Unlink course/ }));
   await waitFor(() => expect(unlinkProjectCourse).toHaveBeenCalledWith(1, 2));
   expect(screen.getByRole("link", { name: "Tensor course" })).toHaveAttribute("href", "/courses/2");
 });

@@ -37,7 +37,7 @@ export default async function ProjectLayout({
   }
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
+    <div className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">
       <Link
         href="/projects"
         className="text-small text-ink-subtle transition-colors duration-fast ease-standard hover:text-ink"

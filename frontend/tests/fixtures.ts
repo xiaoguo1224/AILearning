@@ -12,6 +12,7 @@
  */
 
 import type { TutorOutcome } from "@/lib/api";
+import type { QuizKind } from "@/lib/quizKinds";
 import type {
   AnswerResult,
   AttemptState,
@@ -236,7 +237,7 @@ export const UNANSWERED: AttemptState = {
  * One quiz item. `options` defaults to a plausible mcq set for an mcq item and to an
  * empty array otherwise, matching what the server sends for a short-answer item.
  */
-export function quizItem(fields: { id: number; kind: "mcq" | "short" | "truefalse" | "code" } & Partial<QuizItem>): QuizItem {
+export function quizItem(fields: { id: number; kind: QuizKind } & Partial<QuizItem>): QuizItem {
   return {
     id: fields.id,
     question: fields.question ?? "Which orbit shape keeps a satellite's altitude constant?",

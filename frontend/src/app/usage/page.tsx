@@ -10,61 +10,9 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, getUsage } from "@/lib/api";
 import { formatCount, formatUsd } from "@/lib/format";
-import type { PerCourseUsage, UsageSummary } from "@/lib/types";
+import type { UsageSummary } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-
-function formatTimestamp(iso: string, locale: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString(locale);
-}
-
-/**
- * Three cases, not two. `course_id` survives deletion (the backend needs it to keep a
- * dead course's spend in its own bucket) and SQLite reissues it, so linking on the id
- * sent the learner to whichever live course had since inherited that rowid, under the
- * dead course's name. `title` is null once the course is gone, and is the signal.
- * A deleted row must also not fall through to the note link below: there is no
- * `#note-course` anchor for it to land on.
- */
-function AttributedTo({ row }: { row: PerCourseUsage }) {
-  if (row.group !== "course") {
-    return (
-      <Link
-        href={`#note-${row.group}`}
-        className="text-ink-muted underline decoration-dotted underline-offset-2"
-      >
-        {row.label}
-      </Link>
-    );
-  }
-  if (row.title === null || row.course_id === null) {
-    return (
-      <span className="text-ink-muted">
-        {row.label} <span className="text-small"><LocalizedText text={"(deleted)"} /></span>
-      </span>
-    );
-  }
-  return (
-    <Link href={`/courses/${row.course_id}`} className="hover:underline">
-      {row.label}
-    </Link>
-  );
-}
-
-/**
- * `course_id` alone collides once an id is reissued, which React reports as two children
- * with key `course:1`. The backend buckets on the deletion stamp as well, so the key has
- * to carry that dimension; the payload exposes it as the pairing of `title` (liveness)
- * and `label` (the stamped historical name). Residual collision, stated rather than
- * denied: TWO deleted courses that held the same id, one titled "" and one titled
- * exactly "Course #<that id>". An empty stamp is falsy, so it falls through the label
- * precedence to the same "Course #N" the other one is named. Nothing simpler collides.
- */
-function rowKey(row: PerCourseUsage): string {
-  return `${row.group}:${row.course_id ?? ""}:${row.title === null ? "gone" : "live"}:${row.label}`;
-}
 
 export default async function UsagePage() {
   const t = await getTranslator();

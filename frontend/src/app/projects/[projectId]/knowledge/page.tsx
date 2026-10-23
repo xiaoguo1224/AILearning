@@ -7,7 +7,6 @@ import { KnowledgeEditor } from "@/components/KnowledgeEditor";
 import { KnowledgeGraphSection } from "@/components/KnowledgeGraphSection";
 import { Badge } from "@/components/ui/Badge";
 import { Callout } from "@/components/ui/Callout";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import {
@@ -247,6 +246,8 @@ export default async function ProjectKnowledgePage({
                 {t("This project is archived, so the knowledge base is read-only.")}
               </p>
             )}
+
+            {listError && <ErrorState message={listError} />}
 
             {detailError && <ErrorState message={detailError} />}
 

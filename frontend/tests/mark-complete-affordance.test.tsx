@@ -1,33 +1,14 @@
 /**
- * The completed button's hover treatment, pinned because it is a contrast threshold
- * and nothing else in the suite can see one.
+ * The completed button's tone, and the reveal that the Undo hint depends on.
  *
- * The restyle first hovered this button to the success tone's boundary colour, on the
- * reasoning that it is the next step in the same family. Measured on the built bundle
- * that put the button's own label at 3.57:1 light and 3.91:1 dark, under the 4.5:1 it
- * needs as normal-size text, and the reveal-on-hover Undo hint lower still. The fix
- * added a dedicated hover surface token and took the hint to full opacity, which
- * measures 4.78:1 and 4.95:1. MarkCompleteButton.tsx carries the full derivation.
+ * The tone is no longer a Tailwind fill: the control moved to antd's filled green when
+ * the UI kit migrated, because our own Button deliberately has no status-coloured
+ * variant. What still has to hold is that the completed state is the success tone and
+ * not a neutral one — a swap to the default button would read as "nothing happened".
  *
- * What these tests can and cannot do. jsdom applies no stylesheet, so they cannot
- * measure anything: they assert the class names the measurement was taken against.
- * That is a real guard against the specific way this regressed, which was a swap of
- * one token for another, and it is worth nothing against a change to what the token
- * itself resolves to. A contrast change made in globals.css will not redden these.
- *
- * Every assertion here was run against its mutation rather than assumed, and the record
- * is four for four: pointing the hover fill back at the boundary token reddens the first
- * test, putting the hint back to 80% reddens the second, and dropping either of the two
- * structural classes reddens exactly one test each. Those last two were added late,
- * because the colour assertions alone passed under both structural mutations: the fill
- * still swaps without the group class, and the reveal classes are still present when the
- * hint has no resting opacity to be revealed from. A test that survives the change it
- * exists to catch is worth as little as no test.
- *
- * Colours are described in prose below rather than written as class names, because
- * Tailwind v4's scanner reads test files too and a utility spelled out in a comment emits
- * a real rule into the shipped CSS. The two class names that do appear in comments here
- * are ones the component genuinely uses, which costs nothing.
+ * jsdom applies no stylesheet, so these assertions read class names. They guard the
+ * specific regression (a tone swap or a lost structural class), not the colours those
+ * classes resolve to.
  */
 import { render, screen } from "./render";
 import { describe, expect, test, vi } from "vitest";
@@ -39,17 +20,16 @@ vi.mock("next/navigation", () => ({
 }));
 
 describe("MarkCompleteButton completed state", () => {
-  test("hovers to the tone's own hover surface, not to any other fill", () => {
+  test("keeps the success tone rather than falling back to a neutral button", () => {
     render(<MarkCompleteButton lessonId={1} completed />);
     const button = screen.getByRole("button", { name: "Mark this lesson as not complete" });
-    const hoverFills = button.className
-      .split(/\s+/)
-      .filter((token) => token.startsWith("hover:bg-"));
+    const tokens = button.className.split(/\s+/);
 
-    expect(hoverFills).toEqual(["hover:bg-success-surface-hover"]);
+    expect(tokens).toContain("ant-btn-color-green");
+    expect(tokens).toContain("ant-btn-variant-filled");
     // `group` is what makes the hint's group-hover reveal fire at all. Without it the
-    // hover fill still changes and the test above still passes, so it is pinned here.
-    expect(button.className.split(/\s+/)).toContain("group");
+    // tone assertions above still pass while the hint never appears.
+    expect(tokens).toContain("group");
   });
 
   test("reveals the Undo hint at full opacity, since hover is the only state it is read in", () => {

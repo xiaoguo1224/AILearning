@@ -7,6 +7,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useId,
   useRef,
   useState,
   useSyncExternalStore,
@@ -323,6 +324,8 @@ export function DeleteCourseButton({
   const ctx = useContext(Ctx);
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<CourseDeletion | null>(null);
+  // Names the settled body once, so the footer buttons can describe themselves with it.
+  const bodyId = useId();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /*
@@ -361,14 +364,6 @@ export function DeleteCourseButton({
    * which is what lets Cancel clear the busy state immediately without racing it.
    */
   const generationRef = useRef(0);
-  /*
-   * One id shared by all three things the panel can be showing: the failure alert, the
-   * preview text, and the loading line. They are the arms of a single
-   * `error ? ... : preview ? ... : ...` ternary, so exactly one is mounted at any time
-   * and the id stays unique. A fourth carrier would have to join that ternary too.
-   * See issue #51.
-   */
-  const consequenceId = `delete-consequence-${courseId}`;
 
   if (!ctx) throw new Error("DeleteCourseButton must be rendered inside CourseDeletionProvider");
   const { onDeleted, refreshing } = ctx;
@@ -527,6 +522,7 @@ export function DeleteCourseButton({
         <Button
           key="cancel"
           ref={cancelRef}
+          aria-describedby={bodyId}
           onClick={handleCancel}
           disabled={busy && !loadingPreview}
         >
@@ -535,33 +531,48 @@ export function DeleteCourseButton({
         <Button
           key="delete"
           ref={confirmRef}
+          aria-describedby={bodyId}
+          /* The spinner antd adds carries its own accessible label, so the button's
+             computed name would read "loading Delete permanently". Naming it here keeps
+             the in-flight state the only thing the name says. */
+          aria-label={busy && !loadingPreview ? t("Deleting…") : t("Delete permanently")}
           danger
           type="primary"
           loading={busy && !loadingPreview}
           disabled={loadingPreview}
           onClick={() => void confirmDelete()}
         >
-          {t("Delete permanently")}
+          {/* The label carries the in-flight state; the button itself must stay pressable
+              and focused, so this is the only feedback it can give. */}
+          {busy && !loadingPreview ? t("Deleting…") : t("Delete permanently")}
         </Button>,
       ]}
     >
-      {error ? (
-        <p role="alert" style={{ color: "#f5222d", fontSize: 13 }}>
-          {error}
-        </p>
-      ) : preview ? (
-        <div style={{ fontSize: 13, lineHeight: 1.7, color: "#666" }}>
-          {previewLines(preview, t).map((line) => (
-            <p key={line} style={{ margin: "4px 0" }}>
-              {line}
-            </p>
-          ))}
-        </div>
-      ) : (
-        <p style={{ fontSize: 13, color: "#999" }}>
-          <LocalizedText text={" Checking what this would delete… "} />
-        </p>
-      )}
+      {/*
+        One id on the settled body, whatever shape it takes, and both footer buttons
+        point at it. Cancel is already tabbable while the preview is in flight, and
+        focus lands on it the moment either settled shape arrives, so a description
+        attached only to the settled node would be missing exactly when it is read.
+      */}
+      <div id={bodyId}>
+        {error ? (
+          <p role="alert" style={{ color: "#f5222d", fontSize: 13 }}>
+            {error}
+          </p>
+        ) : preview ? (
+          <div style={{ fontSize: 13, lineHeight: 1.7, color: "#666" }}>
+            {previewLines(preview, t).map((line) => (
+              <p key={line} style={{ margin: "4px 0" }}>
+                {line}
+              </p>
+            ))}
+          </div>
+        ) : (
+          <p style={{ fontSize: 13, color: "#999" }}>
+            <LocalizedText text={" Checking what this would delete… "} />
+          </p>
+        )}
+      </div>
     </Modal>
   );
 }
