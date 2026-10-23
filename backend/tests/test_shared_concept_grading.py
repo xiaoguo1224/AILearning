@@ -34,7 +34,10 @@ def _shared_concept_course():
             lesson.quiz_items.append(
                 models.QuizItem(
                     question=f"{title}: when can a quorum read be stale?",
-                    kind="short",
+                    # fill, not short: these tests are about which concept an attempt
+                    # is attributed to, and every answer here is compared literally.
+                    # A short item would send each one to the model for a verdict.
+                    kind="fill",
                     options=[],
                     answer=f"answer-{position}",
                     concept=SHARED,

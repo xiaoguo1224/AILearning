@@ -55,6 +55,13 @@ def test_generate_questions_mixed_kinds(client, monkeypatch):
             "concept": "注意力",
         },
         {
+            "question": "多头注意力中每个头的维度等于 d_model 除以 ____。",
+            "kind": "fill",
+            "options": [],
+            "answer": "h",
+            "concept": "注意力",
+        },
+        {
             "question": "自注意力计算中 QK^T 后除以根号 dk 的目的是什么？",
             "kind": "short",
             "options": [],
@@ -91,6 +98,7 @@ def test_generate_questions_mixed_kinds(client, monkeypatch):
         json={
             "items": [
                 {"kind": "mcq", "count": 1},
+                {"kind": "fill", "count": 1},
                 {"kind": "short", "count": 1},
                 {"kind": "truefalse", "count": 1},
                 {"kind": "code", "count": 1},
@@ -102,13 +110,17 @@ def test_generate_questions_mixed_kinds(client, monkeypatch):
     assert body["course_id"] == course_id
     assert body["lesson_id"] is None
     kinds = [item["kind"] for item in body["created"]]
-    assert kinds == ["mcq", "short", "truefalse", "code"]
+    # All five kinds survive generation. fill is its own kind now, not a short answer.
+    assert kinds == ["mcq", "fill", "short", "truefalse", "code"]
     # truefalse options are normalized server-side.
     tf = next(item for item in body["created"] if item["kind"] == "truefalse")
     assert tf["options"] == ["正确", "错误"]
+    # A fill item carries no options: the answer is typed, not picked.
+    fill = next(item for item in body["created"] if item["kind"] == "fill")
+    assert fill["options"] == []
     # The new items show up in the bank.
     bank = client.get(f"/api/courses/{course_id}/quiz").json()
-    assert bank["total"] >= 4
+    assert bank["total"] >= 5
 
 
 def test_generate_questions_scoped_to_lesson(client, monkeypatch):
@@ -269,3 +281,135 @@ def test_create_variant_rejects_foreign_item(client, monkeypatch):
     response = client.post(f"/api/courses/{course_id}/quiz/{other_item}/variant")
     assert response.status_code == 422
     assert client.post(f"/api/courses/{course_id}/quiz/999999/variant").status_code == 404
+
+
+def _seed_item_with_attempt(answer="让点积变小", correct=False):
+    """One short-answer item plus one recorded attempt, straight into the DB."""
+    from app import models
+    from app.db import SessionLocal
+
+    session = SessionLocal()
+    try:
+        course = models.Course(title="Attention", description="")
+        module = models.Module(title="Module 1", position=0)
+        lesson = models.Lesson(
+            title="Scaling", position=0, content="# Scaling", concepts=["scaling"]
+        )
+        item = models.QuizItem(
+            question="自注意力里为什么除以根号 dk？",
+            kind="short",
+            options=[],
+            answer="防止点积过大导致 softmax 饱和",
+            concept="scaling",
+        )
+        lesson.quiz_items.append(item)
+        module.lessons.append(lesson)
+        course.modules.append(module)
+        session.add(course)
+        session.flush()
+        attempt = models.Attempt(
+            quiz_item_id=item.id,
+            lesson_id=lesson.id,
+            submitted_answer=answer,
+            expected_answer=item.answer,
+            correct=correct,
+            attempt_no=1,
+            source="lesson_quiz",
+        )
+        session.add(attempt)
+        session.commit()
+        return item.id, attempt.id
+    finally:
+        session.close()
+
+
+class _AnalysisProvider:
+    """Records the prompt and answers with fixed markdown."""
+
+    name, model, is_paid = "fake", "analysis-test", False
+
+    def __init__(self):
+        self.prompts = []
+
+    def generate(self, system, prompt, max_tokens=64000):
+        from app.llm.base import LLMResult
+
+        self.prompts.append((system, prompt))
+        return LLMResult(text="## 好在哪\n说对了方向。\n\n## 问题出在哪\n没说饱和。")
+
+
+def _patch_analysis_provider(monkeypatch):
+    # The router imports get_provider at module level, so the patch has to land on the
+    # router's own name. Patching main's copy leaves the real provider in place, which
+    # is a live network call inside a test.
+    from app.course_quiz import router as quiz_router
+
+    provider = _AnalysisProvider()
+    monkeypatch.setattr(quiz_router, "get_provider", lambda: provider)
+    return provider
+
+
+def test_answer_analysis_sees_the_learners_answer(client, monkeypatch):
+    """The review is about the answer, so the answer has to be in the prompt."""
+    item_id, attempt_id = _seed_item_with_attempt()
+    provider = _patch_analysis_provider(monkeypatch)
+
+    response = client.post(
+        f"/api/quiz/{item_id}/answer-analysis", json={"attempt_id": attempt_id}
+    )
+    assert response.status_code == 200, response.text
+    assert "说对了方向" in response.json()["analysis"]
+
+    system, prompt = provider.prompts[0]
+    assert "让点积变小" in prompt, "the learner's own words must reach the model"
+    assert "防止点积过大导致 softmax 饱和" in prompt
+    assert "incorrect" in prompt
+    # The two reviews are separate: this one is told not to re-teach the question.
+    assert "do not explain the question" in system.lower()
+
+
+def test_answer_analysis_defaults_to_the_latest_attempt(client, monkeypatch):
+    item_id, attempt_id = _seed_item_with_attempt()
+    _patch_analysis_provider(monkeypatch)
+
+    response = client.post(f"/api/quiz/{item_id}/answer-analysis", json={})
+    assert response.status_code == 200, response.text
+    assert response.json()["attempt_id"] == attempt_id
+
+
+def test_answer_analysis_requires_an_attempt(client, monkeypatch):
+    """Nothing to review before the question is answered."""
+    from app import models
+    from app.db import SessionLocal
+
+    session = SessionLocal()
+    try:
+        course = models.Course(title="Empty", description="")
+        module = models.Module(title="Module 1", position=0)
+        lesson = models.Lesson(title="L", position=0, content="# L", concepts=["c"])
+        item = models.QuizItem(
+            question="Q?", kind="short", options=[], answer="A", concept="c"
+        )
+        lesson.quiz_items.append(item)
+        module.lessons.append(lesson)
+        course.modules.append(module)
+        session.add(course)
+        session.commit()
+        item_id = item.id
+    finally:
+        session.close()
+
+    _patch_analysis_provider(monkeypatch)
+    assert client.post(f"/api/quiz/{item_id}/answer-analysis", json={}).status_code == 400
+
+
+def test_answer_analysis_rejects_an_attempt_from_another_question(client, monkeypatch):
+    """An attempt id must not let a caller read a critique of another question."""
+    item_id, _ = _seed_item_with_attempt()
+    other_item, other_attempt = _seed_item_with_attempt(answer="别的题的回答")
+    _patch_analysis_provider(monkeypatch)
+
+    response = client.post(
+        f"/api/quiz/{item_id}/answer-analysis", json={"attempt_id": other_attempt}
+    )
+    assert response.status_code == 404

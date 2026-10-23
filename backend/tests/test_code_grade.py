@@ -121,6 +121,11 @@ def test_unparseable_verdict_is_502_without_recording(client, monkeypatch):
 
 
 def test_non_code_items_still_exact_match_without_feedback(client, monkeypatch):
+    """Fill-in, multiple choice and true/false are one term against a key.
+
+    Sending them to the model would only add a way to be wrong, so the model must
+    not be called at all and no feedback is produced: the answer key is the feedback.
+    """
     item_id = _seed_code_item(client)
     from app import models
     from app.db import SessionLocal
@@ -128,7 +133,7 @@ def test_non_code_items_still_exact_match_without_feedback(client, monkeypatch):
     session = SessionLocal()
     try:
         item = session.get(models.QuizItem, item_id)
-        item.kind = "short"
+        item.kind = "fill"
         item.answer = "和"
         session.commit()
     finally:
@@ -137,10 +142,78 @@ def test_non_code_items_still_exact_match_without_feedback(client, monkeypatch):
     grader = _patch_grader(monkeypatch, json.dumps({"correct": True, "feedback": "x"}))
     response = client.post(f"/quiz/{item_id}/answer", json={"answer": "和"})
     assert response.status_code == 200, response.text
-    assert grader.calls == 0, "short answers must not call the model"
+    assert grader.calls == 0, "fill answers must not call the model"
     body = response.json()
     assert body["correct"] is True
     assert body["feedback"] is None
+
+
+def test_short_answer_is_graded_by_the_model(client, monkeypatch):
+    """A short answer is prose by design, so exact match is the wrong judge.
+
+    The learner answers in their own words; a paraphrase that says the same thing
+    has to be able to pass, and only the model can tell whether it does.
+    """
+    item_id = _seed_code_item(client)
+    from app import models
+    from app.db import SessionLocal
+
+    session = SessionLocal()
+    try:
+        item = session.get(models.QuizItem, item_id)
+        item.kind = "short"
+        item.answer = "缩放点积，防止 softmax 饱和"
+        session.commit()
+    finally:
+        session.close()
+
+    grader = _patch_grader(
+        monkeypatch, json.dumps({"correct": True, "feedback": "说清了缩放的目的。"})
+    )
+    response = client.post(
+        f"/quiz/{item_id}/answer",
+        json={"answer": "除以根号 dk 是为了让点积别太大，softmax 不会饱和"},
+    )
+    assert response.status_code == 200, response.text
+    assert grader.calls == 1, "short answers must be judged by the model"
+    body = response.json()
+    assert body["correct"] is True
+    assert body["feedback"] == "说清了缩放的目的。"
+
+    session = SessionLocal()
+    try:
+        attempt = session.query(models.Attempt).filter_by(quiz_item_id=item_id).one()
+        # The row records the policy that actually judged it, not the exact-match default.
+        assert attempt.grader == code_grade.SHORT_GRADER
+    finally:
+        session.close()
+
+
+def test_short_answer_wrong_verdict_keeps_its_feedback(client, monkeypatch):
+    item_id = _seed_code_item(client)
+    from app import models
+    from app.db import SessionLocal
+
+    session = SessionLocal()
+    try:
+        item = session.get(models.QuizItem, item_id)
+        item.kind = "short"
+        item.answer = "缩放点积，防止 softmax 饱和"
+        session.commit()
+    finally:
+        session.close()
+
+    _patch_grader(
+        monkeypatch,
+        json.dumps({"correct": False, "feedback": "只说了缩小，没说防止 softmax 饱和。"}),
+    )
+    response = client.post(f"/quiz/{item_id}/answer", json={"answer": "让它变小一点"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["correct"] is False
+    assert "softmax" in body["feedback"]
+    # The key still comes back so the learner can compare.
+    assert body["expected"] == "缩放点积，防止 softmax 饱和"
 
 
 @pytest.mark.parametrize(
@@ -213,3 +286,121 @@ def test_quiz_hint_unparseable_is_502(client, monkeypatch):
     item_id = _seed_code_item(client)
     _hint_grader(monkeypatch, "junk")
     assert client.post(f"/quiz/{item_id}/hints", json={"level": 1}).status_code == 502
+
+
+def _run_jobs_inline(monkeypatch):
+    """Make background jobs synchronous, so the job is done when the POST returns."""
+    from app.jobs import service as jobs
+
+    def inline(job_id, fn):
+        if jobs._set_status(job_id, "running"):
+            fn(job_id)
+
+    monkeypatch.setattr(jobs, "run_in_background", inline)
+
+
+def test_job_endpoint_keeps_fill_on_exact_match(client, monkeypatch):
+    """The UI grades through /answer/job, and it used to send every kind to the model.
+
+    A fill answer judged by a model would be slower, cost money, and could pass an
+    answer the key says is wrong. Both endpoints now share one policy table.
+    """
+    item_id = _seed_code_item(client)
+    from app import models
+    from app.db import SessionLocal
+
+    session = SessionLocal()
+    try:
+        item = session.get(models.QuizItem, item_id)
+        item.kind = "fill"
+        item.answer = "h"
+        session.commit()
+    finally:
+        session.close()
+
+    _run_jobs_inline(monkeypatch)
+    grader = _patch_grader(monkeypatch, json.dumps({"correct": True, "feedback": "x"}))
+    response = client.post(f"/quiz/{item_id}/answer/job", json={"answer": "h"})
+    assert response.status_code == 200, response.text
+    job = client.get(f"/api/jobs/{response.json()['job_id']}").json()
+    assert job["status"] == "completed", job
+    assert grader.calls == 0, "the job path must not send a fill answer to the model"
+    assert job["result"]["correct"] is True
+    assert job["result"]["feedback"] is None
+
+    session = SessionLocal()
+    try:
+        attempt = session.query(models.Attempt).filter_by(quiz_item_id=item_id).one()
+        assert attempt.grader == "exact_ci"
+    finally:
+        session.close()
+
+
+def test_job_endpoint_grades_short_with_the_model(client, monkeypatch):
+    """The same job path must give a short answer the model's verdict and say so on the row."""
+    item_id = _seed_code_item(client)
+    from app import models
+    from app.db import SessionLocal
+
+    session = SessionLocal()
+    try:
+        item = session.get(models.QuizItem, item_id)
+        item.kind = "short"
+        item.answer = "缩放点积，防止 softmax 饱和"
+        session.commit()
+    finally:
+        session.close()
+
+    _run_jobs_inline(monkeypatch)
+    grader = _patch_grader(
+        monkeypatch, json.dumps({"correct": True, "feedback": "说清了缩放的目的。"})
+    )
+    response = client.post(
+        f"/quiz/{item_id}/answer/job",
+        json={"answer": "让点积别太大，softmax 不会饱和"},
+    )
+    assert response.status_code == 200, response.text
+    job = client.get(f"/api/jobs/{response.json()['job_id']}").json()
+    assert job["status"] == "completed", job
+    assert grader.calls == 1
+    assert job["result"]["correct"] is True
+    assert job["result"]["feedback"] == "说清了缩放的目的。"
+    # The UI reads attempt_state off the job result to decide what to show next.
+    assert job["result"]["attempt_state"]["ever_correct"] is True
+    assert job["result"]["attempt_id"]
+
+    session = SessionLocal()
+    try:
+        attempt = session.query(models.Attempt).filter_by(quiz_item_id=item_id).one()
+        assert attempt.grader == code_grade.SHORT_GRADER
+    finally:
+        session.close()
+
+
+def test_job_endpoint_fails_without_recording_a_wrong_answer(client, monkeypatch):
+    """An unusable verdict is the provider's fault, not the learner's."""
+    item_id = _seed_code_item(client)
+    from app import models
+    from app.db import SessionLocal
+
+    session = SessionLocal()
+    try:
+        item = session.get(models.QuizItem, item_id)
+        item.kind = "short"
+        item.answer = "缩放点积"
+        session.commit()
+    finally:
+        session.close()
+
+    _run_jobs_inline(monkeypatch)
+    _patch_grader(monkeypatch, "not json")
+    response = client.post(f"/quiz/{item_id}/answer/job", json={"answer": "不知道"})
+    assert response.status_code == 200, response.text
+    job = client.get(f"/api/jobs/{response.json()['job_id']}").json()
+    assert job["status"] == "failed"
+
+    session = SessionLocal()
+    try:
+        assert session.query(models.Attempt).filter_by(quiz_item_id=item_id).count() == 0
+    finally:
+        session.close()

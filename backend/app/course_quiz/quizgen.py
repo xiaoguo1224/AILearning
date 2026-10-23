@@ -23,7 +23,14 @@ _KIND_SPECS = {
         "选择题：4 个选项，选项互斥且只有一个正确；"
         "answer 必须是 options 中的一项原文"
     ),
-    "short": "简答 / 填空题：答案是一个短语、一句话或一个关键数值/公式",
+    "fill": (
+        "填空题：题干里留一个空位（用 ____ 表示），答案是一个词、一个数值或一条公式，"
+        "不超过 20 个字；不要写成需要整句作答的问句"
+    ),
+    "short": (
+        "简答题：要求学习者用自己的话解释一个概念、比较两种做法或说明一个过程；"
+        "答案是一段完整表述（2-4 句），不是单个词或数值"
+    ),
     "truefalse": "判断题：陈述一个关于本课内容的断言；answer 只能是“正确”或“错误”",
     "code": (
         "代码题：给出一个小的编程任务（含必要的起始代码，用 markdown 代码块呈现）；"
@@ -57,7 +64,10 @@ def build_prompt(
     lines += [
         f"共 {total} 道题，难度循序渐进，覆盖内容的不同方面，不要重复。",
         "只返回 JSON 数组，不要解释：",
-        '[{"question": str, "kind": "mcq"|"short"|"truefalse"|"code", '
+        # Built from QUIZ_KINDS rather than spelled out: the last time this list was
+        # written by hand it kept offering four kinds after a fifth existed, and the
+        # model dutifully never produced the new one.
+        '[{"question": str, "kind": "' + "|".join(QUIZ_KINDS) + '", '
         '"options": [str]（仅 mcq/truefalse 需要；truefalse 固定为["正确","错误"]）, '
         '"answer": str, "concept": str}]',
     ]

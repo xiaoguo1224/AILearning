@@ -4,13 +4,20 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 # The kinds the generator can be asked for. "mcq" and "short" are what course
-# generation has always written; "truefalse" and "code" are new with the
-# question bank so a generated set is not all multiple-choice and fill-in.
-QUIZ_KINDS = ("mcq", "short", "truefalse", "code")
+# generation has always written; "truefalse" and "code" came with the question bank.
+#
+# "fill" was split out of "short" because the two need opposite grading: a fill-in
+# answer is one term or number and exact match is the right judge, while a short
+# answer is a sentence and only a model can tell whether it means the right thing.
+# Keeping them as one kind forced one grading policy onto both. Items created before
+# the split keep kind="short" — they were written as sentence answers, so they stay
+# with the kind that grades them fairly.
+QUIZ_KINDS = ("mcq", "fill", "short", "truefalse", "code")
 
 KIND_LABELS = {
     "mcq": "选择题",
-    "short": "简答 / 填空",
+    "fill": "填空题",
+    "short": "简答题",
     "truefalse": "判断题",
     "code": "代码题",
 }
@@ -67,7 +74,7 @@ class QuizGenerateInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     lesson_id: int | None = None
-    items: list[KindCount] = Field(min_length=1, max_length=4)
+    items: list[KindCount] = Field(min_length=1, max_length=len(QUIZ_KINDS))
     prompt: str | None = Field(default=None, max_length=500)
 
 
@@ -75,3 +82,15 @@ class QuizGenerateResult(BaseModel):
     course_id: int
     lesson_id: int | None
     created: list[QuizBankItem]
+
+
+class AnswerAnalysisInput(BaseModel):
+    """Which attempt to review.
+
+    Omitted means the most recent lesson-quiz attempt on the question, which is what
+    the UI means by "analyse my answer": the one just submitted.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    attempt_id: int | None = None

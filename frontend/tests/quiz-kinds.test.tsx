@@ -2,16 +2,15 @@
  * The question bank's new kinds render with the right controls:
  * - truefalse renders as two radios (like mcq), fed by the server's options.
  * - code renders as a textarea, where Enter keeps newlines and Ctrl+Enter submits.
- * - short keeps the single-line input where Enter submits.
+ * - short renders as a textarea that takes file attachments (Enter is a newline,
+ *   Ctrl/Cmd+Enter submits); fill keeps the single-line input where Enter submits.
  */
-import { fireEvent, render, screen } from "./render";
+import { render, screen } from "./render";
 import { describe, expect, test, vi } from "vitest";
 
 import { QuizSection } from "@/components/QuizSection";
-import { answerQuiz } from "@/lib/api";
-import type { AnswerResult } from "@/lib/types";
 
-import { deferred, quizItem, quizProgress, answerResult } from "./fixtures";
+import { quizItem, quizProgress } from "./fixtures";
 
 vi.mock("@/lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
@@ -33,11 +32,21 @@ describe("question kind controls", () => {
     expect(link.getAttribute("href")).toBe("/courses/7/quiz/2");
   });
 
-  test("short keeps the single-line input", () => {
+  test("short answers in a multi-line box that takes files", () => {
     const item = quizItem({ id: 3, kind: "short" });
     const { container } = render(<QuizSection quiz={[item]} progress={quizProgress()} />);
-    expect(container.querySelector('input[type="text"]')).toBeTruthy();
+    // A short answer is prose plus evidence: Enter inserts a newline, so the control
+    // is a textarea rather than the one-line input fill-in still uses.
+    expect(container.querySelector("textarea")).toBeTruthy();
+    // The upload area sits under the box as a button plus a file list.
+    expect(screen.getByRole("button", { name: "Click to upload" })).toBeTruthy();
   });
 
+  test("fill keeps the single-line input", () => {
+    const item = quizItem({ id: 4, kind: "fill" });
+    const { container } = render(<QuizSection quiz={[item]} progress={quizProgress()} />);
+    expect(container.querySelector('input[type="text"]')).toBeTruthy();
+    expect(container.querySelector("textarea")).toBeNull();
+  });
 
 });
