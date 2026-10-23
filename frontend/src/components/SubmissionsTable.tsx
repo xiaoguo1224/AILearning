@@ -4,17 +4,17 @@ import { Table, Tag } from "antd";
 import Link from "next/link";
 
 import type { SubmissionSummary } from "@/lib/types";
+import { formatDateTime } from "@/lib/copy";
 
 interface SubmissionsTableProps {
   items: SubmissionSummary[];
   projectId: number;
-  archived: boolean;
 }
 
 /**
  * Paginated table of code submissions.
  */
-export function SubmissionsTable({ items, projectId, archived }: SubmissionsTableProps) {
+export function SubmissionsTable({ items, projectId }: SubmissionsTableProps) {
   const columns = [
     {
       title: "版本",
@@ -61,7 +61,7 @@ export function SubmissionsTable({ items, projectId, archived }: SubmissionsTabl
       width: 170,
       render: (ts: string) => (
         <span style={{ fontSize: 12, color: "#666" }}>
-          {new Date(ts).toLocaleString("zh-CN")}
+          {formatDateTime(ts, "zh-CN")}
         </span>
       ),
     },

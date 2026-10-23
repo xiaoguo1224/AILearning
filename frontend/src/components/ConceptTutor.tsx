@@ -11,7 +11,7 @@ import type { TextAreaRef } from "antd/es/input/TextArea";
 
 import { LessonMarkdown } from "@/components/LessonMarkdown";
 import { ApiError, getTutorConversation, sendTutorMessage } from "@/lib/api";
-import { formatDay } from "@/lib/copy";
+import { dayKeyOf, formatDay } from "@/lib/copy";
 import type {
   TutorConflict,
   TutorGuided,
@@ -111,8 +111,7 @@ function usageLine(limits: TutorLimits, t: Translator): string {
 
 /** The day a message was sent, or null when it is unreadable. */
 function dayOf(iso: string): string | null {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+  return dayKeyOf(iso);
 }
 
 /**

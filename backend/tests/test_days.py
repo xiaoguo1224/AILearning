@@ -37,13 +37,18 @@ def _clear_warning_memo():
     days._WARNED_ZONES.clear()
 
 
-def test_default_timezone_is_utc(monkeypatch):
+def test_default_timezone_is_beijing(monkeypatch):
+    """Unset means Asia/Shanghai: the learner's own wall clock, not the server's.
+
+    The study day then opens at 04:00 Beijing, which is 20:00 UTC the day before. The
+    bounds below are naive UTC because that is the shape every stored timestamp has.
+    """
     monkeypatch.delenv("STUDYFORGE_TIMEZONE", raising=False)
     tz = days.local_tz()
-    assert tz.utcoffset(stored("2026-09-01T12:00")) == timedelta(0)
+    assert tz.utcoffset(stored("2026-09-01T12:00")) == timedelta(hours=8)
     assert days.day_bounds("2026-09-01") == (
-        stored("2026-09-01T04:00"),
-        stored("2026-09-02T04:00"),
+        stored("2026-08-31T20:00"),
+        stored("2026-09-01T20:00"),
     )
 
 

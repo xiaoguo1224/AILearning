@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { Empty } from "antd";
 import { Badge } from "@/components/ui/Badge";
 import { ApiError, createSuggestion, decideSuggestion, listProjects } from "@/lib/api";
+import { formatDateTime } from "@/lib/copy";
 import type { ProjectList, ProjectReviewTask, SuggestionList } from "@/lib/types";
 
 export function SuggestionsPanel({ projectId, suggestions, source, initialChoices }: {
@@ -73,7 +74,7 @@ export function SuggestionsPanel({ projectId, suggestions, source, initialChoice
       <h2 className="text-title">{item.concept_label}</h2>
       <p><Link className="text-accent underline" href={`/projects/${item.source_project_id}`}>{item.source_name}</Link> → <Link className="text-accent underline" href={`/projects/${item.target_project_id}`}>{item.target_name}</Link></p>
       <Badge>{t(item.state === "pending" ? "Awaiting confirmation" : item.state === "accepted" ? "Accepted" : "Rejected")}</Badge>
-      {item.decided_at && <p className="text-small text-ink-muted">{t("Decided {0}", new Date(item.decided_at).toLocaleString(t.locale))}</p>}
+      {item.decided_at && <p className="text-small text-ink-muted">{t("Decided {0}", formatDateTime(item.decided_at, t.locale))}</p>}
       <details><summary>{t("Source evidence")}</summary><pre className="whitespace-pre-wrap break-words text-small">{item.evidence}</pre></details>
       {item.state === "pending" && <div className="flex flex-wrap gap-3">
         <p>{t("Accepting adds a review task for {0} in {1}.", item.concept_label, item.target_name)}</p>

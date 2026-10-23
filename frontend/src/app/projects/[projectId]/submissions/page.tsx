@@ -6,14 +6,14 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { ApiError, getProject, listProjectSubmissions } from "@/lib/api";
+import { formatDateTime } from "@/lib/copy";
 import { getTranslator } from "@/lib/locale-server";
 import type { ProjectDetail, SubmissionList } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 function formatWhen(value: string, locale: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale);
+  return formatDateTime(value, locale === "en" ? "en" : "zh-CN");
 }
 
 export default async function ProjectSubmissionsPage({

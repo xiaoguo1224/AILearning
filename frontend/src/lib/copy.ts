@@ -13,16 +13,60 @@
  * to import a panel to get it.
  */
 
-/**
- * A fixed locale, so a date rendered on the server survives hydration unchanged.
- * Falls back to the raw ISO string rather than showing "Invalid Date".
- */
 import { createTranslator, type Locale, type Translator } from "./i18n";
 
+/**
+ * The wall clock every timestamp in this app is rendered in: Beijing time.
+ *
+ * Stored timestamps are UTC, and that part is right — an instant should not depend on
+ * where it was written down. What was wrong is that the rendering left the conversion
+ * to whoever happened to be looking. `toLocaleString()` with no timeZone reads the
+ * BROWSER's zone, so the server render and the client render disagreed by the offset
+ * between the host and the viewer, and `timeZone: "UTC"` (what this module used to pin
+ * dates to) showed a Beijing learner yesterday's date for anything they did between
+ * midnight and 08:00.
+ *
+ * One constant, applied on both sides, so the string is the same in the HTML and after
+ * hydration, and it is the learner's clock either way. Change this line, not the
+ * fifteen call sites that used to each pick their own answer.
+ */
+export const APP_TIMEZONE = "Asia/Shanghai";
+
+/** A date with its time of day, in {@link APP_TIMEZONE}. Raw string if unparseable. */
+export function formatDateTime(iso: string, locale: Locale = "en"): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString(locale === "en" ? "en-GB" : "zh-CN", { timeZone: APP_TIMEZONE });
+}
+
+/**
+ * The YYYY-MM-DD key of an instant as it falls in {@link APP_TIMEZONE}.
+ *
+ * NOT `toISOString().slice(0, 10)`, which is the UTC day and therefore a day behind for
+ * the first eight hours of a Beijing morning. Used to group a conversation by the day
+ * each message was sent, so the wrong key puts a 07:00 message under yesterday.
+ */
+export function dayKeyOf(iso: string): string | null {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: APP_TIMEZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+/**
+ * A fixed locale and a fixed zone, so a date rendered on the server survives hydration
+ * unchanged. Falls back to the raw ISO string rather than showing "Invalid Date".
+ */
 export function formatDay(iso: string, locale: Locale = "en"): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleDateString(locale === "en" ? "en-GB" : "zh-CN", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+  return date.toLocaleDateString(locale === "en" ? "en-GB" : "zh-CN", { day: "numeric", month: "long", year: "numeric", timeZone: APP_TIMEZONE });
 }
 
 /**

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.attempts import iso_utc
 from app.db import get_session
 from app.jobs.models import Job
 
@@ -45,8 +46,13 @@ def _out(job: Job) -> JobOut:
         error=job.error,
         ref_type=job.ref_type,
         ref_id=job.ref_id,
-        created_at=job.created_at.isoformat() if job.created_at else "",
-        updated_at=job.updated_at.isoformat() if job.updated_at else "",
+        # iso_utc, not .isoformat(). Every stored timestamp is naive UTC (SQLite drops
+        # tzinfo), so a bare .isoformat() emits "2026-10-23T07:04:36" with no offset.
+        # A browser reads an offset-less string as LOCAL time, so a Beijing learner saw
+        # every job timestamp eight hours early. iso_utc stamps the +00:00 that was
+        # always implied, and the browser converts it to the wall clock they live in.
+        created_at=iso_utc(job.created_at) or "",
+        updated_at=iso_utc(job.updated_at) or "",
     )
 
 

@@ -9,6 +9,7 @@ import { useI18n } from "@/components/LocaleProvider";
 import { JobCancelButton, JobProgressBar } from "@/components/JobProgress";
 import { JobTrace } from "@/components/JobTrace";
 import { listJobs, type Job } from "@/lib/api";
+import { formatDateTime } from "@/lib/copy";
 
 const TYPE_LABELS: Record<string, string> = {
   course_generate: "Course generation",
@@ -115,7 +116,7 @@ export function JobsList() {
       responsive: ["md"] as ("md")[],
       render: (ts: string) => (
         <span style={{ fontSize: 12, color: "var(--sf-ink-muted)" }}>
-          {new Date(ts).toLocaleString()}
+          {formatDateTime(ts, t.locale)}
         </span>
       ),
     },

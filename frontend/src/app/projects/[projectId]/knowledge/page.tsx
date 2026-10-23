@@ -20,6 +20,7 @@ import {
   listProjectKnowledge,
 } from "@/lib/api";
 import type { Translator } from "@/lib/i18n";
+import { formatDateTime } from "@/lib/copy";
 import {
   knowledgeKindLabel,
   knowledgeProvenanceLine,
@@ -44,8 +45,7 @@ export const dynamic = "force-dynamic";
 const STATUS_FILTERS: KnowledgeStatus[] = ["draft", "pending_review", "confirmed"];
 
 function formatWhen(value: string, locale: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale);
+  return formatDateTime(value, locale === "en" ? "en" : "zh-CN");
 }
 
 /**

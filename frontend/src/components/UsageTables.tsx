@@ -3,14 +3,13 @@
 import { Table } from "antd";
 import Link from "next/link";
 
-import { LocalizedText, useI18n } from "@/components/LocaleProvider";
+import { LocalizedText } from "@/components/LocaleProvider";
+import { formatDateTime } from "@/lib/copy";
 import { formatCount, formatUsd } from "@/lib/format";
 import type { PerCourseUsage, UsageCall } from "@/lib/types";
 
 function formatTimestamp(iso: string, locale: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
-  return date.toLocaleString(locale);
+  return formatDateTime(iso, locale === "en" ? "en" : "zh-CN");
 }
 
 function AttributedTo({ row }: { row: PerCourseUsage }) {
@@ -49,7 +48,6 @@ interface UsageTablesProps {
 }
 
 export function UsageTables({ perCourse, recentCalls, locale }: UsageTablesProps) {
-  const { t } = useI18n();
   return (
     <>
       {perCourse.length === 0 ? (

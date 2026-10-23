@@ -7,14 +7,14 @@ import { NewExploreSessionButton } from "@/components/NewExploreSessionButton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ApiError, getExploreSession, getProject, listProjectSessions } from "@/lib/api";
+import { formatDateTime } from "@/lib/copy";
 import { getTranslator } from "@/lib/locale-server";
 import type { ExploreSessionDetail, ExploreSessionList, ProjectDetail } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 function formatWhen(value: string, locale: string): string {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString(locale);
+  return formatDateTime(value, locale === "en" ? "en" : "zh-CN");
 }
 
 /**

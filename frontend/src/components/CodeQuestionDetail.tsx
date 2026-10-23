@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { formatDateTime } from "@/lib/copy";
 import {
   ApiError,
   createQuestionSubmission,
@@ -396,7 +397,7 @@ export function CodeQuestionDetail({
                 title: t("Submitted at"),
                 dataIndex: "created_at",
                 key: "created_at",
-                render: (_, entry) => new Date(entry.created_at).toLocaleString(),
+                render: (_, entry) => formatDateTime(entry.created_at, t.locale),
               },
             ]}
           />

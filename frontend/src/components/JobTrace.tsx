@@ -1,6 +1,7 @@
 "use client";
 
 import type { Job } from "@/lib/api";
+import { formatDateTime } from "@/lib/copy";
 import styles from "./JobTrace.module.css";
 
 export function JobTrace({ job }: { job: Job }) {
@@ -13,7 +14,7 @@ export function JobTrace({ job }: { job: Job }) {
         <div className={styles.heading}>
           <span className={styles.badge} data-kind={entry.type}>{index + 1}. {entry.type === "thinking" ? "执行阶段" : entry.type === "tool_call" ? "调用" : "返回"}</span>
           <strong>{entry.tool}</strong>
-          <time>{new Date(entry.at.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(entry.at) ? entry.at : `${entry.at}Z`).toLocaleString()}</time>
+          <time>{formatDateTime(entry.at.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(entry.at) ? entry.at : `${entry.at}Z`)}</time>
         </div>
         {entry.content && <p>{entry.content}</p>}
         {entry.call_id && <p className={styles.meta}>调用 ID：{entry.call_id.slice(0, 8)}</p>}

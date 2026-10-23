@@ -6,9 +6,15 @@ across two days, break the streak they just extended, and schedule tomorrow's
 reviews while they are still doing today's. 04:00 is late enough to cover any
 plausible late night and early enough that nobody is starting the next day before it.
 
-The timezone comes from STUDYFORGE_TIMEZONE (an IANA name, default "UTC") and is read
-on every call, not captured at import, matching metering.py. That keeps the setting
+The timezone comes from STUDYFORGE_TIMEZONE (an IANA name, default "Asia/Shanghai") and is
+read on every call, not captured at import, matching metering.py. That keeps the setting
 changeable in a test or a restart without a stale module-level snapshot.
+
+The default is Beijing time rather than UTC because this deployment is a single learner
+living on it: every day boundary, streak, deadline countdown and "today" the UI shows is
+meant to be the one on their wall clock. Defaulting to UTC put the study day's 04:00
+boundary at noon in Beijing, so a morning session was filed under the previous day and
+the queue flipped over lunch. The variable still overrides it for anyone elsewhere.
 """
 
 import logging
@@ -20,7 +26,7 @@ from app.models import utcnow
 
 logger = logging.getLogger("studyforge.days")
 
-DEFAULT_TIMEZONE = "UTC"
+DEFAULT_TIMEZONE = "Asia/Shanghai"
 DAY_START_HOUR = 4
 
 # Zones already reported as unloadable. Without this the warning repeats on every

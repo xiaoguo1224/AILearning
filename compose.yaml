@@ -8,6 +8,10 @@ services:
       LLM_BASE_URL: ${LLM_BASE_URL:-}
       LLM_API_KEY: ${LLM_API_KEY:-}
       STUDYFORGE_DB: /data/studyforge.sqlite3
+      # Study days, streaks and deadlines are the learner's wall clock, not the
+      # container's. Unset means Asia/Shanghai (see app/days.py); stated here so a
+      # container reading this file does not have to guess.
+      STUDYFORGE_TIMEZONE: ${STUDYFORGE_TIMEZONE:-Asia/Shanghai}
       STUDYFORGE_CORS_ORIGINS: http://localhost:3000
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
