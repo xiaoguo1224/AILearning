@@ -5,6 +5,8 @@ __pycache__/
 venv/
 *.egg-info/
 .pytest_cache/
+# pytest basetemp, when a run points TMPDIR inside the repo. Test debris, not source.
+.pytest-tmp*/
 .ruff_cache/
 
 # Node
