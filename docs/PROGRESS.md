@@ -558,3 +558,13 @@
 - 真正执行完成的验证：修改前 `backend/.venv/Scripts/python.exe -m pytest backend/tests/test_error_shape.py -q` 26 passed；前端 `npx vitest run tests/landing-page.test.tsx` 8 passed。实现中 `pytest tests/test_auth.py tests/test_error_shape.py -q` 47 passed；前端首页/API 地址相关 10 passed；一次 `npm run build` 成功（含 TypeScript、Proxy 与登录/转发路由）。之后认证/UI/首页/API 地址批次实际只发现 3 个 `.test.tsx` 文件、16 passed，随后发现 `.test.ts` 不在 Vitest include 中，已将认证代理用例更名为 `.test.tsx`，未重新运行。
 - 实际执行过后端 Ruff：新认证模块与测试通过；对 `main.py`/`db.py` 的较宽检查报告既有及新增 import 顺序等共 11 项，未宣称全仓 lint 通过。后端全量在 fake provider 环境开始后被用户要求中止，日志到 14%，没有完整结果。前端 tsc/lint 链也按要求停止，不宣称最终全量通过。
 - 用户在验证中明确要求「不用做测试了，直接进行git提交」；停止后续测试和浏览器验收，直接交付提交。最终代码较已完成构建有后续改动，完整前后端回归、最终生产构建、移动/桌面真实视觉与实际登录链路仍未验收。风险和边界不以局部结果替代。
+
+### 2026-10-24 — 私有服务器原生部署与完整数据迁移
+
+- 从干净的 `main` / `c56159e` 开始。用户授权部署到私有服务器，不使用 Docker，并明确一次性完整迁移、以后主要使用网站；随后授权复用现有 HTTPS 首页，保留模型网关。
+- Next.js / FastAPI 使用独立 `studyforge` 用户、systemd 服务与开机启动；回环监听，上游内部 Nginx 与既有 TLS 入口转发。已实际重启两服务并确认登录会话继续有效。配置模板和维护/回滚说明保存在 `deploy/` 与 `docs/DEPLOYMENT.md`。
+- SQLite backup 快照迁移 3 项目、9 课程、168 课时及全部历史；源库没有活动作业。上线前数据库字节 SHA256 相同，启动后 41 张物理表的数量/内容哈希、21 文件 SHA256 相同。线上两附件重新下载比对一致。本地库未修改，未建立双向同步。
+- 真实部署发现 Next.js Proxy 内部 Origin 被规范化成 `https://localhost:3000`；按固定部署配置允许该内部来源，外部跨站请求仍拒绝。真实浏览器发现脚本尚未加载时表单会 GET 提交密码，提交 `fff5f36` 改为显式 POST 并补断言；修复后生产构建、类型检查、lint 与 26 项相关测试通过。
+- 本轮实际基线：后端认证/错误 47 passed；前端完整 45 文件 / 274 passed；后端完整 1469 passed / 2 failed / 2 skipped。失败包括全量 SQL 监听测试（单独复跑通过）和迁移白名单遗漏 `auth_sessions`。Ruff 报 47 项既有问题，未扩大修改范围。
+- HTTPS、匿名门禁、Secure/HttpOnly Cookie、跨站拒绝、业务 SSR、课程内容、附件、退出、模型网关列表均实际检查；未调用付费生成。桌面/手机真实浏览器及截图检查已进行。完整证据及限制见 `test-reports/2026-10-24-native-deployment.md`。
+- 数据遗留风险：旧外部内容 FTS 索引引用不存在的列，`quick_check` 成功但 `integrity_check` 失败；本轮保留原数据，已登记单独修复任务。没有将上线成功写成全仓质量门禁通过。

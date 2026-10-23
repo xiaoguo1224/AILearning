@@ -216,3 +216,7 @@ P4 已实现：项目自由问答和临时讲解在回答引用本项目资料�
 - 浏览器请求统一经 `/backend/[...path]` 同源流式转发到固定配置的后端；SSR API 请求转发当前 Cookie。转发仅允许必要请求头，不改变上传与 SSE 响应体。侧栏接口复用同一 API 封装。
 - 生产/本地配置：在根 `.env` 或 `backend/.env` 设置 `ADMIN_PWD`（后者优先；系统环境变量优先于文件），重启后端生效；前端使用 `API_INTERNAL_URL` 指定服务端后端地址，默认本机 8000。修改访问域名或端口时，`STUDYFORGE_CORS_ORIGINS` 必须列出实际前端 Origin。密码不使用 `NEXT_PUBLIC_` 前缀。浏览器通过同源路径访问，不依赖直连后端的 CORS 凭据。
 - 登录限流为本地单 worker 的 60 秒最多 10 次尝试；扩展多 worker 前需要共享限流存储。refresh token 在其固定期限内可重复换发 access，退出/改密/过期均撤销；不扩展设备管理或账号体系。
+
+## 私有服务器运行（2026-10-24）
+
+用户授权单人私有服务器部署：Next.js / FastAPI 原生 systemd 运行，Nginx 内部转发接入既有 HTTPS 首页，保留原模型网关。数据库与资料独立存放于 `/var/lib/studyforge`，部署配置在 `/etc/studyforge`，版本目录与运行数据分离。采用一次性本地快照迁移，后续网站为准；用户代码仍仅在自己的本地环境运行。具体路径、来源校验、备份与回滚见 [DEPLOYMENT.md](DEPLOYMENT.md) 与 ADR-035。

@@ -1,0 +1,11 @@
+# Replace only the existing final `handle { respond "Not found" 404 }` block.
+# Keep the existing /v1/* and /v1beta/* model-gateway handler before this block.
+handle {
+    reverse_proxy http://172.18.0.1:8081 {
+        flush_interval -1
+        transport http {
+            dial_timeout 10s
+            response_header_timeout 300s
+        }
+    }
+}
