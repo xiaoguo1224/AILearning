@@ -15,10 +15,14 @@ from app.db import SessionLocal
 
 
 def _make_lesson(concepts=("Gradient Descent", "Backpropagation")):
-    """Insert a one-module course whose lesson has two short-answer quiz items.
+    """Insert a one-module course whose lesson has two fill-in quiz items.
 
     Returns (lesson_id, [item_id, ...]). Built directly rather than through the
     generation pipeline so the expected answers and concept labels are exact.
+
+    fill rather than short: every answer here is one word, and these tests are about
+    attempt persistence, not grading. A short item would send each answer to the
+    model, which costs a real call and makes the assertions depend on a verdict.
     """
     session = SessionLocal()
     try:
@@ -30,7 +34,7 @@ def _make_lesson(concepts=("Gradient Descent", "Backpropagation")):
         lesson.quiz_items.append(
             models.QuizItem(
                 question="Which direction does gradient descent step in?",
-                kind="short",
+                kind="fill",
                 options=[],
                 answer="downhill",
                 concept=concepts[0],
@@ -39,7 +43,7 @@ def _make_lesson(concepts=("Gradient Descent", "Backpropagation")):
         lesson.quiz_items.append(
             models.QuizItem(
                 question="What rule does backprop apply?",
-                kind="short",
+                kind="fill",
                 options=[],
                 answer="chain rule",
                 concept=concepts[1],

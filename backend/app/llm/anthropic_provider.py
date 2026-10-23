@@ -1,3 +1,4 @@
+import base64
 import os
 
 import anthropic
@@ -8,20 +9,46 @@ from app.llm.base import LLMCallError, LLMResult
 class AnthropicProvider:
     name = "anthropic"
     is_paid = True
+    supports_vision = True
 
     def __init__(self, model: str | None = None):
         # Credentials resolve from ANTHROPIC_API_KEY or an `ant auth login` profile.
         self.client = anthropic.Anthropic()
         self.model = model or os.environ.get("STUDYFORGE_MODEL", "claude-opus-5")
 
-    def generate(self, system: str, prompt: str, max_tokens: int = 64000) -> LLMResult:
+    def generate(
+        self,
+        system: str,
+        prompt: str,
+        max_tokens: int = 64000,
+        images: list[tuple[str, bytes]] | None = None,
+    ) -> LLMResult:
+        if images:
+            # Images come before the text so the model reads the question after seeing
+            # what it is being asked about, which is the order the docs recommend.
+            content: list[dict] = [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": mime,
+                        "data": base64.b64encode(data).decode(),
+                    },
+                }
+                for mime, data in images
+            ]
+            content.append({"type": "text", "text": prompt})
+            user_content: object = content
+        else:
+            user_content = prompt
+
         # Course generation produces long outputs - stream to avoid HTTP timeouts.
         # Thinking is adaptive by default on claude-opus-5; no thinking param needed.
         with self.client.messages.stream(
             model=self.model,
             max_tokens=max_tokens,
             system=system,
-            messages=[{"role": "user", "content": prompt}],
+            messages=[{"role": "user", "content": user_content}],
         ) as stream:
             response = stream.get_final_message()
         input_tokens = getattr(response.usage, "input_tokens", None)

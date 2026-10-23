@@ -23,6 +23,7 @@ raw httpx exceptions out, so a local setup's ordinary failures (Ollama not runni
 model not pulled) escaped unmetered. Every failure now leaves as LLMCallError.
 """
 
+import base64
 import logging
 import os
 
@@ -153,20 +154,57 @@ class OllamaProvider:
         self.model = model or os.environ.get("OLLAMA_MODEL", "llama3.1")
         self.num_ctx = num_ctx if num_ctx is not None else _num_ctx_from_env()
 
-    def generate(self, system: str, prompt: str, max_tokens: int = 64000) -> LLMResult:
+    def generate(
+        self,
+        system: str,
+        prompt: str,
+        max_tokens: int = 64000,
+        images: list[tuple[str, bytes]] | None = None,
+    ) -> LLMResult:
         self._warn_if_prompt_looks_too_long(system, prompt)
-        body = self._post(system, prompt, self._num_predict(system, prompt, max_tokens))
+        body = self._post(
+            system, prompt, self._num_predict(system, prompt, max_tokens), images
+        )
         input_tokens = _token_count(body.get("prompt_eval_count"), "prompt_eval_count")
         output_tokens = _token_count(body.get("eval_count"), "eval_count")
         text = self._message_content(body, input_tokens, output_tokens)
         self._reject_if_window_filled(input_tokens, output_tokens)
         return LLMResult(text=text, input_tokens=input_tokens, output_tokens=output_tokens)
 
+    @property
+    def supports_vision(self) -> bool:
+        """Whether the configured model can read images.
+
+        Decided from the model name because Ollama exposes no capability flag. The list
+        is families that are vision-capable by default; anything else is treated as
+        text-only, and the caller refuses a picture-only answer rather than sending it
+        to a model that will invent something.
+        """
+        name = self.model.lower()
+        return any(
+            marker in name
+            for marker in ("llava", "vision", "qwen2-vl", "qwen2.5-vl", "minicpm-v", "moondream")
+        )
+
     # ----------------------------------------------------------------------
     # Transport
     # ----------------------------------------------------------------------
 
-    def _post(self, system: str, prompt: str, num_predict: int) -> dict:
+    def _post(
+        self,
+        system: str,
+        prompt: str,
+        num_predict: int,
+        images: list[tuple[str, bytes]] | None = None,
+    ) -> dict:
+        user_message: dict = {"role": "user", "content": prompt}
+        if images:
+            # Ollama takes bare base64 strings on the message, with no mime type: it
+            # decodes the bytes itself. The mime we sniffed is therefore only used to
+            # decide whether to send them at all.
+            user_message["images"] = [
+                base64.b64encode(data).decode() for _, data in images
+            ]
         try:
             response = httpx.post(
                 f"{self.base_url}/api/chat",
@@ -174,7 +212,7 @@ class OllamaProvider:
                     "model": self.model,
                     "messages": [
                         {"role": "system", "content": system},
-                        {"role": "user", "content": prompt},
+                        user_message,
                     ],
                     "stream": False,
                     "options": {"num_predict": num_predict, "num_ctx": self.num_ctx},

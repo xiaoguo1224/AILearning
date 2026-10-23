@@ -10,8 +10,6 @@ import { createSubmission, uploadSubmission } from "@/lib/api";
 
 type Mode = "paste" | "upload";
 
-const INPUT =
-  "w-full rounded-control border border-line bg-transparent px-3 py-1.5 text-ui text-ink placeholder:text-ink-muted";
 const LABEL = "block text-small font-medium text-ink";
 
 /**

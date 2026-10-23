@@ -872,7 +872,7 @@ def test_a_correct_remedial_answer_moves_ever_correct_and_nothing_else(client):
 
     session = SessionLocal()
     try:
-        before = _attempt_state(_attempts_for_item(session, item_id))
+        before = _attempt_state(_attempts_for_item(session, item_id), session)
     finally:
         session.close()
     assert before["ever_correct"] is False
@@ -881,7 +881,7 @@ def test_a_correct_remedial_answer_moves_ever_correct_and_nothing_else(client):
 
     session = SessionLocal()
     try:
-        after = _attempt_state(_attempts_for_item(session, item_id))
+        after = _attempt_state(_attempts_for_item(session, item_id), session)
     finally:
         session.close()
     assert after["ever_correct"] is True

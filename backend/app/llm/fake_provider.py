@@ -75,8 +75,7 @@ HOSTILE_LESSON_TITLE = "Handling Untrusted Content"
 # app.generation and app.remediation both reach app.llm, so importing back would
 # close a cycle.
 OUTLINE_MARKER = "curriculum designer"
-REMEDIATION_MARKER = "re-teaching one concept"
-# The tutor's marker has to avoid both phrases above, or the tutor prompt would
+REMEDIATION_MARKER = "re-teaching one concept"# The tutor's marker has to avoid both phrases above, or the tutor prompt would
 # dispatch to another branch and the reply would parse as the wrong schema.
 # test_fake_provider.py asserts the three are mutually exclusive against the live
 # system prompts, so a reworded TUTOR_SYSTEM fails there rather than in production.
@@ -93,6 +92,12 @@ TUTOR_MARKER = "answering a learner's question"
 # feeds guided_system(1) and guided_system(2) in for real, so drift fails there.
 GUIDED_MARKER = "GIVE EVERYTHING BUT THE LAST MOVE"
 GUIDED_RUNG2_MARKER = "STATE THE METHOD FOR THE FINAL MOVE EXPLICITLY"
+
+# The first line of both grading system prompts (code and short answer). The fake
+# verdict is exact match on REFERENCE vs SUBMITTED, which is what every offline test
+# assumed before short answers went to the model — so adding the model path here
+# changes no existing expectation, it only keeps that path from returning lesson JSON.
+GRADE_MARKER = "You are grading one learner's"
 
 
 # The labels label_segments() prepends to each chunk, in both of its shapes. The
@@ -171,12 +176,24 @@ class FakeProvider:
     name = "fake"
     model = "fake"
     is_paid = False
+    # True so an attachment-only answer still reaches a verdict offline. The images
+    # themselves are ignored: a fake that pretended to read them would let a broken
+    # image path pass every test.
+    supports_vision = True
 
-    def generate(self, system: str, prompt: str, max_tokens: int = 64000) -> LLMResult:
+    def generate(
+        self,
+        system: str,
+        prompt: str,
+        max_tokens: int = 64000,
+        images: list[tuple[str, bytes]] | None = None,
+    ) -> LLMResult:
         if OUTLINE_MARKER in system:
             text = self._outline(prompt)
         elif REMEDIATION_MARKER in system:
             text = self._remediation(prompt)
+        elif GRADE_MARKER in system:
+            text = self._verdict(prompt)
         elif TUTOR_MARKER in system:
             # Guided mode is the same stage in a different form, so the second decision
             # is taken here rather than by a marker of its own. See GUIDED_MARKER.
@@ -188,6 +205,27 @@ class FakeProvider:
             text = self._lesson(prompt)
         estimated = max(1, len(text) // 4)
         return LLMResult(text=text, input_tokens=estimated, output_tokens=estimated)
+
+    def _verdict(self, prompt: str) -> str:
+        """A deterministic grading verdict: exact match on reference vs submitted.
+
+        Deliberately literal rather than clever. Every offline test that answers a
+        question expects "the right string is correct, anything else is not", which is
+        exactly what the exact-match grader did before short answers went to the
+        model. Mirroring it here keeps those tests honest and network-free; a fake
+        that accepted paraphrases would let a wrong grader pass.
+        """
+        marker = "REFERENCE (one correct solution):"
+        reference, submitted = "", ""
+        if marker in prompt:
+            tail = prompt.split(marker, 1)[1]
+            if "SUBMITTED:" in tail:
+                reference, submitted = tail.split("SUBMITTED:", 1)
+                # Attachments come after the answer; the verdict is about the answer.
+                submitted = submitted.split("SUBMITTED ATTACHMENTS:", 1)[0]
+        correct = reference.strip().lower() == submitted.strip().lower()
+        feedback = "与参考答案一致。" if correct else "与参考答案不一致。"
+        return json.dumps({"correct": correct, "feedback": feedback})
 
     def _outline(self, prompt: str) -> str:
         topic = _topic(prompt)

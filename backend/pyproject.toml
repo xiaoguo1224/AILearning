@@ -10,6 +10,9 @@ dependencies = [
     "pydantic>=2.7",
     "anthropic>=0.40",
     "pypdf>=5.0",
+    # Reading .xlsx attachments. Pure Python, no compiled extensions. DOCX needs no
+    # equivalent: resources/parser.py already reads its XML by hand.
+    "openpyxl>=3.1",
     "python-dotenv>=1.0",
     "httpx>=0.27",
     "python-multipart>=0.0.9",

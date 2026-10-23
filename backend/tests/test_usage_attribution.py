@@ -11,6 +11,7 @@ Every LLM call goes through a stub provider. Nothing here reaches a real API.
 """
 
 import json
+import time
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -21,6 +22,8 @@ from sqlalchemy.orm import sessionmaker
 from app import fsrs, generation, main, models, remediation, review, tutor
 from app.agent import practice as agent_practice
 from app.agent import router as agent_router
+from app.concept_extract import service as extract_service
+from app.project_graph import service as graph_service
 from app.concepts import normalize_concept
 from app.course_quiz import quizgen
 from app.course_quiz import router as quiz_router
@@ -664,6 +667,21 @@ class _ExploreStageProvider:
         )
 
 
+def _await_job(client, job_id: str, tries: int = 200) -> dict:
+    """Block until a background job reaches a terminal state.
+
+    The extractors are jobs, so the call they record lands on another thread. Polling
+    the job is the only signal that the row exists yet; without it the assertion below
+    races the worker.
+    """
+    for _ in range(tries):
+        job = client.get(f"/api/jobs/{job_id}").json()
+        if job["status"] in {"completed", "failed", "cancelled"}:
+            return job
+        time.sleep(0.05)
+    raise AssertionError(f"job {job_id} never finished")
+
+
 def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monkeypatch):
     """The constant above can be honoured and still be wrong about what gets written.
 
@@ -754,9 +772,25 @@ def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monke
                 concept="函数",
             )
         )
+        # A written answer to the same lesson: short answers are model-judged too
+        # (ADR-029) and record their own stage, so the scenario has to drive one or
+        # the "every known stage" half of this test would be asserting nothing.
+        seed.add(
+            models.QuizItem(
+                lesson_id=lesson_id,
+                question="把两个数相加的函数叫什么？",
+                kind="short",
+                options=[],
+                answer="函数",
+                concept="函数",
+            )
+        )
         seed.commit()
         code_item_id = seed.query(models.QuizItem.id).filter(
             models.QuizItem.lesson_id == lesson_id, models.QuizItem.kind == "code"
+        ).order_by(models.QuizItem.id.desc()).first()[0]
+        short_item_id = seed.query(models.QuizItem.id).filter(
+            models.QuizItem.lesson_id == lesson_id, models.QuizItem.kind == "short"
         ).order_by(models.QuizItem.id.desc()).first()[0]
     finally:
         seed.close()
@@ -766,6 +800,47 @@ def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monke
         .status_code
         == 200
     )
+    # The fake provider's grading branch compares REFERENCE against SUBMITTED, so
+    # answering with the reference exactly is enough to record short_grade offline.
+    monkeypatch.setattr(main, "get_provider", lambda: FakeProvider())
+    assert (
+        client.post(f"/quiz/{short_item_id}/answer", json={"answer": "函数"}).status_code == 200
+    )
+    # The learner's follow-up question about that graded answer ("how did I do?").
+    # Its own stage, so /usage can tell it apart from a hint and from generation.
+    monkeypatch.setattr(quiz_router, "get_provider", lambda: FakeProvider())
+    assert (
+        client.post(f"/api/quiz/{short_item_id}/answer-analysis", json={}).status_code == 200
+    )
+    # The AI reference solution for the same question: the other half of "explain
+    # this to me", and a stage of its own.
+    assert client.post(f"/api/quiz/{short_item_id}/solution").status_code == 200
+
+    # Two background extractors, driven here because nothing else in this file
+    # touches them: they are not part of any single course request, so if this
+    # scenario skips them the "every known stage" half of the assertion below is
+    # measuring whatever other test files happened to run first.
+    monkeypatch.setattr(extract_service, "get_provider", lambda: FakeProvider())
+    concept_job = client.post(f"/api/courses/{generated_course_id}/concepts/extract/job")
+    assert concept_job.status_code == 202
+    _await_job(client, concept_job.json()["job_id"])
+
+    monkeypatch.setattr(graph_service, "get_provider", lambda: FakeProvider())
+    # Linking a course to the project is what triggers graph extraction, so the
+    # provider is patched first and the explicit /extract/job below then reports the
+    # already-running job rather than starting a second one. A project with no
+    # courses extracts nothing and records no call at all, which is why the link is
+    # part of the scenario.
+    assert (
+        client.put(
+            f"/api/projects/{project['id']}/courses/{generated_course_id}",
+            json={"position": 0},
+        ).status_code
+        == 200
+    )
+    graph_job = client.post(f"/api/projects/{project['id']}/graph/extract/job")
+    assert graph_job.status_code == 202
+    _await_job(client, graph_job.json()["job_id"])
 
     # A hint for that wrong-answered code question, and a variant of it.
     monkeypatch.setattr(main, "get_provider", lambda: _QuizHintStageProvider())
@@ -794,8 +869,23 @@ def test_every_stage_actually_recorded_is_one_the_page_can_explain(client, monke
         agent_practice.PRACTICE_STAGE,
         quizgen.QUIZGEN_STAGE,
         quizgen.VARIANT_STAGE,
+        # "How did my answer do?" is its own request and its own line on /usage, not
+        # part of grading and not part of generating the question bank.
+        quiz_router.ANSWER_ANALYSIS_STAGE,
         code_grade.CODE_GRADE_STAGE,
+        # Short answers are judged by the model too (ADR-029), and that call records
+        # its own stage: a one-line answer costs a fraction of a code review, and
+        # lumping them together would hide which surface is spending. It belongs to
+        # the same group as code_grade — both are "grading an answer to a course
+        # question", so both carry the question's course id and land in GROUP_COURSE.
+        code_grade.SHORT_GRADE_STAGE,
         quiz_hint.HINT_STAGE,
+        quiz_router.SOLUTION_STAGE,
+        # The two offline extractors. They run as background jobs and belong to no
+        # single course request, which is exactly why they were the stages this file
+        # found missing rather than the ones someone remembered to add.
+        extract_service.EXTRACT_STAGE,
+        graph_service.EXTRACT_STAGE,
     }
     assert explained <= recorded, "the scenario above should exercise every known stage"
     assert recorded <= explained, f"stage with no /usage copy: {sorted(recorded - explained)}"

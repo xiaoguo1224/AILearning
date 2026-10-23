@@ -43,7 +43,9 @@ def _grade(submitted: str, expected: str) -> bool:
     return _normalized_answer(submitted) == _normalized_answer(expected)
 
 
-def _attempt_state(attempts: list[models.Attempt]) -> dict:
+def _attempt_state(
+    attempts: list[models.Attempt], session: Session | None = None
+) -> dict:
     """Summarize one quiz item's history, from its attempts ordered by attempt_no.
 
     attempts/first_attempt_correct/latest_quiz_attempt describe the lesson quiz only,
@@ -54,23 +56,35 @@ def _attempt_state(attempts: list[models.Attempt]) -> dict:
     latest_quiz_attempt is named for its scope on purpose. Once review attempts exist
     it is no longer "most recent activity" on the item, and a caller treating it as
     "last practiced" would be wrong in a way nothing would flag.
+
+    `session` is optional only so a caller with no attachments to resolve can skip it.
+    Pass it: without it the latest attempt comes back with no `attachments` key, and
+    the learner re-opening a question cannot see the file they answered with — which
+    is exactly the report that added it ("附件上传后，就无法查看了").
     """
     quiz_attempts = [a for a in attempts if a.source == LESSON_QUIZ_SOURCE]
     latest = quiz_attempts[-1] if quiz_attempts else None
-    return {
-        "attempts": len(quiz_attempts),
-        "first_attempt_correct": quiz_attempts[0].correct if quiz_attempts else None,
-        "ever_correct": any(a.correct for a in attempts),
-        "latest_quiz_attempt": None
-        if latest is None
-        else {
-            # expected rides inside this object, which exists only once the learner
-            # has answered. That is what keeps unattempted questions from leaking the key.
+    latest_payload: dict | None = None
+    if latest is not None:
+        # expected rides inside this object, which exists only once the learner
+        # has answered. That is what keeps unattempted questions from leaking the key.
+        latest_payload = {
             "answer": latest.submitted_answer,
             "correct": latest.correct,
             "expected": latest.expected_answer,
             "created_at": iso_utc(latest.created_at),
-        },
+        }
+        if session is not None:
+            from app.attachments import service as attachment_service
+
+            latest_payload["attachments"] = attachment_service.summaries(
+                session, list(latest.attachment_ids or [])
+            )
+    return {
+        "attempts": len(quiz_attempts),
+        "first_attempt_correct": quiz_attempts[0].correct if quiz_attempts else None,
+        "ever_correct": any(a.correct for a in attempts),
+        "latest_quiz_attempt": latest_payload,
     }
 
 
@@ -140,6 +154,7 @@ def _record_attempt(
     elapsed_ms: int | None,
     source: str = LESSON_QUIZ_SOURCE,
     grader: str = GRADER,
+    attachment_ids: list[int] | None = None,
 ) -> models.Attempt:
     """Append one attempt row. Attempts are never updated: the history is the data.
 
@@ -172,6 +187,7 @@ def _record_attempt(
             source=source,
             grader=grader,
             elapsed_ms=elapsed_ms,
+            attachment_ids=list(attachment_ids or []),
         )
         session.add(row)
         try:

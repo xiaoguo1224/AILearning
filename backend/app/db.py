@@ -154,6 +154,11 @@ ADDED_COLUMNS: tuple[tuple[str, str, str], ...] = (
     # question exists (on demand via POST /api/quiz/{item_id}/solution).
     # Nullable: NULL means "not generated yet".
     ("quiz_items", "solution", "TEXT"),
+    # Files submitted with one answer, as a JSON array of attachment ids. NOT NULL with
+    # a constant default: every attempt recorded before attachments existed attached
+    # nothing, so '[]' is literally true for them rather than a placeholder, and the
+    # default is what lets SQLite add a NOT NULL column to a table that has rows.
+    ("attempts", "attachment_ids", "JSON NOT NULL DEFAULT '[]'"),
 )
 
 

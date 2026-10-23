@@ -32,7 +32,11 @@ def _make_lesson(concepts=("Gradient Descent", "Backpropagation"), items_per_con
                 lesson.quiz_items.append(
                     models.QuizItem(
                         question=f"Question {index}.{repeat}?",
-                        kind="short",
+                        # fill, not short: these tests are about card creation and
+                        # scheduling, and every answer here is compared literally. A
+                        # short item would send each answer to the model for a verdict,
+                        # which is a real network call and not what is under test.
+                        kind="fill",
                         options=[],
                         answer=answer,
                         concept=concept,
@@ -69,7 +73,8 @@ def _make_course(lessons, items_per_concept=1):
                     row.quiz_items.append(
                         models.QuizItem(
                             question=f"{title} {index}.{repeat}?",
-                            kind="short",
+                            # fill for the same reason as _make_lesson above.
+                            kind="fill",
                             options=[],
                             answer=f"answer-{index}-{repeat}",
                             concept=concept,

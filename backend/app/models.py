@@ -155,9 +155,44 @@ class Attempt(Base):
     source: Mapped[str] = mapped_column(String(20), default="lesson_quiz")
     grader: Mapped[str] = mapped_column(String(16), default="exact_ci")
     elapsed_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Ids of the files submitted with this answer, in the order they were attached.
+    # Ids rather than paths: the bytes are content-addressed and the row owns no path.
+    #
+    # NOT NULL WITH A SERVER DEFAULT, for the reason spelled out on TutorMessage.ask
+    # below: this column is appended to a table that already has rows, so a NOT NULL
+    # without a default would be rejected by SQLite on an upgraded install, and a
+    # nullable one would make upgraded != fresh. '[]' is also the honest value for
+    # every attempt recorded before attachments existed: none were attached.
+    attachment_ids: Mapped[list] = mapped_column(
+        JSON, default=list, server_default=text("'[]'")
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     quiz_item: Mapped[QuizItem] = relationship(back_populates="attempts")
+
+
+class Attachment(Base):
+    """One file a learner attached to an answer.
+
+    The bytes live on disk under backend/data/attachments/, addressed by sha256; this
+    row is the metadata. Content addressing gives three things for free: the same file
+    attached twice is stored once, the path is derived rather than trusted (no filename
+    ever reaches the filesystem, so there is no traversal to defend against), and a
+    corrupt or swapped file is detectable by re-hashing.
+
+    filename is kept for display only. It is never used to build a path.
+    """
+
+    __tablename__ = "attachments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sha256: Mapped[str] = mapped_column(String(64), unique=True)
+    filename: Mapped[str] = mapped_column(String(255), default="")
+    mime: Mapped[str] = mapped_column(String(120))
+    size: Mapped[int] = mapped_column(Integer)
+    # image | pdf | docx | xlsx | text. Decided from the bytes, not the extension.
+    kind: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class LlmCall(Base):

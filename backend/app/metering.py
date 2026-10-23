@@ -121,14 +121,29 @@ class MeteredLLM:
         self.course_id = course_id
         self.job_id = job_id
 
-    def generate(self, stage: str, system: str, prompt: str, max_tokens: int = 64000) -> str:
+    def generate(
+        self,
+        stage: str,
+        system: str,
+        prompt: str,
+        max_tokens: int = 64000,
+        images: list[tuple[str, bytes]] | None = None,
+    ) -> str:
         self._check_cap()
         started = time.monotonic()
         call_id = uuid.uuid4().hex
         if self.job_id:
             self._trace_call(stage, prompt, call_id)
         try:
-            result = self.provider.generate(teaching_system(system), prompt, max_tokens)
+            if images:
+                result = self.provider.generate(
+                    teaching_system(system), prompt, max_tokens, images
+                )
+            else:
+                # Three arguments when there is nothing to attach. Providers and test
+                # doubles written before images existed keep working unchanged, which is
+                # what lets one new optional parameter avoid touching every stub.
+                result = self.provider.generate(teaching_system(system), prompt, max_tokens)
         except LLMCallError as exc:
             self._record(stage, exc.input_tokens, exc.output_tokens)
             if self.job_id:
