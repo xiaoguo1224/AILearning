@@ -32,7 +32,7 @@ flowchart TD
   U -->|课程和自由提问| W
   W --> A[FastAPI 模块化单体]
   A --> P[Project / Course / Resource]
-  A --> S[Submission / Static Review]
+  A --> S[Submission / AI Review]
   A --> T[Teaching Agent Coordinator]
   T --> K[Knowledge Retrieval / Drafts]
   T --> L[Learning State / Remediation]
@@ -45,12 +45,12 @@ flowchart TD
   T --> M[LLM Provider]
 ```
 
-**安全约束：上传代码仅作文本与静态分析，后端没有执行路径。**
+**安全约束：上传代码仅作文本解析与 AI 评审，后端没有执行路径，独立规则静态检查已取消。**
 
 ## 3. 代码模块规划
 
 - 保留：`ingest.py`、`generation.py`、`attempts.py`、`fsrs.py`、`review.py`、`remediation.py` 既有功能与测试。
-- 新增：`projects/`（项目）、`resources/`（持久资料）、`submissions/`（手动上传与历史，静态与模型评审都在此）、`agent/`（项目级自由学习：会话、检索、引文、临时练习）、`teaching.py`（各教学端共用的教学策略）、`knowledge/`（草稿与关联）、`suggestions/`（跨项目确认）。
+- 新增：`projects/`（项目）、`resources/`（持久资料）、`submissions/`（手动上传与历史，上传与模型评审都在此）、`agent/`（项目级自由学习：会话、检索、引文、临时练习）、`teaching.py`（各教学端共用的教学策略）、`knowledge/`（草稿与关联）、`suggestions/`（跨项目确认）。
 - 优先将新 API 写进独立 `APIRouter`，避免继续扩大 `main.py`。旧路由采用渐进迁移，不一次性重构。
 - 新功能尽量复用现有 SQLAlchemy session、LLM Provider、错误响应格式与测试模式。
 
@@ -65,7 +65,7 @@ flowchart TD
 | ResourceChunk | id, resource_id, locator, text, ordinal | PDF 页码/文本片段，可全文检索 |
 | Submission | id, project_id, exercise_id?, version, created_at, user_note | 一次上传/粘贴记录 |
 | SubmissionArtifact | submission_id, kind, filename, content, size_bytes, sha256 | 代码、日志、配置（文本存库，便于整库备份） |
-| CodeReview | id, submission_id, summary, evidence, model, created_at | 静态分析结果及证据等级 |
+| CodeReview | id, submission_id, summary, evidence, model, created_at | AI 评审结果及证据等级 |
 | AgentSession | id, project_id, mode, title, updated_at | 项目级自由对话；会话不跨项目 |
 | AgentMessage | session_id, role, body, beyond, check_question, source_refs, grounded, model, run_id | 消息与出处快照（非外键，资料删除后仍可追溯） |
 | KnowledgeEntry | id, project_id?, title, body, kind, concept_key, status, provenance, updated_at | 草稿/待审/确认知识，正文存 SQLite |
@@ -94,7 +94,7 @@ flowchart TD
 | GET/POST | `/api/projects/{id}/resources` | 资料列表/上传 |
 | GET/POST | `/api/projects/{id}/submissions` | 提交列表/上传 |
 | GET | `/api/submissions/{id}` | 查看一次提交 |
-| POST | `/api/submissions/{id}/review` | 触发 AI 静态审查 |
+| POST | `/api/submissions/{id}/review` | 触发 AI 评审 |
 | GET | `/api/submissions/{id}/reviews` | 评审历史 |
 | GET/POST | `/api/projects/{id}/sessions` | 项目会话 |
 | POST | `/api/sessions/{id}/messages` | 发送教学消息（回答 + 引文） |
@@ -128,7 +128,7 @@ P1-01 已交付 Project 子集：GET/POST `/api/projects`、GET/PATCH `/api/proj
 
 不把整个聊天记录无限拼接；结构化持久化必要事实，检索当前相关片段。
 
-## 7. 静态评审证据模型
+## 7. AI 评审证据模型
 
 评审发现 `Finding` 建议含 `file`, `line_start`, `line_end`, `category`, `severity`, `evidence_type`, `description`, `suggestion`：
 
@@ -220,3 +220,19 @@ P4 已实现：项目自由问答和临时讲解在回答引用本项目资料�
 ## 私有服务器运行（2026-10-24）
 
 用户授权单人私有服务器部署：Next.js / FastAPI 原生 systemd 运行，Nginx 内部转发接入既有 HTTPS 首页，保留原模型网关。数据库与资料独立存放于 `/var/lib/studyforge`，部署配置在 `/etc/studyforge`，版本目录与运行数据分离。采用一次性本地快照迁移，后续网站为准；用户代码仍仅在自己的本地环境运行。具体路径、来源校验、备份与回滚见 [DEPLOYMENT.md](DEPLOYMENT.md) 与 ADR-035。
+
+
+## 作答快照与后续生成（2026-10-25）
+
+`answer_history/` 提供 `answer_snapshots`（不可变的回答/提交现场）和 `answer_snapshot_events`（后续 AI 输出的追加记录）。快照以来源类型、来源 ID、来源时间唯一标识；题目/课程/来源 ID 不带删除级联，源记录消失后仍可回看与补生成。保存课程创建时间，避免 SQLite 复用已删除的 ID 后串入另一门课程的历史。
+
+`attempts._record_attempt` 与代码提交服务在原事务中保存快照；代码评审、答案分析、题目解析和提示在成功后追加事件。题目级解析/提示只关联题干和参考答案版本匹配的历史；作答前生成的提示随下一次提交冻结。历史列表分页，详情默认不返回参考答案、完整解法与高等级提示，主动展开后读取已有快照，不生成新作答。
+
+- `GET /api/answer-history`：支持 `question_id`、`course_id`、`variant_id`、`limit`（1–100）、`offset`。
+- `GET /api/answer-history/{id}?reveal=true`：详情及按时间排列的输出；不传 reveal 时隐藏完整答案/提示。
+- `POST /api/answer-history/{id}/analysis/job`：已有 AI 分析直接返回 cached；原来源仍在时复用既有任务，否则使用独立快照评审。
+- `POST /api/answer-history/{id}/solution/job`：按历史题目与参考依据补生成解析，成功后保存，再次请求复用。
+
+任务创建前对快照行执行事务内无内容修改的更新以串行化并发请求，随后检查缓存/进行中作业，再提交任务并释放数据库写锁；模型调用不持有写锁。错误/取消不产生成功评审，可重试。新任务类型有独立展示名称。所有接口沿用密码门禁、Origin 校验与模型预算。
+
+初始化只新增两表，并幂等归档原作答、代码/日志、已有评审和作业中可恢复的分析/判分反馈；旧题干、解析不能推断成原始数据。`init_db` 的初始化/回填会话绑定实际迁移 engine，避免迁移到一个库却回填另一个库。见 ADR-036。
