@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AnswerHistory } from "@/components/AnswerHistory";
 import {usePathname} from "next/navigation";
 import {useEffect, useState} from "react";
 import {LanguageSwitcher, useI18n} from "./LocaleProvider";
@@ -77,6 +78,7 @@ function NavRows({onNavigate}: { onNavigate?: () => void }) {
                     </Link>
                 );
             })}
+            <AnswerHistory />
         </nav>
     );
 }
@@ -135,6 +137,7 @@ function ProjectRows() {
                         </Link>
                     );
                 })}
+                <AnswerHistory />
             </nav>
         </div>
     );

@@ -72,6 +72,63 @@ const BASE_URL = typeof window === "undefined"
   ? process.env.API_INTERNAL_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"
   : "/backend";
 
+export interface AnswerHistorySummary {
+  id: number;
+  question_id: number | null;
+  source: string;
+  created_at: string;
+  question: string | null;
+  correct: boolean | null;
+  complete: boolean;
+}
+
+export interface AnswerHistoryDetail {
+  id: number;
+  source: string;
+  created_at: string;
+  has_analysis: boolean;
+  has_solution: boolean;
+  can_generate: boolean;
+  snapshot: {
+    question_context?: string;
+    complete: boolean;
+    question?: string;
+    kind?: string;
+    options?: string[];
+    submitted_answer?: string;
+    expected?: string;
+    hints?: { level: number; hint: string }[];
+    solution?: string;
+    correct?: boolean;
+    feedback?: string;
+    user_note?: string;
+    attachments?: UploadedAttachment[];
+    artifacts?: { filename: string; kind: string; content: string; sha256: string }[];
+  };
+  events: {
+    kind: string;
+    created_at: string;
+    payload: {
+      analysis?: string; feedback?: string; summary?: string; solution?: string;
+      reference_solution?: string; model?: string; hint?: string;
+      hint_level_1?: string; hint_level_2?: string; hint_level_3?: string;
+      findings?: { file: string; line_start: number; description: string; suggestion: string; evidence_type: string }[];
+    };
+  }[];
+}
+
+export function listAnswerHistory(filter: { questionId?: number; courseId?: number; variantId?: number }, offset = 0): Promise<{ items: AnswerHistorySummary[]; total: number }> {
+  const params = new URLSearchParams({ offset: String(offset), limit: "20" });
+  if (filter.questionId) params.set("question_id", String(filter.questionId));
+  if (filter.courseId) params.set("course_id", String(filter.courseId));
+  if (filter.variantId) params.set("variant_id", String(filter.variantId));
+  return get(`/api/answer-history?${params}`);
+}
+
+export function getAnswerHistory(id: number, reveal = false): Promise<AnswerHistoryDetail> {
+  return get(`/api/answer-history/${id}?reveal=${reveal}`);
+}
+
 export function listProjectReviewTasks(projectId: number, locale?: Locale): Promise<ProjectReviewTasks> {
   return get(`/api/projects/${projectId}/review-tasks`, locale);
 }
@@ -1549,7 +1606,7 @@ export function startHintJob(
 
 export function startReviewJob(
   submissionId: number,
-  useLlm = false,
+  useLlm = true,
 ): Promise<{ job_id: string }> {
   return postJson(
     `/api/submissions/${submissionId}/review/job?use_llm=${useLlm ? "true" : "false"}`,
@@ -1857,4 +1914,8 @@ export function reviseCourseOutline(
 /** Record that the user opened a course (for "opened N times" stats). */
 export function recordCourseOpen(courseId: number): Promise<{ opened_count: number }> {
   return postJson(`/api/courses/${courseId}/open`, {});
+}
+
+export function generateHistoryAnalysis(id: number, kind: "analysis" | "solution" = "analysis"): Promise<{ job_id?: string; cached?: boolean }> {
+  return postJson(`/api/answer-history/${id}/${kind}/job`, {});
 }

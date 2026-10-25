@@ -116,7 +116,7 @@ export function LandingPage({ courses, unavailable }: { courses: CourseSummary[]
           <div className={styles.steps}>
             {[
               ["01", "Learn with context", "Start with a course or a question. Connect concepts to your project and source materials."],
-              ["02", "Build, then reflect", "Run your code locally. Upload code and logs for AI static review, evidence, and progressive hints."],
+              ["02", "Build, then reflect", "Run your code locally. Upload code and logs for AI review, evidence, and progressive hints."],
               ["03", "Make understanding last", "Turn mistakes into targeted practice and sourced knowledge drafts. Review core content before confirming it."],
             ].map(([number, title, description]) => <article key={number}><span>{number} /</span><h3>{t(title)}</h3><p>{t(description)}</p></article>)}
           </div>

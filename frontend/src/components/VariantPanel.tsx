@@ -1,5 +1,7 @@
 "use client";
 
+import { AnswerHistory } from "@/components/AnswerHistory";
+
 import { useState } from "react";
 import Link from "next/link";
 import { useI18n } from "@/components/LocaleProvider";
@@ -59,6 +61,7 @@ export function VariantPanel({
             <Badge tone="warning">{t("Draft, unreviewed")}</Badge>
             <h3 className="text-ui font-medium text-ink">{variant.title}</h3>
           </div>
+          <AnswerHistory variantId={variant.id} />
           <p className="whitespace-pre-wrap text-ui text-ink">{variant.prompt}</p>
           {variant.starter_code && (
             <pre className="overflow-x-auto rounded-control bg-surface-sunken p-3 text-small">

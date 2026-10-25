@@ -55,7 +55,7 @@ export default async function ProjectSubmissionsPage({
         description={
           project
             ? t("Submissions for {0}", project.name)
-            : t("Upload code and logs from your own machine for static review.")
+            : t("Upload code and logs from your own machine for AI review.")
         }
         actions={archived ? <Badge>{t("Archived")}</Badge> : undefined}
       />

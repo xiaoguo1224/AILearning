@@ -1,5 +1,7 @@
 "use client";
 
+import { AnswerHistory } from "@/components/AnswerHistory";
+
 import Link from "next/link";
 
 
@@ -500,7 +502,7 @@ export function QuizSection({
                       <QuizMarkdown content={item.question} />
                     </div>
                   </div>
-                  {renderItemAction?.(item)}
+                  <div className="flex shrink-0 flex-wrap gap-1"><AnswerHistory key={item.id} questionId={item.id} />{renderItemAction?.(item)}</div>
                 </div>
                 {item.concept && (
                   /*

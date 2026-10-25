@@ -67,6 +67,7 @@ from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import DeclarativeBase, Session
 
 from app.db import ADDED_COLUMNS
+from app.jobs import models as job_models  # noqa: F401
 
 # The revisions this file measures from, PINNED BY SHA rather than named by branch.
 #
@@ -545,6 +546,15 @@ def test_upgrade_adds_the_tutor_and_explicit_project_tables(databases):
         # Answer attachments (ADR-030). A brand-new table rather than a column, so it
         # belongs on this whitelist and nowhere in ADDED_COLUMNS.
         "attachments",
+        "auth_sessions",
+        "answer_snapshots",
+        "answer_snapshot_events",
+        "resource_chunks_fts",
+        "resource_chunks_fts_config",
+        "resource_chunks_fts_content",
+        "resource_chunks_fts_data",
+        "resource_chunks_fts_docsize",
+        "resource_chunks_fts_idx",
     }
     assert not set(databases.base) - set(databases.upgraded), "create_all cannot drop a table"
 

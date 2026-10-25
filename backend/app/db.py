@@ -273,15 +273,16 @@ def _migrate_submissions_question_scope() -> None:
 def init_db() -> None:
     from app import models  # noqa: F401  (register models with Base)
     from app.agent import models as agent_models  # noqa: F401
+    from app.answer_history import models as history_models  # noqa: F401
     from app.auth import models as auth_models  # noqa: F401
     from app.content_reviews import models as content_review_models  # noqa: F401
+    from app.jobs import models as job_models  # noqa: F401
     from app.knowledge import models as knowledge_models  # noqa: F401
+    from app.project_graph import models as project_graph_models  # noqa: F401
     from app.projects import models as project_models  # noqa: F401
     from app.resources import models as resource_models  # noqa: F401
     from app.resources.service import init_fts
     from app.submissions import models as submission_models  # noqa: F401
-    from app.jobs import models as job_models  # noqa: F401
-    from app.project_graph import models as project_graph_models  # noqa: F401
     from app.suggestions import models as suggestion_models  # noqa: F401
 
     Base.metadata.create_all(engine)
@@ -295,8 +296,12 @@ def init_db() -> None:
     interrupted = mark_interrupted_jobs()
     if interrupted:
         print(f"marked {interrupted} interrupted job(s) as failed")
-    with SessionLocal() as session:
+    with Session(engine) as session:
         init_fts(session)
+        from app.answer_history.service import backfill
+
+        backfill(session)
+        session.commit()
 
 
 def get_session():

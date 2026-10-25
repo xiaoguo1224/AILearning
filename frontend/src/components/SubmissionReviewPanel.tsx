@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useI18n } from "@/components/LocaleProvider";
+import { QuizMarkdown } from "@/components/QuizMarkdown";
+import { CopyCodeBlock } from "@/components/CopyCodeBlock";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -51,8 +53,8 @@ function FindingRow({ finding, evidence }: { finding: Finding; evidence?: { proj
           {finding.line_end > finding.line_start ? `-${finding.line_end}` : ""}
         </span>
       </div>
-      <p className="text-ui text-ink">{finding.description}</p>
-      <p className="text-small text-ink-muted">{finding.suggestion}</p>
+      <QuizMarkdown content={finding.description} />
+      <QuizMarkdown content={finding.suggestion} />
       {evidence && finding.severity !== "info" && finding.evidence_type !== "needs_local_check" && (
         <details><summary>{t("Record diagnosis")}</summary><DiagnosisForm projectId={evidence.projectId} evidence={{ review_id: evidence.review_id, finding_index: evidence.finding_index }} /></details>
       )}
@@ -78,7 +80,7 @@ export function SubmissionReviewPanel({
   const router = useRouter();
 
   const [reviews, setReviews] = useState<CodeReviewSummary[]>(initialReviews);
-  const [pending, setPending] = useState<"static" | "llm" | null>(null);
+  const [pending, setPending] = useState<"llm" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hints, setHints] = useState<Record<string, string>>({});
   const [unlocked, setUnlocked] = useState<Record<number, number>>({});
@@ -88,7 +90,7 @@ export function SubmissionReviewPanel({
   const review = reviews[0];
 
   async function runReview(useLlm: boolean) {
-    setPending(useLlm ? "llm" : "static");
+    setPending("llm");
     setError(null);
     try {
       const { job_id } = await startReviewJob(submissionId, useLlm);
@@ -148,28 +150,19 @@ export function SubmissionReviewPanel({
           <h2 className="text-title">{t("Review")}</h2>
           <p className="text-small text-ink-muted">
             {t(
-              "The server did not run your code. Conclusions come from static analysis and the log you supplied.",
+              "The AI reads your code and the log you supplied. The server did not run your code.",
             )}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
-            variant="secondary"
-            size="sm"
-            disabled={pending !== null}
-            onClick={() => runReview(false)}
-          >
-            {pending === "static" ? t("Analysing...") : t("Run static review")}
-          </Button>
-          <Button
-            type="button"
             variant="tinted"
             size="sm"
-            disabled={pending !== null}
+            disabled={pending !== null || review?.llm_status === "used"}
             onClick={() => runReview(true)}
           >
-            {pending === "llm" ? t("Asking the model...") : t("AI review (uses model budget)")}
+            {pending === "llm" ? t("Asking the model...") : review?.llm_status === "used" ? t("Saved AI review") : t("AI review (uses model budget)")}
           </Button>
         </div>
       </div>
@@ -178,14 +171,14 @@ export function SubmissionReviewPanel({
 
       {!review ? (
         <p className="text-small text-ink-muted">
-          {t("No review yet. Static analysis is free and runs on this machine's server.")}
+          {t("No review yet. Request an AI review when you are ready.")}
         </p>
       ) : (
         <div className="space-y-4">
           <div className="flex flex-wrap items-center gap-2 text-micro text-ink-muted">
             <Badge tone="neutral">
               {review.llm_status === "used"
-                ? t("Static + AI")
+                ? t("AI review")
                 : review.llm_status === "unavailable"
                   ? t("Static only (model unavailable)")
                   : t("Static only")}
@@ -193,7 +186,7 @@ export function SubmissionReviewPanel({
             <span>{review.model}</span>
           </div>
 
-          <p className="text-ui text-ink">{review.summary}</p>
+          <QuizMarkdown content={review.summary} />
 
           {review.findings.length === 0 ? (
             <p className="text-small text-ink-muted">{t("No findings.")}</p>
@@ -241,9 +234,7 @@ export function SubmissionReviewPanel({
             {solutions[review.id] ? (
               <div className="space-y-2">
                 <Badge tone="warning">{t("AI generated, unverified")}</Badge>
-                <pre className="overflow-x-auto rounded-control bg-surface-sunken p-3 text-small">
-                  {solutions[review.id].reference_solution}
-                </pre>
+                <CopyCodeBlock><code>{solutions[review.id].reference_solution}</code></CopyCodeBlock>
                 {projectId && <ContentReviewButton projectId={projectId} kind="solution" sourceId={review.id} />}
               </div>
             ) : confirmSolution ? (

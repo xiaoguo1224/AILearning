@@ -15,7 +15,6 @@ from pydantic import BaseModel, Field, ValidationError
 from app.llm import get_provider
 from app.metering import MeteredLLM
 from app.submissions.llm_review import ReviewContext, _excerpt
-from app.submissions.static_check import StaticFinding
 
 logger = logging.getLogger("studyforge.submissions.variant")
 
@@ -47,15 +46,15 @@ class VariantDraft(BaseModel):
     acceptance: str = Field(default="", max_length=2_000)
 
 
-def _prompt(context: ReviewContext, findings: list[StaticFinding]) -> str:
+def _prompt(context: ReviewContext, findings: list[dict]) -> str:
     code = "\n".join(
         _excerpt(content, MAX_CODE_CHARS) for _, kind, content in context.artifacts if kind == "code"
     )
     observed = json.dumps(
         [
-            {"category": f.category, "description": f.description}
+            {"category": f["category"], "description": f["description"]}
             for f in findings
-            if f.evidence_type in {"confirmed_static", "inferred", "user_reported"}
+            if f["evidence_type"] in {"confirmed_static", "inferred", "user_reported"}
         ],
         ensure_ascii=False,
     )
@@ -85,7 +84,7 @@ def parse_variant(raw: str) -> VariantDraft | None:
 
 
 def draft_variant(
-    context: ReviewContext, findings: list[StaticFinding]
+    context: ReviewContext, findings: list[dict]
 ) -> VariantDraft | None:
     """One metered call. CostLimitExceeded propagates so the cap is not hidden."""
     run_id = f"variant-{uuid.uuid4().hex[:12]}"

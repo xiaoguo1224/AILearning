@@ -2,7 +2,6 @@
 submission/review pipeline, but the submission belongs to the question
 (project_id NULL) rather than to a project."""
 
-import json
 
 
 def _seed_code_question():
@@ -94,8 +93,6 @@ def test_question_submission_accepts_log_and_upload(client):
 
 
 def test_question_solution_generated_on_demand(client, monkeypatch):
-    from app import models
-    from app.course_quiz import router as quiz_router
     from app.llm.base import LLMResult
 
     item_id = _seed_code_question()
@@ -128,12 +125,15 @@ def test_question_solution_generated_on_demand(client, monkeypatch):
     assert client.post("/api/quiz/999999/solution").status_code == 404
 
 
-def test_question_review_runs_without_project(client):
+def test_question_review_runs_without_project(client, monkeypatch):
+    from app.submissions import llm_review
+
+    monkeypatch.setattr(llm_review, "review_with_model", lambda *args, **kwargs: llm_review.LlmReview(summary="AI review", findings=[]))
     item_id = _seed_code_question()
     submission_id = client.post(
         f"/api/quiz/{item_id}/submissions", json={"code": "def add(a, b):\n    return a + b"}
     ).json()["id"]
-    # Static-only review: no project write lock to take, no LLM needed.
+    # Model output is controlled; no project lock or paid call is needed.
     response = client.post(f"/api/submissions/{submission_id}/review")
     assert response.status_code == 201, response.text
     body = response.json()

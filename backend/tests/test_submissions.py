@@ -55,7 +55,7 @@ def test_submission_records_code_and_log_without_running_them(client):
     assert body["reviews"] == []
 
 
-def test_static_review_separates_evidence_types_and_hides_the_answer(client):
+def test_ai_review_preserves_evidence_types_and_hides_the_answer(client):
     project_id = _project(client)
     submission = _submit(client, project_id).json()
 
@@ -64,17 +64,17 @@ def test_static_review_separates_evidence_types_and_hides_the_answer(client):
     review = response.json()
 
     evidence = {finding["evidence_type"] for finding in review["findings"]}
-    assert {"confirmed_static", "user_reported", "inferred"} <= evidence
+    assert evidence == {"needs_local_check"}
     categories = {finding["category"] for finding in review["findings"]}
-    assert "tensor_shape_reduction" in categories
-    assert "likely_root_cause" in categories
+    assert "tensor_shape_reduction" not in categories
+    assert "likely_root_cause" not in categories
 
     # The ladder and the answer are not in the default payload.
     assert review["hint_level_1"]
     assert "hint_level_2" not in review
     assert "hint_level_3" not in review
     assert "reference_solution" not in review
-    assert review["llm_status"] == "skipped"
+    assert review["llm_status"] == "used"
     assert review["hints_revealed"] == 1
 
     detail = client.get(f"/api/submissions/{submission['id']}").json()
@@ -225,7 +225,7 @@ def review_provider(monkeypatch):
     return install
 
 
-def test_llm_review_is_opt_in_and_merges_structured_findings(client, review_provider):
+def test_ai_review_stores_only_model_findings(client, review_provider):
     import json
 
     review_provider(
@@ -269,7 +269,7 @@ def test_llm_review_is_opt_in_and_merges_structured_findings(client, review_prov
     ).json()
 
     assert review["llm_status"] == "used"
-    assert review["model"] == "static_ast+llm"
+    assert review["model"] == "llm"
     assert review["summary"] == "The column axis is dropped before the matmul."
     categories = [finding["category"] for finding in review["findings"]]
     assert categories.count("tensor_shape_reduction") == 1
@@ -277,7 +277,7 @@ def test_llm_review_is_opt_in_and_merges_structured_findings(client, review_prov
     assert review["hint_level_1"] == "Look at line 5."
 
 
-def test_unusable_model_output_degrades_to_static_only(client, review_provider):
+def test_unusable_model_output_reports_failure_without_fallback(client, review_provider):
     review_provider("this is not json")
     project_id = _project(client)
     submission = _submit(client, project_id).json()
@@ -285,11 +285,8 @@ def test_unusable_model_output_degrades_to_static_only(client, review_provider):
     response = client.post(
         f"/api/submissions/{submission['id']}/review", params={"use_llm": "true"}
     )
-    assert response.status_code == 201
-    review = response.json()
-    assert review["llm_status"] == "unavailable"
-    assert review["model"] == "static_ast"
-    assert review["findings"]
+    assert response.status_code == 502
+    assert client.get(f"/api/submissions/{submission['id']}").json()["reviews"] == []
 
 
 def test_log_without_a_static_cause_states_uncertainty_instead_of_guessing(client):
@@ -302,8 +299,8 @@ def test_log_without_a_static_cause_states_uncertainty_instead_of_guessing(clien
 
     categories = {finding["category"] for finding in review["findings"]}
     assert "likely_root_cause" not in categories
-    assert "runtime_shape_mismatch" in categories
-    assert "no provable hazard" in review["summary"].lower()
+    assert "needs_local_check" in categories
+    assert "unverified" in review["summary"].lower()
     assert "your log reports" in review["summary"].lower()
 
 
@@ -474,9 +471,30 @@ def test_review_prompt_numbers_code_lines_for_the_model():
         user_note=None,
         artifacts=[("solution.py", "code", "import torch\nx = torch.ones(2, 2)\ny = x * 2\n")],
     )
-    prompt = _prompt(ctx, [])
+    prompt = _prompt(ctx)
     assert "1|import torch" in prompt
     assert "2|x = torch.ones(2, 2)" in prompt
     assert "3|y = x * 2" in prompt
     assert "--- solution.py ---" in prompt
     assert "cite exactly those" in REVIEW_SYSTEM or "N|" in REVIEW_SYSTEM
+
+
+@pytest.fixture(autouse=True)
+def _fake_review_by_default(monkeypatch):
+    """These integration tests never call the configured paid provider."""
+    import json
+
+    from app.submissions import llm_review
+
+    payload = {
+        "summary": "AI review: your log reports user evidence; runtime correctness is unverified.",
+        "findings": [{"file": "solution.py", "line_start": 1, "line_end": 1,
+                      "category": "needs_local_check", "severity": "info",
+                      "evidence_type": "needs_local_check", "description": "Check intended output locally.",
+                      "suggestion": "Compare output with the task."}],
+        "hint_level_1": "Check the expected output.",
+        "hint_level_2": "Check whether a column is intended.",
+        "hint_level_3": "Use unsqueeze(1) only if a column is required.",
+        "reference_solution": "w_col = weights[:, 0:1]",
+    }
+    monkeypatch.setattr(llm_review, "get_provider", lambda: _ReviewProvider(json.dumps(payload)))

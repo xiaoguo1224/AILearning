@@ -1,5 +1,7 @@
 "use client";
 
+import { AnswerHistory } from "@/components/AnswerHistory";
+
 import { LocalizedText, useI18n } from "@/components/LocaleProvider";
 
 import { useEffect, useRef, useState } from "react";
@@ -635,6 +637,7 @@ function ActivePanel({
           className="mt-3 rounded-lg border border-amber-200 bg-white/70 px-4 py-3 dark:border-amber-900 dark:bg-zinc-900/40"
         >
           <p className="text-[14px] font-medium leading-[1.45]">{item.question}</p>
+          <AnswerHistory key={item.id} questionId={item.id} />
 
           {/* Neither the input nor the radios are ever disabled, even mid-request.
               Disabling the focused control blurs it to the body, and a second submit is

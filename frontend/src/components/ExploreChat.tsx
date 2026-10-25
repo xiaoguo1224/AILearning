@@ -1,5 +1,7 @@
 "use client";
 
+import { AnswerHistory } from "@/components/AnswerHistory";
+
 import Link from "next/link";
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -201,6 +203,7 @@ function PracticeCard({ exercise, projectId }: { exercise: VariantDraft; project
           {t("Practice exercise: {0}", exercise.title)}
         </h5>
       </div>
+      <AnswerHistory variantId={exercise.id} />
       <p className="whitespace-pre-wrap text-ui text-ink">{exercise.prompt}</p>
       {/* Omitted rather than rendered empty: the server may send no starter at all, and
           an empty <pre> reads as a rendering fault. */}

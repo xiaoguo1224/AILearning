@@ -1,5 +1,7 @@
 "use client";
 
+import { AnswerHistory } from "@/components/AnswerHistory";
+
 
 
 import { useI18n } from "@/components/LocaleProvider";
@@ -271,6 +273,7 @@ export function ReviewSession({ queue, returnHref }: { queue: ReviewQueue; retur
 
             <div className="mt-3.5 rounded-surface border border-line bg-surface p-8">
               <p className="text-xl font-medium leading-[1.45]">{item.question}</p>
+              <AnswerHistory key={item.id} questionId={item.id} />
 
               {phase.kind === "answering" && (
                 <div className="mt-6">

@@ -20,6 +20,8 @@ const TYPE_LABELS: Record<string, string> = {
   quiz_variant: "Question variant",
   quiz_solution: "Reference solution",
   quiz_answer_analysis: "Answer analysis",
+  answer_history_analysis: "History answer analysis",
+  answer_history_solution: "History question explanation",
   quiz_grade: "Short-answer grading",
   quiz_hint: "Answer hint",
   code_review_llm: "Code review",

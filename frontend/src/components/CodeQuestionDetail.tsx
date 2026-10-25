@@ -1,5 +1,7 @@
 "use client";
 
+import { AnswerHistory } from "@/components/AnswerHistory";
+
 import { BackButton } from "@/components/BackButton";
 import { useEffect, useState } from "react";
 
@@ -355,6 +357,7 @@ export function CodeQuestionDetail({
         <section>
           <Table
             loading={loadingHistory}
+            title={() => <AnswerHistory questionId={item.id} courseId={courseId} />}
             dataSource={history}
             rowKey="id"
             pagination={false}

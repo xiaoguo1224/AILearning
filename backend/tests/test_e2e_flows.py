@@ -13,7 +13,7 @@ import pytest
 
 from app.agent import router as agent_router
 from app.llm.base import LLMResult
-from app.submissions import llm_variant
+from app.submissions import llm_review, llm_variant
 
 
 def _project(client, name):
@@ -124,6 +124,15 @@ def test_flow1_pytorch_study_loop(client, stub_provider):
     ).json()
     assert v1["version"] == 1
 
+    stub_provider(llm_review, json.dumps({
+        "summary": "AI review of the supplied code and log.",
+        "findings": [{"file": "solution.py", "line_start": 3, "line_end": 3,
+                      "category": "tensor_shape_reduction", "severity": "warning",
+                      "evidence_type": "confirmed_static", "description": "Scalar indexing removes an axis.",
+                      "suggestion": "Check the intended output shape."}],
+        "hint_level_1": "Inspect indexing.", "hint_level_2": "A scalar index removes that axis.",
+        "hint_level_3": "Keep the column when required.", "reference_solution": "w = weights[:, 0:1]",
+    }))
     review = client.post(f"/api/submissions/{v1['id']}/review").json()
     findings = review["findings"]
     assert [f["category"] for f in findings if f["category"] == "tensor_shape_reduction"]
@@ -161,6 +170,7 @@ def test_flow1_pytorch_study_loop(client, stub_provider):
     assert v2["version"] == 2
     assert v2["variant_id"] == variant["id"]
 
+    stub_provider(llm_review, json.dumps({"summary": "Review the new submission.", "findings": []}))
     review2 = client.post(f"/api/submissions/{v2['id']}/review").json()
     assert not [
         f for f in review2["findings"] if f["category"] == "tensor_shape_reduction"

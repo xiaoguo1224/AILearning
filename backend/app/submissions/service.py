@@ -222,6 +222,11 @@ def build_submission(
                 sha256=hashlib.sha256(content.encode("utf-8")).hexdigest(),
             )
         )
+    session.flush()
+    session.expire(submission, ["artifacts"])
+    from app.answer_history.service import capture_submission
+
+    capture_submission(session, submission)
     return submission
 
 

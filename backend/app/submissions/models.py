@@ -98,7 +98,7 @@ class SubmissionArtifact(Base):
 
 
 class CodeReview(Base):
-    """A static (and optionally model-assisted) review of one submission.
+    """An AI review of one submission, preserved with its original evidence.
 
     `reference_solution` is deliberately absent from every default response: the PRD
     requires the learner to ask for it, and requires it to be labelled as unverified
@@ -124,7 +124,7 @@ class CodeReview(Base):
     llm_status: Mapped[str] = mapped_column(
         String(20), server_default=text("'skipped'"), default="skipped"
     )  # skipped, used, unavailable
-    model: Mapped[str] = mapped_column(String(100), default="static_ast")
+    model: Mapped[str] = mapped_column(String(100), default="llm")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     submission: Mapped[Submission] = relationship(back_populates="reviews")

@@ -2,14 +2,21 @@
 
 import logging
 import uuid
+from collections import defaultdict
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlalchemy.orm import Session, selectinload
-from typing import Annotated
-
-from collections import defaultdict
 
 from app import models
+from app.answer_history.service import (
+    analysis_for,
+    capture_analysis,
+    capture_attempt,
+    capture_question_event,
+    find_source,
+    lock_snapshot,
+)
 from app.attempts import _attempt_state
 from app.course_quiz import quizgen
 from app.course_quiz.schemas import (
@@ -233,7 +240,10 @@ def generate_solution_job(item_id: int, session: Db):
                 return
             it = s.get(_m.QuizItem, item_id)
             if it:
-                it.solution = solution
+                if it.question == question_snap and it.answer == answer_snap:
+                    it.solution = solution
+                capture_question_event(s, item_id, question_snap, answer_snap,
+                                       f"solution-job:{job_id}", "solution", {"solution": solution})
                 s.commit()
             complete_job(job_id, {"item_id": item_id, "solution": solution})
 
@@ -284,6 +294,8 @@ def generate_solution(
     if not solution:
         raise HTTPException(502, "The model did not return a solution.")
     item.solution = solution
+    capture_question_event(session, item.id, item.question, item.answer,
+                           f"solution:{uuid.uuid4().hex}", "solution", {"solution": solution})
     session.commit()
     return {"item_id": item.id, "solution": solution}
 
@@ -376,7 +388,7 @@ def _attempt_attachments(
 
 
 def _analysis_prompt(
-    item: models.QuizItem, attempt: models.Attempt, attachments: str = ""
+    item: models.QuizItem, attempt: models.Attempt, attachments: str = "", session: Session | None = None
 ) -> str:
     """The review's input: the question, the attempt, and everything the attempt was.
 
@@ -386,9 +398,13 @@ def _analysis_prompt(
     "本次提交内容显示为空白" — a review of the absence of an answer that was, in fact,
     attached.
     """
+    record = find_source(session, "attempt", attempt) if session else None
+    question = (record.snapshot.get("question") or record.snapshot.get("question_context")) if record else item.question
+    if record and not record.snapshot.get("complete"):
+        question = "Legacy answer: original question was not saved. Current question context (may differ):\n" + (question or item.question)
     parts = [
-        f"QUESTION:\n{item.question}",
-        f"REFERENCE ANSWER:\n{item.answer or '(none)'}",
+        f"QUESTION:\n{question}",
+        f"REFERENCE ANSWER:\n{attempt.expected_answer or '(none)'}",
         # Said explicitly rather than left blank, exactly as code_grade._prompt does:
         # an empty block reads as a missing answer and gets reviewed as one.
         "LEARNER'S ANSWER:\n"
@@ -412,6 +428,18 @@ def answer_analysis_job(item_id: int, body: AnswerAnalysisInput, session: Db):
     from app.jobs.service import create_job, run_in_background
 
     item, attempt = _analysis_targets(session, item_id, body.attempt_id)
+    record = find_source(session, "attempt", attempt) or capture_attempt(session, attempt, legacy=True)
+    lock_snapshot(session, record)
+    saved = analysis_for(session, attempt)
+    if saved:
+        from app.jobs.service import complete_job, create_job
+
+        cached = _analysis_job_for(session, item_id, attempt.id, live=False)
+        if cached:
+            return {"job_id": cached.id, "cached": True}
+        job = create_job(session, ANSWER_ANALYSIS_STAGE, ref_type="quiz", ref_id=item_id)
+        complete_job(job.id, {"item_id": item_id, "attempt_id": attempt.id, "analysis": saved})
+        return {"job_id": job.id, "cached": True}
     cached = _analysis_job_for(session, item_id, attempt.id, live=False)
     if cached:
         # This answer has already been reviewed. Hand back the job that did it: the
@@ -423,6 +451,7 @@ def answer_analysis_job(item_id: int, body: AnswerAnalysisInput, session: Db):
 
     attachment_text, images = _attempt_attachments(session, attempt)
     attempt_id = attempt.id
+    prompt = _analysis_prompt(item, attempt, attachment_text, session)
     job = create_job(
         session,
         ANSWER_ANALYSIS_STAGE,
@@ -432,7 +461,6 @@ def answer_analysis_job(item_id: int, body: AnswerAnalysisInput, session: Db):
         # between create and run is exactly when a double-click arrives.
         progress={"stage": "queued", "attempt_id": attempt_id},
     )
-    prompt = _analysis_prompt(item, attempt, attachment_text)
 
     def _run(job_id: str):
         from app.jobs.service import complete_job, fail_job, update_progress
@@ -460,6 +488,19 @@ def answer_analysis_job(item_id: int, body: AnswerAnalysisInput, session: Db):
         if not analysis:
             fail_job(job_id, "The model did not return an analysis.")
             return
+        from app.db import SessionLocal
+        from app.jobs.models import Job
+
+        with SessionLocal() as s:
+            job_row = s.get(Job, job_id)
+            if job_row and job_row.status == "cancelled":
+                return
+            answer = s.get(models.Attempt, attempt_id)
+            if answer is None:
+                fail_job(job_id, "Answer no longer exists.")
+                return
+            capture_analysis(s, answer, analysis, f"job:{job_id}")
+            s.commit()
         complete_job(
             job_id,
             {"item_id": item_id, "attempt_id": attempt_id, "analysis": analysis},
@@ -475,6 +516,11 @@ def answer_analysis(item_id: int, body: AnswerAnalysisInput, session: Db):
     from app.metering import cost_limit_detail
 
     item, attempt = _analysis_targets(session, item_id, body.attempt_id)
+    record = find_source(session, "attempt", attempt) or capture_attempt(session, attempt, legacy=True)
+    lock_snapshot(session, record)
+    saved = analysis_for(session, attempt)
+    if saved:
+        return {"item_id": item.id, "attempt_id": attempt.id, "analysis": saved, "cached": True}
     cached = _analysis_job_for(session, item_id, attempt.id, live=False)
     if cached:
         # Same answer, same review — the sync route must not be a way around the
@@ -486,9 +532,17 @@ def answer_analysis(item_id: int, body: AnswerAnalysisInput, session: Db):
             "cached": True,
         }
     attachment_text, images = _attempt_attachments(session, attempt)
-    prompt = _analysis_prompt(item, attempt, attachment_text)
+    prompt = _analysis_prompt(item, attempt, attachment_text, session)
 
-    meter = MeteredLLM(get_provider(), uuid.uuid4().hex)
+    from app.jobs.service import complete_job, create_job, fail_job
+
+    live = _analysis_job_for(session, item_id, attempt.id, live=True)
+    if live:
+        session.rollback()
+        raise HTTPException(409, "This answer is already being analysed. Reopen it to view the result.")
+    job = create_job(session, ANSWER_ANALYSIS_STAGE, ref_type="quiz", ref_id=item_id,
+                     progress={"stage": "analysing", "attempt_id": attempt.id})
+    meter = MeteredLLM(get_provider(), uuid.uuid4().hex, job_id=job.id)
     try:
         raw: str = meter.generate(
             ANSWER_ANALYSIS_STAGE,
@@ -498,12 +552,18 @@ def answer_analysis(item_id: int, body: AnswerAnalysisInput, session: Db):
             images=images or None,
         )
     except CostLimitExceeded as exc:
+        fail_job(job.id, "Model budget exceeded.")
         raise HTTPException(402, detail=cost_limit_detail(exc)) from exc
     except LLMCallError as exc:
-        raise HTTPException(502, str(exc)) from exc
+        fail_job(job.id, "AI analysis failed. Please retry.")
+        raise HTTPException(502, "AI analysis failed. Please retry.") from exc
     analysis = (raw or "").strip()
     if not analysis:
+        fail_job(job.id, "The model did not return an analysis.")
         raise HTTPException(502, "The model did not return an analysis.")
+    capture_analysis(session, attempt, analysis, f"job:{job.id}")
+    session.commit()
+    complete_job(job.id, {"item_id": item.id, "attempt_id": attempt.id, "analysis": analysis})
     return {"item_id": item.id, "attempt_id": attempt.id, "analysis": analysis}
 
 
@@ -517,7 +577,7 @@ def generate_quiz_job(course_id: CourseId, body: QuizGenerateInput, session: Db)
     from app.jobs.service import create_job, find_live_job, run_in_background
 
     # Validate synchronously so bad input fails fast.
-    course = _course_or_404(session, course_id)
+    _course_or_404(session, course_id)
     requests: list[tuple[str, int]] = []
     for entry in body.items:
         if entry.kind not in QUIZ_KINDS:

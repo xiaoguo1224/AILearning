@@ -1,3 +1,4 @@
+import { AnswerHistory } from "@/components/AnswerHistory";
 import { LocalizedText } from "@/components/LocaleProvider";
 
 
@@ -77,6 +78,7 @@ export default async function CoursePage(props: { params: Promise<{ courseId: st
             <h1 className="break-words text-[28px] font-bold leading-tight tracking-tight">
               {course.title}
             </h1>
+            <AnswerHistory courseId={course.id} />
             <EditCourseButton
               courseId={course.id}
               initialTitle={course.title}

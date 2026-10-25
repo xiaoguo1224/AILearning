@@ -34,6 +34,7 @@ from app import (
 from app.agent import practice as agent_practice
 from app.agent import router as agent_router_module
 from app.agent.router import router as agent_router
+from app.answer_history.router import router as answer_history_router
 from app.attempts import (
     GRADER,
     _attempt_state,
@@ -78,6 +79,8 @@ logger = logging.getLogger("studyforge.api")
 app = FastAPI(title="MindTrail", version="0.1.0")
 app.add_middleware(TeachingLocaleMiddleware)
 app.add_middleware(AuthMiddleware)
+
+app.include_router(answer_history_router)
 app.include_router(auth_router)
 app.include_router(projects_router)
 app.include_router(resources_router)
@@ -1874,6 +1877,9 @@ def answer_quiz_job(item_id: int, body: QuizAnswer, session: Session = Depends(g
         return {"job_id": live.id, "resumed": True}
 
     job = create_job(session, "quiz_grade", ref_type="quiz", ref_id=item_id)
+    from app.answer_history.service import question_snapshot
+
+    history_question = question_snapshot(item)
     answer_snap = body.answer.strip()
     kind_snap = item.kind
     question_snap = item.question
@@ -1920,6 +1926,7 @@ def answer_quiz_job(item_id: int, body: QuizAnswer, session: Session = Depends(g
                 elapsed_snap,
                 grader=grader,
                 attachment_ids=attachment_ids,
+                question=history_question, feedback=feedback,
             )
             s.commit()
             state = _attempt_state(_attempts_for_item(s, item_id), s)
@@ -1947,6 +1954,9 @@ def answer_quiz(item_id: int, body: QuizAnswer, session: Session = Depends(get_s
     if not body.answer.strip() and not body.attachment_ids:
         raise HTTPException(400, "Answer cannot be empty")
 
+    from app.answer_history.service import question_snapshot
+
+    history_question = question_snapshot(item)
     attachment_text, images = _attachment_material(session, list(body.attachment_ids))
     correct, feedback, grader = _judge_answer(
         item.kind,
@@ -1965,6 +1975,7 @@ def answer_quiz(item_id: int, body: QuizAnswer, session: Session = Depends(get_s
         _sanitize_elapsed_ms(body.elapsed_ms),
         grader=grader,
         attachment_ids=list(body.attachment_ids),
+        question=history_question, feedback=feedback,
     )
     return {
         "correct": attempt.correct,
@@ -2057,7 +2068,17 @@ def quiz_hints_job(
         except LLMCallError as exc:
             fail_job(job_id, str(exc))
             return
-        complete_job(job_id, {"hint": hint})
+        from app.answer_history.service import capture_question_event
+        from app.jobs.models import Job
+
+        with SessionLocal() as s:
+            current_job = s.get(Job, job_id)
+            if current_job and current_job.status == "cancelled":
+                return
+            capture_question_event(s, item_id, question_snap, reference_snap,
+                                   f"hint:{job_id}", "hint", {"hint": hint, "level": level_snap})
+            s.commit()
+        complete_job(job_id, {"hint": hint, "level": level_snap, "question": question_snap, "expected": reference_snap})
 
     run_in_background(job.id, _run)
     return {"job_id": job.id}
@@ -2092,6 +2113,15 @@ def quiz_hints(item_id: int, body: QuizHintRequest, session: Session = Depends(g
         raise _cost_limit_exceeded(exc) from exc
     except quiz_hint.HintParseError as exc:
         raise HTTPException(502, "AI 提示生成失败，请重试一次。") from exc
+    from app.answer_history.service import capture_question_event
+
+    capture_question_event(session, item.id, item.question, item.answer,
+                           f"hint:{run_id}", "hint", {"hint": hint, "level": body.level})
+    session.commit()
+    from app.jobs.service import complete_job, create_job
+
+    hint_job = create_job(session, "quiz_hint", ref_type="quiz", ref_id=item.id)
+    complete_job(hint_job.id, {"hint": hint, "level": body.level, "question": item.question, "expected": item.answer})
     return {"level": body.level, "hint": hint}
 
 

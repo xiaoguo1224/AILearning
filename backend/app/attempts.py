@@ -155,6 +155,8 @@ def _record_attempt(
     source: str = LESSON_QUIZ_SOURCE,
     grader: str = GRADER,
     attachment_ids: list[int] | None = None,
+    question: dict | None = None,
+    feedback: str | None = None,
 ) -> models.Attempt:
     """Append one attempt row. Attempts are never updated: the history is the data.
 
@@ -178,10 +180,10 @@ def _record_attempt(
         row = models.Attempt(
             quiz_item_id=item.id,
             lesson_id=item.lesson_id,
-            concept_key=normalize_concept(item.concept),
-            concept_label=item.concept or "",
+            concept_key=normalize_concept(question.get("concept", "") if question else item.concept),
+            concept_label=(question.get("concept", "") if question else item.concept) or "",
             submitted_answer=submitted,
-            expected_answer=item.answer,
+            expected_answer=question["expected"] if question else item.answer,
             correct=correct,
             attempt_no=prior + 1,
             source=source,
@@ -191,6 +193,10 @@ def _record_attempt(
         )
         session.add(row)
         try:
+            session.flush()
+            from app.answer_history.service import capture_attempt
+
+            capture_attempt(session, row, question=question, feedback=feedback)
             session.commit()
         except IntegrityError:
             # Another request took this attempt_no between the count and the insert.
