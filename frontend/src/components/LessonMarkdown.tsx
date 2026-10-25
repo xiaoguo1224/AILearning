@@ -2,7 +2,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
-import { MermaidBlock } from "./MermaidBlock";
+import { CopyCodeBlock } from "./CopyCodeBlock";
 
 /** Loose comparison so wording that differs only in case, spacing, or emphasis still matches. */
 function normalizeHeading(text: string): string {
@@ -154,19 +154,8 @@ export function LessonMarkdown({ content, title }: { content: string; title: str
               </h3>
             );
           },
-          pre({ children, ...props }) {
-            // Mermaid fenced blocks render as diagrams at the same block level
-            // as the surrounding article, not nested inside a <pre>.
-            const child = Array.isArray(children) ? children[0] : children;
-            const childProps = (
-              child as { props?: { className?: string; children?: unknown } } | null
-            )?.props;
-            const language = /language-(\w+)/.exec(childProps?.className || "")?.[1];
-            if (language === "mermaid") {
-              const chart = String(childProps?.children ?? "").trim();
-              return <MermaidBlock key={chart} chart={chart} />;
-            }
-            return <pre {...props}>{children}</pre>;
+          pre({ children, className }) {
+            return <CopyCodeBlock className={className}>{children}</CopyCodeBlock>;
           },
         }}
       >
