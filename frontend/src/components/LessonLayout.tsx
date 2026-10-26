@@ -11,13 +11,8 @@ import type { QuizItem, QuizProgress } from "@/lib/types";
 import Link from "next/link";
 
 /**
- * Lesson page layout: questions on the left, article in the center, Q&A on
- * the right — each side column an independent sticky module that does not
- * scroll with the article.
- *
- * The sidebars are in-flow (not overlays), so the blank space on wide screens
- * is actually used. Each sidebar collapses to a slim edge toggle, giving the
- * article the full width when the learner wants focused reading.
+ * Wide screens use a sticky contents / article / Q&A grid. Q&A moves below the
+ * article at medium widths; narrow screens stack all three in reading order.
  */
 export function LessonLayout({
   courseId,
@@ -39,12 +34,11 @@ export function LessonLayout({
   const [qaOpen, setQaOpen] = useState(true);
 
   return (
-    <div className="flex items-start gap-6">
+    <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[16rem_minmax(0,1fr)] 2xl:grid-cols-[16rem_minmax(0,1fr)_auto]">
       {/* Left: table of contents */}
       <aside
         aria-label={t("Contents")}
-        className="w-64 shrink-0"
-        style={{ position: "sticky", top: "1.5rem", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}
+        className="min-w-0 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto"
       >
         <LessonToc content={content} />
         <Link
@@ -70,8 +64,7 @@ export function LessonLayout({
       {qaOpen ? (
         <aside
           aria-label={t("Q&A")}
-          className="w-80 shrink-0 space-y-6"
-          style={{ position: "sticky", top: "1.5rem", maxHeight: "calc(100vh - 3rem)", overflowY: "auto" }}
+          className="min-w-0 w-full space-y-6 xl:col-start-2 2xl:col-start-auto 2xl:w-80 2xl:sticky 2xl:top-6 2xl:max-h-[calc(100vh-3rem)] 2xl:overflow-y-auto"
         >
           <div className="flex items-center justify-between">
             <h2 className="text-micro font-semibold uppercase tracking-wide text-ink-muted">
@@ -93,7 +86,7 @@ export function LessonLayout({
           onClick={() => setQaOpen(true)}
           aria-label={t("Show Q&A")}
           size="small"
-          style={{ position: "sticky", top: "1.5rem", flexShrink: 0 }}
+          className="justify-self-start xl:col-start-2 2xl:col-start-auto 2xl:sticky 2xl:top-6"
         >
           {t("Q&A")}
         </Button>

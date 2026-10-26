@@ -23,8 +23,8 @@ export function CopyCodeBlock({ children, ...props }: ComponentPropsWithoutRef<"
 
   return (
     <div className="min-w-0 max-w-full rounded-control bg-surface-sunken">
-      <div className="flex items-center justify-between gap-3 px-3 pt-2 text-small text-ink-muted">
-        <span>{language ?? ""}</span>
+      <div className="flex flex-wrap items-center justify-between gap-3 px-3 pt-2 text-small text-ink-muted">
+        <span className="min-w-0 break-all">{language ?? ""}</span>
         <button type="button" onClick={() => void copy()} className="shrink-0 rounded px-2 py-1 hover:bg-surface focus-visible:outline-2 focus-visible:outline-accent">
           {t("Copy code")}
         </button>

@@ -222,6 +222,34 @@ body {
   font-family: var(--font-sans);
 }
 
+.lesson-markdown,
+.quiz-markdown {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.lesson-markdown table,
+.quiz-markdown table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-wrap: normal;
+}
+
+.lesson-markdown .katex-display,
+.quiz-markdown .katex-display {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.lesson-markdown img,
+.quiz-markdown img {
+  max-width: 100%;
+  height: auto;
+}
+
 .theme-switcher { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px; padding: 7px 11px; border: 1px solid var(--sf-line); border-radius: 24px; background: var(--sf-surface); color: var(--sf-ink-muted); font: inherit; font-size: 12px; cursor: pointer; white-space: nowrap; }
 .theme-switcher:hover { color: var(--sf-ink); border-color: var(--sf-line-hover); }
 @media (max-width: 540px) { .theme-switcher { width: 34px; padding: 7px; flex-shrink: 0; } .theme-switcher span { display: none; } }

@@ -184,7 +184,7 @@ export function CourseQuizBank({
   const chapters = bank ? bank.modules.filter((m) => m.lessons.some((l) => l.items.length > 0)) : [];
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 px-6 py-8">
+    <main className="mx-auto min-w-0 w-full max-w-7xl flex-1 px-4 py-8 sm:px-6">
       <nav aria-label="Breadcrumb" className="text-small text-ink-subtle">
         <Link href="/courses" className="transition-colors duration-fast ease-standard hover:text-ink">
           {t("Courses")}
@@ -243,7 +243,7 @@ export function CourseQuizBank({
       )}
 
       {!error && chapters.length > 0 && (
-        <div className="mt-6 grid items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="mt-6 grid items-start gap-6 xl:grid-cols-[220px_minmax(0,1fr)]">
           {/*
             Sticky, and deliberately thin: it is an index, not a second column of
             content. On a narrow screen it collapses to a plain list above the
@@ -251,7 +251,7 @@ export function CourseQuizBank({
           */}
           <nav
             aria-label={t("Chapters")}
-            className="rounded-surface bg-surface p-4 shadow-raise lg:sticky lg:top-8"
+            className="rounded-surface bg-surface p-4 shadow-raise xl:sticky xl:top-8"
           >
             <h2 className="text-small font-semibold text-ink-muted">{t("Chapters")}</h2>
             <ul className="mt-2 space-y-1">
@@ -284,7 +284,7 @@ export function CourseQuizBank({
                       onClick={() => toggle(module.id)}
                       aria-expanded={!isCollapsed}
                       aria-controls={`chapter-body-${module.id}`}
-                      className="!px-0 text-subtitle font-semibold hover:text-accent"
+                      className="h-auto max-w-full !px-0 whitespace-normal text-left text-subtitle font-semibold hover:text-accent"
                     >
                       <span aria-hidden className="mr-2">{isCollapsed ? "▸" : "▾"}</span>
                       {module.title}
@@ -303,7 +303,7 @@ export function CourseQuizBank({
 
                   <div id={`chapter-body-${module.id}`} hidden={isCollapsed}>
                     {lessons.map((lesson) => (
-                      <div key={lesson.id} className="mt-4 rounded-surface bg-surface p-6 shadow-raise">
+                      <div key={lesson.id} className="mt-4 rounded-surface bg-surface p-4 shadow-raise sm:p-6">
                         <h3 className="text-ui font-medium text-ink-muted">{lesson.title}</h3>
                         <div className="mt-3">
                           <QuizSection

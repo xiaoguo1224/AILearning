@@ -166,9 +166,9 @@ export function MobileTopBar() {
     const pathname = usePathname();
     return (
         <header className="border-b border-line bg-surface/70 backdrop-blur-xl lg:hidden">
-            <div className="flex items-center justify-between px-4 py-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5">
                 <SiteBrand/>
-                <div className="flex items-center gap-2"><ThemeSwitcher/><LanguageSwitcher/><LogoutButton/></div>
+                <div className="ml-auto flex shrink-0 items-center gap-2"><ThemeSwitcher/><LanguageSwitcher/><LogoutButton/></div>
             </div>
             <nav aria-label={t("Primary")} className="flex gap-1 overflow-x-auto px-4 pb-2.5">
                 {NAV.map((item) => {

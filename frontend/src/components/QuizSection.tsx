@@ -470,7 +470,7 @@ export function QuizSection({
 
   return (
     <section>
-      <div className="flex items-baseline justify-between">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-subtitle">{t("Check your understanding")}</h2>
         <p className="text-small tabular-nums text-ink-muted">
           {t("{0} of {1} answered", answeredCount, progress.items)}</p>
@@ -498,14 +498,14 @@ export function QuizSection({
                   contributes nothing to it, while JSX drops the newline between the two.
                   Without the space a screen reader says "1.Which orbit shape".
                 */}
-                <div className="flex items-start justify-between gap-3">
-                  <div id={`quiz-question-${item.id}`} className="flex gap-2 text-ui font-medium">
+                <div className="space-y-3">
+                  <div className="flex flex-wrap justify-end gap-1"><AnswerHistory key={item.id} questionId={item.id} />{renderItemAction?.(item)}</div>
+                  <div id={`quiz-question-${item.id}`} className="flex min-w-0 flex-1 gap-2 text-ui font-medium">
                     <span className="shrink-0 text-ink-subtle">{index + 1}.</span>
                     <div className="min-w-0 flex-1">
                       <QuizMarkdown content={item.question} />
                     </div>
                   </div>
-                  <div className="flex shrink-0 flex-wrap gap-1"><AnswerHistory key={item.id} questionId={item.id} />{renderItemAction?.(item)}</div>
                 </div>
                 {item.concept && (
                   /*

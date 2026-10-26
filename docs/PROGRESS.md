@@ -8,6 +8,15 @@
 - 最终 `npx vitest run --maxWorkers=2`：48 文件 / 293 passed。`npx tsc --noEmit`、`npx eslint .`、`npm run build` 均通过。真实 Edge 实际点击课程题库/课时题库 → 详情 → 刷新 → 返回上一级均回到原入口；直接访问、外站来源、其他课程来源均回退到课程题库。
 - 只涉及导航及其测试，不修改答题、评审、学习状态或历史数据；未推送或部署。
 
+## 2026-10-26 — 平板/手机题目与正文适配
+
+- 导航提交 `d7af5d8` 独立归档。布局根因为题干 flex 子项的默认最小宽度、不可收缩的并排操作和课时固定三栏；长代码/公式/表格进一步撑宽页面。隔离压力样本在 390px 下修复前文档宽度分别为：课程题库 2812px、课时题库 2772px、详情 1513px、课时正文 2909px。
+- 操作移到题干上方，内容允许收缩；平板收起题库侧栏，课时正文改为响应式网格；共享 Markdown 表格/显示公式局部横滚、长文本换行，代码复制栏可换行，历史表格可横滚。PageHeader 标题/操作可换行；截图检查发现 320px 手机顶栏退出按钮竖排，再补顶栏自然换行及操作组不压缩。
+- 完整前端 `npx vitest run --maxWorkers=2`：48 文件 / 293 passed（最后手机顶栏纯 class 调整前；之后浏览器复验、最终构建/类型/lint）。首次全量 292 passed / 1 failed 是旧链接契约断言，已更新并完整复跑。jsdom 的 getComputedStyle 伪元素提示无用例失败。
+- 本机 Uvicorn 8001 + Next dev 3001，独立 SQLite `output/playwright/responsive-20261026/verification.sqlite3`，受控 fake provider。真实 Edge 双主题 × 课程题库/课时题库/代码详情/课时正文 × 1920/1440/1194/1024/768/390/320px，56 组均断言文档宽度不超过视口；代码/表格/显示公式可滚动到末尾。实际返回与刷新、直接访问及非法来源回退、代码提交与窄屏历史表格、问答开关均通过，截图人工查看。无 pageerror；开发模式仍有修复前已存在的课时目录 headingId hydration 警告，单独登记 UI-MD-01。
+- `npm run build`、`npx tsc --noEmit`、`npx eslint .` 与 `git diff --check` 实际通过。自动审批拒绝 `next start`，只返回 blocked by policy，未说明更具体原因；未绕过，生产启动未验收。开发服务已正常完成浏览器验证，测试服务结束后停止。
+- 无后端源码、数据库或配置修改；未运行后端完整测试、未调用付费模型、未用 Docker、未推送/部署。Windows Edge 的尺寸验证不能替代 iPad/Safari 实机。详细命令、截图和边界见 `test-reports/2026-10-26-navigation-responsive.md`。
+
 > 下方保留初始化与逐项真实验证记录；以本节“当前状态”和最新追加记录为恢复入口。
 
 ## 当前状态

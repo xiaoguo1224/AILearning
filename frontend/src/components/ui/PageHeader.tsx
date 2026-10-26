@@ -16,13 +16,13 @@ export const PageHeader = forwardRef<HTMLDivElement, PageHeaderProps>(function P
 ) {
   return (
     <div ref={ref} {...props}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
         {/*
           Level 1, not 2: this is the page's own title, and several error branches render
           it on its own to keep the page from having no heading at all. At level 2 those
           pages had no h1 for a screen reader to announce.
         */}
-        <Typography.Title level={1} style={{ margin: 0 }}>{title ?? children}</Typography.Title>
+        <Typography.Title level={1} style={{ margin: 0, minWidth: 0, overflowWrap: "anywhere" }}>{title ?? children}</Typography.Title>
         {actions && <div>{actions}</div>}
       </div>
       {description && <Typography.Paragraph type="secondary">{description}</Typography.Paragraph>}

@@ -363,7 +363,7 @@ export function CodeQuestionDetail({
             dataSource={history}
             rowKey="id"
             pagination={false}
-            scroll={{ y: 400 }}
+            scroll={{ x: 600, y: 400 }}
             onRow={(entry) => ({
               onClick: () => {
                 void selectSubmission(entry.id);
