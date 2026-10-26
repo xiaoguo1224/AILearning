@@ -168,6 +168,7 @@ export function LessonQuizPanel({
               quiz={quiz}
               progress={progress}
               courseId={courseId}
+              returnHref={`/courses/${courseId}/lessons/${lessonId}`}
               renderItemAction={(item) => (
                 <VariantButton
                   courseId={courseId}

@@ -29,7 +29,7 @@ describe("code question entry point", () => {
 
     expect(screen.getByRole("link", { name: /Open the code question/ })).toHaveAttribute(
       "href",
-      "/courses/3/quiz/1",
+      "/courses/3/quiz/1?returnTo=%2Fcourses%2F3%2Fquiz",
     );
     expect(screen.queryByRole("button", { name: /hint/i })).toBeNull();
   });

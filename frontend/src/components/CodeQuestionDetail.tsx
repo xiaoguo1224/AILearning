@@ -36,9 +36,11 @@ type Tab = "question" | "answer" | "review" | "history";
 export function CodeQuestionDetail({
   courseId,
   item,
+  backHref = `/courses/${courseId}/quiz`,
 }: {
   courseId: number;
   item: QuizBankItem;
+  backHref?: string;
 }) {
   const { t } = useI18n();
   const [tab, setTab] = useState<Tab>("question");
@@ -162,8 +164,8 @@ export function CodeQuestionDetail({
 
   return (
     <div className="space-y-6">
-      <BackButton href={`/courses/${courseId}`}>
-        {t("Back to course")}
+      <BackButton href={backHref}>
+        {t("Back to previous page")}
       </BackButton>
 
       <PageHeader

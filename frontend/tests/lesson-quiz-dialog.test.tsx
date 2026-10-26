@@ -12,7 +12,7 @@ import { LessonQuizList } from "@/components/LessonQuizList";
 import { listJobs } from "@/lib/api";
 import { QUIZ_KINDS } from "@/lib/quizKinds";
 
-import { quizProgress } from "./fixtures";
+import { quizItem, quizProgress } from "./fixtures";
 
 vi.mock("@/lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/api")>()),
@@ -24,6 +24,12 @@ vi.mock("@/lib/api", async (importOriginal) => ({
 }));
 
 describe("LessonQuizList", () => {
+  test("code questions return to this lesson's question list", () => {
+    vi.mocked(listJobs).mockResolvedValue({ items: [] } as never);
+    render(<LessonQuizList courseId={3} lessonId={9} initialQuiz={[quizItem({ id: 1, kind: "code" })]} progress={quizProgress()} />);
+    const href = screen.getByRole("link", { name: /Open the code question/ }).getAttribute("href")!;
+    expect(new URL(href, "http://localhost").searchParams.get("returnTo")).toBe("/courses/3/lessons/9/quiz");
+  });
   test("the generate dialog offers a row for every question kind", () => {
     vi.mocked(listJobs).mockResolvedValue({ items: [] } as never);
     render(

@@ -152,6 +152,7 @@ export function QuizSection({
   progress,
   renderItemAction,
   courseId,
+  returnHref,
 }: {
   quiz: QuizItem[];
   progress: QuizProgress;
@@ -159,6 +160,8 @@ export function QuizSection({
   renderItemAction?: (item: QuizItem) => React.ReactNode;
   /** When set, code questions link to their detail page instead of answering inline. */
   courseId?: number;
+  /** Page containing this list, for returning from a code question. */
+  returnHref?: string;
 }) {
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 5;
@@ -571,7 +574,7 @@ export function QuizSection({
                 ) : item.kind === "code" ? (
                   courseId ? (
                     <Link
-                      href={`/courses/${courseId}/quiz/${item.id}`}
+                      href={`/courses/${courseId}/quiz/${item.id}?returnTo=${encodeURIComponent(returnHref ?? `/courses/${courseId}/quiz`)}`}
                       className="mt-3 inline-flex items-center gap-2 rounded-control border border-line bg-surface px-4 py-2 text-small font-medium text-accent transition-colors hover:border-accent"
                     >
                       {t("Open the code question")}

@@ -13,8 +13,10 @@ export const dynamic = "force-dynamic";
  */
 export default async function CodeQuestionPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ courseId: string; itemId: string }>;
+  searchParams: Promise<{ returnTo?: string | string[] }>;
 }) {
   const t = await getTranslator();
   const { courseId, itemId } = await params;
@@ -50,9 +52,15 @@ export default async function CodeQuestionPage({
 
   if (question.kind !== "code") notFound();
 
+  const { returnTo } = await searchParams;
+  const backHref = typeof returnTo === "string" &&
+    new RegExp(`^/courses/${course}/(?:quiz|lessons/[1-9]\\d*(?:/quiz)?)$`).test(returnTo)
+    ? returnTo
+    : `/courses/${course}/quiz`;
+
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-6 py-12">
-      <CodeQuestionDetail courseId={course} item={question} />
+      <CodeQuestionDetail courseId={course} item={question} backHref={backHref} />
     </main>
   );
 }

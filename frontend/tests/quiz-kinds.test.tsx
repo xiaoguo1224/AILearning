@@ -29,7 +29,7 @@ describe("question kind controls", () => {
     const item = quizItem({ id: 2, kind: "code" });
     render(<QuizSection quiz={[item]} progress={quizProgress()} courseId={7} />);
     const link = screen.getByRole("link", { name: /Open the code question/ });
-    expect(link.getAttribute("href")).toBe("/courses/7/quiz/2");
+    expect(link.getAttribute("href")).toBe("/courses/7/quiz/2?returnTo=%2Fcourses%2F7%2Fquiz");
   });
 
   test("short answers in a multi-line box that takes files", () => {

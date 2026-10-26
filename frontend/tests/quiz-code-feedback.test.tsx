@@ -27,8 +27,14 @@ describe("code questions in the bank", () => {
     render(<QuizSection quiz={[item]} progress={quizProgress()} courseId={7} />);
 
     const link = screen.getByRole("link", { name: /Open the code question/ });
-    expect(link).toHaveAttribute("href", "/courses/7/quiz/1");
+    expect(link).toHaveAttribute("href", "/courses/7/quiz/1?returnTo=%2Fcourses%2F7%2Fquiz");
     expect(screen.queryByRole("textbox")).toBeNull();
+  });
+
+  test("carries the lesson question list as the return destination", () => {
+    render(<QuizSection quiz={[quizItem({ id: 1, kind: "code" })]} progress={quizProgress()} courseId={7} returnHref="/courses/7/lessons/12/quiz" />);
+    const href = screen.getByRole("link", { name: /Open the code question/ }).getAttribute("href")!;
+    expect(new URL(href, "http://localhost").searchParams.get("returnTo")).toBe("/courses/7/lessons/12/quiz");
   });
 
   test("say where they live when the bank has no course to link to", () => {

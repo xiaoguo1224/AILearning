@@ -1,5 +1,13 @@
 # PROGRESS — 开发进度与真实验证记录
 
+## 2026-10-26 — 编程题详情返回上一级
+
+- 起点 main / `1e8a698`，工作区干净；先核查项目文档、前端规则、Next.js 本地文档及全部 QuizSection 调用方。本轮沿用近期原生本机验证约定，不操作个人学习数据库或线上服务。
+- QuizSection 的编程题入口携带 `returnTo`；课时题库/课时正文显式提供各自路径，课程题库默认返回自身。详情 SSR 校验路径仅为当前课程题库、课时正文或课时题库，拒绝外站、其他课程、数组参数及未知路径，缺省返回课程题库。链接在刷新后仍有效，不依赖浏览器历史长度。
+- 修改前 `npx vitest run tests/code-question-detail.test.tsx tests/course-quiz-bank.test.tsx tests/quiz-code-feedback.test.tsx tests/lesson-quiz-dialog.test.tsx tests/code-block-copy.test.tsx --maxWorkers=2`：5 文件 / 13 passed。新增来源链接、课时题库实际调用、SSR 返回路径及非法来源回退测试；同步全部旧链接契约断言。
+- 最终 `npx vitest run --maxWorkers=2`：48 文件 / 293 passed。`npx tsc --noEmit`、`npx eslint .`、`npm run build` 均通过。真实 Edge 实际点击课程题库/课时题库 → 详情 → 刷新 → 返回上一级均回到原入口；直接访问、外站来源、其他课程来源均回退到课程题库。
+- 只涉及导航及其测试，不修改答题、评审、学习状态或历史数据；未推送或部署。
+
 > 下方保留初始化与逐项真实验证记录；以本节“当前状态”和最新追加记录为恢复入口。
 
 ## 当前状态

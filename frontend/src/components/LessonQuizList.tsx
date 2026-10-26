@@ -164,6 +164,7 @@ export function LessonQuizList({
       quiz={quiz}
       progress={progress}
       courseId={courseId}
+      returnHref={`/courses/${courseId}/lessons/${lessonId}/quiz`}
       renderItemAction={(item) => (
         <VariantButton
           courseId={courseId}
