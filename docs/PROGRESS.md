@@ -1,5 +1,14 @@
 # PROGRESS — 开发进度与真实验证记录
 
+## 2026-10-26 — 响应式与返回路径提交推送、服务器发布
+
+- 用户追加明确授权直接提交、推送并部署；两项修复 `d7af5d8` / `513e3cb` 已推送到 origin/main，远端提交再次核对。首次 schannel 握手失败后，用 openssl TLS 后端 fetch 成功，没有关闭证书验证。
+- 服务器由 `1e8a698-20261025` 更新为 `513e3cb-20261026`，BUILD_ID `B1nlnLe6cdgyoXGkmaT6f`。校验源码/构建包 SHA256、前端 lockfile 和全部后端 Python 文件哈希；复用既有 Linux 依赖，不重装运行环境。SQLite backup API 快照及附件、资料、配置备份保存在 `/opt/studyforge/backups/513e3cb-20261026`，旧版本保留。
+- 原子切换 current，只重启前端；两个服务 active、自动重启均为 0。后端 PID 509447 未改变，没有启动迁移或本地库覆盖。服务器 systemd 生产启动、后端健康和 HTTPS 实际通过，补齐此前本机 next start 被审批拒绝的生产运行证据。
+- HTTPS 匿名门禁、真实登录 Secure/HttpOnly Cookie、课程/题库/详情、28 个静态脚本、退出撤权通过。既有模型入口 `/v1/models` 继续要求认证（401），未变更入口配置或调用付费模型。
+- 实际以截图中的 `manual_sgd_step`（课程 3 / 课时 19 / 题目 132）验证：课程题库和课时题库进入详情、刷新、返回来源成功；Edge 双主题、3 页面、6 尺寸共 36 组无整页横向溢出、无 pageerror、无 console error。仅登录/退出及课程阅读计数，无提交、生成、重生成等业务写入；截图人工检查。Windows Edge 尺寸验证仍不能替代 iPad/Safari 实机。
+- 详细命令、超时重试原因、备份/回滚与限制见 `test-reports/2026-10-26-responsive-deployment.md`。本次仅前端发布，未再运行后端完整回归。
+
 ## 2026-10-26 — 编程题详情返回上一级
 
 - 起点 main / `1e8a698`，工作区干净；先核查项目文档、前端规则、Next.js 本地文档及全部 QuizSection 调用方。本轮沿用近期原生本机验证约定，不操作个人学习数据库或线上服务。
