@@ -2,7 +2,7 @@
 
 ## 2026-10-27 — 最新公式与图表渲染
 
-- [-] UI-MATH-DEPLOY-01：`5afe0fc` 已推送；发布包已上传并启动独立 Linux 依赖安装，但 SSH/HTTPS 持续超时，部署完成及线上验收尚未确认。先恢复连接、检查原部署会话和服务状态，再继续发布；见 `test-reports/2026-10-27-math-deployment.md`。
+- [x] UI-MATH-DEPLOY-01：`5afe0fc` 已推送并发布为 `5afe0fc-20261027`；重启后确认原安装未完成，修复 Nginx 与 Docker 网桥的启动顺序，核验有限 lockfile 差异后独立复制 Linux 依赖并替换官方 KaTeX。数据库/附件/配置及旧版保留，只重启前端；HTTPS、50 个资源、认证、12 组双主题/尺寸公式检查通过。见 `test-reports/2026-10-27-math-deployment.md`。
 
 - [x] UI-MATH-01：KaTeX 更新至当前最新稳定版 0.19.1；Markdown、Mermaid 及数学解析依赖统一使用同一份 KaTeX，消除 HTML/CSS 版本分叉。Mermaid 12.2.0、ECharts 6.1.0、echarts-for-react 3.0.6 及现有 Markdown 插件已核验为最新稳定版。回归和浏览器证据见 `test-reports/2026-10-27-math-rendering.md`。
 
