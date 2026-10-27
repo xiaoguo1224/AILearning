@@ -26,7 +26,7 @@ HTTPS :443 → 既有 Caddy → Nginx 172.18.0.1:8081
 
 ## 安装与发布
 
-1. 检查已有端口、站点、磁盘和内存；安装 Node.js（满足当前 Next.js 的最低版本）和 Python 3.11+。当前使用 Node.js 22.22.0、Python 3.11.13、uv 0.10.9。
+1. 检查已有端口、站点、磁盘、可用内存及 swap；安装 Node.js（满足当前 Next.js 的最低版本）和 Python 3.11+。当前使用 Node.js 22.22.0、Python 3.11.13、uv 0.10.9。此服务器总内存约 1.9GiB，不能将开发机上可完成的安装视为服务器也有足够内存，低内存发布限制见下文。
 2. 创建系统用户 `studyforge`，创建上述目录。源码与运行环境由 root 管理，只有数据目录和前端 `.next/cache` 允许服务用户写入。
 3. 用 `git archive` 导出明确版本，避免打包 `.env`、本机虚拟环境、数据库与缓存。前端先运行 `npm ci`、`npm test`、`npm run lint`、`npx tsc --noEmit`、`npm run build`。发布匹配源码的 `.next` 产物，排除开发与构建缓存；服务器在 `frontend/` 执行 `npm ci --omit=dev --no-audit --no-fund`，安装 Linux 原生运行依赖。本次构建在 Windows 完成，Linux 安装本机依赖后以实际 HTTP 与浏览器验证可运行性；跨系统升级必须重新验收。
 4. 用 `uv export --project backend --frozen --no-dev --no-emit-project --format requirements-txt` 导出锁定依赖，再用服务器独立虚拟环境的 `uv pip install --require-hashes -r <requirements.txt>` 安装。不要安装到系统 Python。
@@ -53,8 +53,16 @@ NODE_OPTIONS=--max-old-space-size=256
 ```
 
 6. 将 `deploy/systemd/*.service` 安装到 `/etc/systemd/system/`，创建 `.next/cache` 并赋予 `studyforge` 用户写权限，设置 `current` 链接。运行 `systemd-analyze verify`、`systemctl daemon-reload`、`systemctl enable --now studyforge-backend studyforge-frontend`。
-7. 先核验 `http://127.0.0.1:8000/health` 和前端，再将 `deploy/nginx.conf` 安装到已有 Nginx 的站点 include 目录。执行 `nginx -t` 后 reload。
+7. 先核验 `http://127.0.0.1:8000/health` 和前端，再将 `deploy/nginx.conf` 安装到已有 Nginx 的站点 include 目录。将 `deploy/systemd/nginx.service.d/studyforge-network.conf` 安装到 `/etc/systemd/system/nginx.service.d/`，执行 `systemctl daemon-reload`，使 Nginx 在 Docker 启动后再绑定桥接地址；否则重启时桥接地址尚未创建，Nginx 会启动失败并使 HTTPS 返回 502。执行 `nginx -t` 后 reload，若服务未运行则 start。不要覆盖已有 Nginx 主配置或其他站点。
 8. 备份当前 HTTPS 入口配置，仅将最终 404 fallback 换为 `deploy/caddy-handle.caddy` 内容。使用既有入口的管理方式验证并热加载。保留模型路由、TLS 策略、证书续期及其配置。最后检查 HTTPS 证书、匿名访问隔离、登录/退出、SSR、课程、附件和原模型网关。
+
+## 低内存服务器的依赖更新
+
+2026-10-27 的默认 `npm ci` 曾触发内核 OOM；安装器与本机版本一致也不能代替资源预算。安装进程应置于独立 systemd scope，限制内存和 CPU，并使用显式超时及 Node heap 上限；限制内失败须停止发布、保留旧版本，不能通过取消限制反复尝试。当前实例 `MemoryLimit=384M`、`CPUQuota=50%`、heap 256MiB 的安装仍会被限制终止，不应作为已验证可行的完整安装命令。
+
+本次 KaTeX 发布采用经过核验的有限替代流程：逐项比较新旧 lockfile，确认只有根 KaTeX 升级及其旧嵌套副本/旧 commander 删除；使用 `cp -a` 完整复制旧版 Linux 依赖到新 release，校验文件 inode 不与旧版共享；移除该新副本内的旧包，将与新 lockfile SHA512 相同的官方 KaTeX tarball 解包至新目录。删除新副本内旧的 `.package-lock.json` 优化缓存，保留项目正式 lockfile。随后检查每个数学渲染入口都解析到 KaTeX 0.19.1，并进行真实运行验收。
+
+该流程仅适用于已逐项证明的有限依赖差异；其他依赖变化仍应在资源充足、平台一致的构建环境安装并验证，不可直接复制一棵任意旧依赖树。禁止在通过硬链接共享的依赖树内安装或原地改写文件，避免破坏回滚版本。具体证据见 `test-reports/2026-10-27-math-deployment.md`。
 
 ## 一次性完整迁移与核验
 
