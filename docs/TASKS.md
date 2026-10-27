@@ -1,5 +1,9 @@
 # TASKS — Codex 分阶段开发清单
 
+## 2026-10-27 — 最新公式与图表渲染
+
+- [x] UI-MATH-01：KaTeX 更新至当前最新稳定版 0.19.1；Markdown、Mermaid 及数学解析依赖统一使用同一份 KaTeX，消除 HTML/CSS 版本分叉。Mermaid 12.2.0、ECharts 6.1.0、echarts-for-react 3.0.6 及现有 Markdown 插件已核验为最新稳定版。回归和浏览器证据见 `test-reports/2026-10-27-math-rendering.md`。
+
 ## 2026-10-26 — 编程题返回与跨设备布局
 
 - [x] UI-NAV-01：课程题库、课时题库及课时内题目入口携带来源；详情返回上一级，刷新保留来源，直接打开回退到课程题库；服务端限制为本课程的已知页面路径。相关基线 13 passed；最终前端 48 文件 / 293 passed，浏览器实际点击返回及刷新通过。

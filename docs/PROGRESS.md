@@ -1,5 +1,12 @@
 # PROGRESS — 开发进度与真实验证记录
 
+## 2026-10-27 — 最新公式与图表渲染
+
+- 修复 KaTeX HTML/CSS 版本分叉：根依赖升级至 npm 官方 latest 0.19.1，通过 override 让 Markdown、Mermaid 和数学解析器共享同一份 KaTeX。现有 Mermaid 12.2.0、ECharts 6.1.0、echarts-for-react 3.0.6 和 Markdown 依赖已核验为最新稳定版。只改前端依赖、测试和文档，不改学习数据。
+- 基线 2 文件 / 6 passed；新增回归先验证 3 failed / 2 passed，修复后完整前端 49 文件 / 298 passed。ESLint、生产构建、独立 TypeScript 和 diff 检查通过；ECharts 实际库柱状/饼图 SVG smoke 通过。
+- 本机隔离数据库、fake provider，真实 Edge 课程/题目 × 双主题 × 1440/1194/390px，12 组均验证分数、上划线、矩阵、图内 MathML、长公式横滚和页面宽度，无浏览器错误；已人工看图。Docker daemon 不可用，采用原生服务。生产启动额外检查被自动审批拒绝（仅 `blocked by policy`），未绕过；生产运行与 Safari 实机未验收。
+- 未运行后端完整回归，未推送或线上发布。证据与升级/回滚边界见 `test-reports/2026-10-27-math-rendering.md`、ADR-037。
+
 ## 2026-10-26 — 响应式与返回路径提交推送、服务器发布
 
 - 用户追加明确授权直接提交、推送并部署；两项修复 `d7af5d8` / `513e3cb` 已推送到 origin/main，远端提交再次核对。首次 schannel 握手失败后，用 openssl TLS 后端 fetch 成功，没有关闭证书验证。

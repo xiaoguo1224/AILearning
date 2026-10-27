@@ -329,3 +329,10 @@
 - Markdown 两个共享渲染器复用 CopyCodeBlock，复制代码原文并反馈结果，不引入依赖；Windows 剪贴板可能把 LF 标准化为 CRLF，浏览器验收据此核对缩进和行内容。
 - 迁移前备份数据库及附件；本次只新增两表，不改写原学习记录。回滚代码时保留新表，不删除新产生的历史；恢复旧备份属于数据回退，需单独确认。
 - 按用户要求仅本机运行，使用隔离验证库与受控 provider，不使用 Docker、不跑全量测试、不部署线上。实际结果见 PROGRESS 和验证报告。
+
+## ADR-037 — 公式渲染与样式共享最新稳定版 KaTeX（2026-10-27）
+
+- 用户要求修复公式显示并使用最新版本的公式、图表组件。以 npm 官方 registry 的 latest 为本次版本依据：KaTeX 0.19.1；其他现有 Markdown/Mermaid/ECharts 渲染依赖已是最新稳定版，不扩展到无关框架升级。
+- 根布局的 KaTeX CSS 与 rehype-katex、Mermaid、micromark-extension-math 曾分别使用 0.19、0.16、0.18，内部布局类名不同，造成上划线等公式结构丢失。通过 npm `overrides.katex = "$katex"` 复用根依赖及其字体、样式；不维护局部 CSS 补丁，不改写保存的课程、公式或作答记录。
+- 当前最新版 rehype-katex 仍声明旧版 KaTeX 范围，因此本次主动统一跨版本依赖。升级时必须保留依赖解析一致性、两个 Markdown 渲染器的 MathML/分数/矩阵测试，并检查真实浏览器和图内数学公式；不以安装成功替代兼容验证。原有 Markdown HTML 转义、KaTeX trust 默认关闭和 Mermaid strict 安全设置保持生效。
+- 固定本次 lockfile，后续升级仍需验证再发布，不在运行期自动获取最新脚本。回滚 package.json/package-lock.json 并重建前端即可，不涉及数据迁移。
