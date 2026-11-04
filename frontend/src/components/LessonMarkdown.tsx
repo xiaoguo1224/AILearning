@@ -3,6 +3,7 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { CopyCodeBlock } from "./CopyCodeBlock";
+import { normalizeMath } from "@/lib/normalize-math";
 
 /** Loose comparison so wording that differs only in case, spacing, or emphasis still matches. */
 function normalizeHeading(text: string): string {
@@ -159,7 +160,7 @@ export function LessonMarkdown({ content, title }: { content: string; title: str
           },
         }}
       >
-        {stripDuplicateTitle(content, title)}
+        {normalizeMath(stripDuplicateTitle(content, title))}
       </ReactMarkdown>
     </article>
   );

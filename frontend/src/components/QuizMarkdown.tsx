@@ -4,6 +4,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 
 import { CopyCodeBlock } from "@/components/CopyCodeBlock";
+import { normalizeMath } from "@/lib/normalize-math";
 import "./QuizMarkdown.css";
 
 /**
@@ -27,7 +28,7 @@ export function QuizMarkdown({ content }: { content: string }) {
           },
         }}
       >
-        {content}
+        {normalizeMath(content)}
       </ReactMarkdown>
     </div>
   );

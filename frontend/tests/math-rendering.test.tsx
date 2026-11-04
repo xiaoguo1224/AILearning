@@ -15,6 +15,27 @@ test.each(["rehype-katex", "mermaid", "micromark-extension-math"])("%s shares th
   expect(dependencyRequire.resolve("katex")).toBe(require.resolve("katex"));
 });
 
+test.each(["lesson", "quiz"])("%s renders pasted LaTeX in text and tables without changing code", kind => {
+  const content = String.raw`| 符号 | 含义 |
+| --- | --- |
+| \\(s\_{11}\\) | 分数 |
+
+单斜杠 \(d_k\)，双斜杠 \\(Q\\)。
+
+\\[ \frac{QK^\top}{\sqrt{d_k}} \\]
+
+\[ x_1 \]
+
+` + "`\\(literal\\)`" + "\n\n```text\n\\[literal\\]\n```";
+  const { container } = render(kind === "lesson" ? <LessonMarkdown title="Math" content={content} /> : <QuizMarkdown content={content} />);
+  expect(container.querySelectorAll("table .katex")).toHaveLength(1);
+  expect(container.querySelectorAll(".katex")).toHaveLength(5);
+  expect(container.querySelectorAll(".katex-display")).toHaveLength(2);
+  expect(container.querySelector(".katex-error")).toBeNull();
+  expect(container.querySelector("code")?.textContent).toBe(String.raw`\(literal\)`);
+  expect(container.querySelector("pre code")?.textContent).toContain(String.raw`\[literal\]`);
+});
+
 test.each(["lesson", "quiz"])("%s renders inline and display math with accessible MathML", kind => {
   const content = String.raw`Inline $x_i^2$.
 
