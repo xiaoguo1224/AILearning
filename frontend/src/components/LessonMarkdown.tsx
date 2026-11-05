@@ -4,6 +4,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import { CopyCodeBlock } from "./CopyCodeBlock";
 import { normalizeMath } from "@/lib/normalize-math";
+import { MarkdownTable } from "@/components/MarkdownTable";
 
 /** Loose comparison so wording that differs only in case, spacing, or emphasis still matches. */
 function normalizeHeading(text: string): string {
@@ -141,6 +142,10 @@ export function LessonMarkdown({ content, title }: { content: string; title: str
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
         components={{
+          table({ node, ...props }) {
+            void node;
+            return <MarkdownTable {...props} />;
+          },
           h2({ children, ...props }) {
             return (
               <h2 id={headingId()} {...props}>

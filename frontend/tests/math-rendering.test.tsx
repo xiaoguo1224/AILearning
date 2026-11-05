@@ -29,6 +29,7 @@ test.each(["lesson", "quiz"])("%s renders pasted LaTeX in text and tables withou
 ` + "`\\(literal\\)`" + "\n\n```text\n\\[literal\\]\n```";
   const { container } = render(kind === "lesson" ? <LessonMarkdown title="Math" content={content} /> : <QuizMarkdown content={content} />);
   expect(container.querySelectorAll("table .katex")).toHaveLength(1);
+  expect(container.querySelector("table")?.parentElement).toHaveClass("markdown-table");
   expect(container.querySelectorAll(".katex")).toHaveLength(5);
   expect(container.querySelectorAll(".katex-display")).toHaveLength(2);
   expect(container.querySelector(".katex-error")).toBeNull();

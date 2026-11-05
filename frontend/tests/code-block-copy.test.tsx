@@ -15,6 +15,9 @@ test.each(["lesson", "quiz"])("%s code blocks copy exact source including whites
   fireEvent.click(screen.getAllByRole("button", { name: "Copy code" })[0]);
   await waitFor(() => expect(writeText).toHaveBeenCalledWith("def add(a, b):\n    return a + b\n"));
   expect(screen.getAllByRole("status")[0]).toHaveTextContent("Copied");
+  fireEvent.click(screen.getAllByRole("button", { name: "Copy code" })[0]);
+  await waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(screen.getAllByRole("status")[0]).toHaveTextContent(/^$/), { timeout: 4000 });
 });
 
 test("clipboard failure is reported while leaving code selectable", async () => {

@@ -229,12 +229,28 @@ body {
   overflow-wrap: anywhere;
 }
 
-.lesson-markdown table,
-.quiz-markdown table {
-  display: block;
+.lesson-markdown .markdown-table,
+.quiz-markdown .markdown-table {
+  width: 100%;
   max-width: 100%;
   overflow-x: auto;
   overflow-wrap: normal;
+}
+
+.lesson-markdown table,
+.quiz-markdown table {
+  width: 100%;
+  margin-inline: auto;
+}
+
+.lesson-markdown pre,
+.quiz-markdown pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.quiz-markdown pre code {
+  word-break: normal;
 }
 
 .lesson-markdown .katex-display,

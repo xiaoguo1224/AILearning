@@ -5,6 +5,7 @@ import rehypeKatex from "rehype-katex";
 
 import { CopyCodeBlock } from "@/components/CopyCodeBlock";
 import { normalizeMath } from "@/lib/normalize-math";
+import { MarkdownTable } from "@/components/MarkdownTable";
 import "./QuizMarkdown.css";
 
 /**
@@ -23,6 +24,10 @@ export function QuizMarkdown({ content }: { content: string }) {
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}
         components={{
+          table({ node, ...props }) {
+            void node;
+            return <MarkdownTable {...props} />;
+          },
           pre({ children, className }) {
             return <CopyCodeBlock className={className}>{children}</CopyCodeBlock>;
           },
