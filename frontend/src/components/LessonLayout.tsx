@@ -32,14 +32,19 @@ export function LessonLayout({
 }) {
   const { t } = useI18n();
   const [qaOpen, setQaOpen] = useState(true);
+  const [contentsOpen, setContentsOpen] = useState(true);
 
   return (
-    <div className="grid min-w-0 items-start gap-6 xl:grid-cols-[16rem_minmax(0,1fr)] 2xl:grid-cols-[16rem_minmax(0,1fr)_auto]">
+    <div className={`grid min-w-0 items-start gap-6 ${contentsOpen ? "xl:grid-cols-[16rem_minmax(0,1fr)] 2xl:grid-cols-[16rem_minmax(0,1fr)_auto]" : "xl:grid-cols-[3rem_minmax(0,1fr)] 2xl:grid-cols-[3rem_minmax(0,1fr)_auto]"}`}>
       {/* Left: table of contents */}
       <aside
         aria-label={t("Contents")}
         className="min-w-0 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto"
       >
+        <button type="button" aria-label={t(contentsOpen ? "Collapse contents" : "Expand contents")} aria-expanded={contentsOpen} aria-controls="lesson-sidebar-content" title={t(contentsOpen ? "Collapse contents" : "Expand contents")} onClick={() => setContentsOpen(!contentsOpen)} className="mb-2 rounded-control px-2 py-1 text-small text-ink-muted hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-accent">
+          <span aria-hidden="true">{contentsOpen ? "←" : "→"}</span>
+        </button>
+        <div id="lesson-sidebar-content" hidden={!contentsOpen}>
         <LessonToc content={content} />
         <Link
           href={`/courses/${courseId}/lessons/${lessonId}/quiz`}
@@ -48,6 +53,7 @@ export function LessonLayout({
           {t("Questions")} ({quiz.length})
           <span aria-hidden className="ml-1">→</span>
         </Link>
+        </div>
       </aside>
 
       {/* Center: article */}

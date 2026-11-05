@@ -144,9 +144,15 @@ function ProjectRows() {
 }
 
 export function AppSidebar() {
+    const {t} = useI18n();
+    const [collapsed, setCollapsed] = useState(false);
     return (
         <aside
-            className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface/70 px-3 py-4 backdrop-blur-xl lg:flex">
+            className={`sticky top-0 hidden h-screen shrink-0 flex-col border-r border-line bg-surface/70 py-4 backdrop-blur-xl lg:flex ${collapsed ? "w-12 px-1" : "w-60 px-3"}`}>
+            <button type="button" aria-label={t(collapsed ? "Expand navigation" : "Collapse navigation")} aria-expanded={!collapsed} aria-controls="desktop-sidebar-content" title={t(collapsed ? "Expand navigation" : "Collapse navigation")} onClick={() => setCollapsed(!collapsed)} className="self-end rounded-control px-2 py-1 text-ink-muted hover:bg-surface-sunken focus-visible:outline-2 focus-visible:outline-accent">
+                <span aria-hidden="true">{collapsed ? "→" : "←"}</span>
+            </button>
+            <div id="desktop-sidebar-content" hidden={collapsed} className="min-h-0 flex-1 flex-col data-[visible=true]:flex" data-visible={!collapsed}>
             <div className="px-2.5"><SiteBrand/></div>
             <div className=" flex flex-wrap items-center gap-2 pt-4">
                 <ThemeSwitcher/>
@@ -157,6 +163,7 @@ export function AppSidebar() {
             </div>
             <ProjectRows/>
             <div className="mt-auto pt-4"><LogoutButton/></div>
+            </div>
         </aside>
     );
 }
