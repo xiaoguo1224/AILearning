@@ -21,7 +21,7 @@ HTTPS :443 → 既有 Caddy → Nginx 172.18.0.1:8081
 | `/etc/studyforge/frontend.env` | 前端服务端配置，不包含模型密钥 |
 | `/var/lib/studyforge/studyforge.sqlite3` | 正式学习数据库 |
 | `/var/lib/studyforge/resources` | 原始资料文件 |
-| `/var/lib/studyforge/attachments` | 答案附件原始文件 |
+| `/var/lib/studyforge/attachments` | 答案附件和课时内嵌图片文件 |
 | `/opt/studyforge/backups` | 上线前快照、核验清单和入口回滚配置，0700 |
 
 ## 安装与发布
